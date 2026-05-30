@@ -3,3 +3,4 @@ PyYAML>=6.0
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 pulp>=3.3.1
+pytest>=9.0.3
