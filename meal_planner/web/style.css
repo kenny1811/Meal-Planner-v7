@@ -1094,9 +1094,24 @@
       font-weight: 700;
     }
     footer { font-size: 9px; color: var(--muted); margin-top: 4px; }
+    #diagnostics-panel {
+      height: calc(100vh - 20px);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
     .diagnostics-out {
-      max-width: 1280px;
+      min-width: 0;
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow: auto;
       padding-bottom: 32px;
+    }
+
+    .diag-report-body {
+      width: max-content;
+      transition: margin-left 80ms ease;
     }
 
     .diag-summary {
@@ -1129,9 +1144,9 @@
     .diag-table {
       border-collapse: collapse;
       margin: 8px 0 22px;
-      min-width: 760px;
-      width: 100%;
+      width: max-content;
       background: #f8fafc;
+      table-layout: fixed;
     }
 
     .diag-table th,
@@ -1148,6 +1163,12 @@
       position: sticky;
       top: 0;
       z-index: 1;
+    }
+
+    .diag-report-title {
+      width: max-content;
+      cursor: ew-resize;
+      user-select: none;
     }
 
     .diag-ok {

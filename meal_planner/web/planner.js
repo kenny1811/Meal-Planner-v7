@@ -910,6 +910,7 @@
         ["#maint-editor table.maint-table", "table_offset_maint_sheet"],
         ["#maint-editor table.maint-roster-table", "table_offset_maint_roster"],
         ["#shopping-out table.shopping-table", "table_offset_shopping"],
+        ["#diagnostics-out .diag-report-body", "table_offset_diagnostics"],
       ];
       for (const [selector, key] of targets) {
         document.querySelectorAll(selector).forEach((el) => {
@@ -961,6 +962,7 @@
         ["#maint-editor .maint-sheet-title", "table_offset_maint_sheet"],
         ["#maint-editor .maint-roster-pane:first-child .maint-pane-title", "table_offset_maint_roster"],
         ["#shopping-panel h1", "table_offset_shopping"],
+        ["#diagnostics-out .diag-report-title", "table_offset_diagnostics"],
       ];
       for (const [selector, key] of configs) {
         document.querySelectorAll(selector).forEach((handle) => {

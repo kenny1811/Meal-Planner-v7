@@ -823,6 +823,8 @@
         ${diagnosticRequirementCell(row, "payroll_time", "payroll_time_pattern")}
         ${diagnosticRequirementCell(row, "schedule_grid", "schedule_grid_patterns")}
       </tr>`).join("");
+      const colGroup = (prefix, widths) => `<colgroup>${widths.map((width, idx) => `<col data-form-col-key="${prefix}_${idx}" data-form-col-default="${width}" />`).join("")}</colgroup>`;
+      const th = (key, text) => `<th data-form-col-key="${key}">${text}</th>`;
       box.innerHTML = `<div class="diag-summary diag-status-${esc(status)}">
           <div><strong>Status</strong><span>${esc(status.toUpperCase())}</span></div>
           <div><strong>Issues</strong><span>${esc(summary.issues || 0)}</span></div>
@@ -832,14 +834,20 @@
           <div><strong>Missing shift times</strong><span>${esc(summary.missing_payroll_time_codes || 0)}</span></div>
           <div><strong>Missing schedules</strong><span>${esc(summary.missing_schedule_grid_codes || 0)}</span></div>
         </div>
-        <h2>Roster Code Coverage</h2>
-        <table class="diag-table"><thead><tr><th>Code</th><th>Days</th><th>Meal Time</th><th>Shift Time</th><th>Schedule Grid</th></tr></thead><tbody>${coverageRows || '<tr><td colspan="5" class="maint-empty">No roster codes</td></tr>'}</tbody></table>
-        <h2>Issues</h2>
-        <table class="diag-table"><thead><tr><th>Severity</th><th>Area</th><th>Message</th></tr></thead><tbody>${issueRows || '<tr><td colspan="3" class="maint-empty">No issues</td></tr>'}</tbody></table>
-        <h2>Roster Months</h2>
-        <table class="diag-table"><thead><tr><th>Month</th><th>Days Found</th><th>Days Expected</th><th>Missing Days</th></tr></thead><tbody>${monthRows || '<tr><td colspan="4" class="maint-empty">No roster months</td></tr>'}</tbody></table>
-        <h2>SQLite Tables</h2>
-        <table class="diag-table"><thead><tr><th>Table</th><th>Key</th><th>Rows</th><th>Updated</th></tr></thead><tbody>${tableRows}</tbody></table>`;
+        <div class="diag-report-body">
+          <h2 class="diag-report-title">Roster Code Coverage</h2>
+          <table class="diag-table" data-form-table>${colGroup("diag_coverage", [150, 90, 230, 260, 360])}<thead><tr>${th("diag_coverage_0", "Code")}${th("diag_coverage_1", "Days")}${th("diag_coverage_2", "Meal Time")}${th("diag_coverage_3", "Shift Time")}${th("diag_coverage_4", "Schedule Grid")}</tr></thead><tbody>${coverageRows || '<tr><td colspan="5" class="maint-empty">No roster codes</td></tr>'}</tbody></table>
+          <h2 class="diag-report-title">Issues</h2>
+          <table class="diag-table" data-form-table>${colGroup("diag_issues", [120, 180, 520])}<thead><tr>${th("diag_issues_0", "Severity")}${th("diag_issues_1", "Area")}${th("diag_issues_2", "Message")}</tr></thead><tbody>${issueRows || '<tr><td colspan="3" class="maint-empty">No issues</td></tr>'}</tbody></table>
+          <h2 class="diag-report-title">Roster Months</h2>
+          <table class="diag-table" data-form-table>${colGroup("diag_months", [140, 120, 130, 360])}<thead><tr>${th("diag_months_0", "Month")}${th("diag_months_1", "Days Found")}${th("diag_months_2", "Days Expected")}${th("diag_months_3", "Missing Days")}</tr></thead><tbody>${monthRows || '<tr><td colspan="4" class="maint-empty">No roster months</td></tr>'}</tbody></table>
+          <h2 class="diag-report-title">SQLite Tables</h2>
+          <table class="diag-table" data-form-table>${colGroup("diag_tables", [170, 180, 90, 210])}<thead><tr>${th("diag_tables_0", "Table")}${th("diag_tables_1", "Key")}${th("diag_tables_2", "Rows")}${th("diag_tables_3", "Updated")}</tr></thead><tbody>${tableRows}</tbody></table>
+        </div>`;
+      applyFormColumnWidths(box);
+      attachFormColumnResizers(box);
+      applyTableOffsets(box);
+      attachTableDragHandles(box);
     }
 
     async function refreshDiagnostics() {
