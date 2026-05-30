@@ -36,6 +36,7 @@
       } else if (action === "append") {
         rows.push(emptyMaintRow(rows));
       }
+      setUnsavedChanges("餐單參數");
       setMaintRowsAndRender(rows);
     }
 
@@ -420,6 +421,7 @@
         input.addEventListener("mousedown", () => setActiveRosterMonthIndex(Number(input.getAttribute("data-maint-roster-row"))));
         input.addEventListener("input", () => {
           activeRosterMonthIndex = Number(input.getAttribute("data-maint-roster-row"));
+          setUnsavedChanges("餐單參數");
           refreshRosterMaintReport();
         });
       });
@@ -686,6 +688,7 @@
 
     async function openMaintSheet(sheetKey, openTree = true) {
       if (!sheetKey) return;
+      if (sheetKey !== activeMaintSheetKey && !confirmDiscardUnsaved()) return;
       setActivePanel("maint");
       if (openTree) setMaintMenuTreeOpen(true);
       activeMaintSheetKey = sheetKey;
@@ -709,6 +712,7 @@
           };
         }
         renderMaintEditor();
+        clearUnsavedChanges("餐單參數");
         setMaintStatus(`${maintSheetPayload.rows.length} rows`);
       } catch (e) {
         showMaintError(String(e.message || e));
@@ -725,6 +729,7 @@
         const rows = collectMaintRows();
         const result = await persistMaintSheet(activeMaintSheetKey, rows);
         maintSheetPayload.rows = rows;
+        clearUnsavedChanges("餐單參數");
         setMaintStatus(`Save ${menuLabel(activeMaintSheetKey)} ${new Date().toLocaleTimeString("en-GB")}`);
         await refreshMaintSheets();
       } catch (e) {
@@ -741,6 +746,7 @@
         maintSheetPayload = await importMaintSheet(activeMaintSheetKey);
         if (!Array.isArray(maintSheetPayload.rows)) maintSheetPayload.rows = [];
         renderMaintEditor();
+        clearUnsavedChanges("餐單參數");
         setMaintStatus(`Imported ${maintSheetPayload.rows.length} rows`);
         await refreshMaintSheets();
       } catch (e) {
@@ -760,6 +766,7 @@
         if (activeMaintSheetKey === "roster" || activeMaintSheetKey === "overtime") {
           await openMaintSheet(activeMaintSheetKey, false);
         }
+        clearUnsavedChanges("餐單參數");
         const counts = (payload.sheets || [])
           .map((sheet) => `${menuLabel(sheet.sheet_key)} ${sheet.row_count || 0}`)
           .join(", ");

@@ -206,7 +206,10 @@
       applyTableOffsets(box);
       attachTableDragHandles();
       box.querySelectorAll("[data-detail-code-field]").forEach((input) => {
-        input.addEventListener("input", refreshRosterMaintReport);
+        input.addEventListener("input", () => {
+          setUnsavedChanges("系統參數");
+          refreshRosterMaintReport();
+        });
       });
     }
 
@@ -244,6 +247,7 @@
       } else if (action === "append") {
         rows.push(emptyRosterCodeDefinition());
       }
+      setUnsavedChanges("系統參數");
       detailSettingsPayload.roster_code_definitions = rows;
       renderRosterCodeDefinitions(rows);
       refreshRosterMaintReport();
@@ -267,6 +271,7 @@
       try {
         const data = await loadDetailSettings();
         fillDetailSettings(data);
+        clearUnsavedChanges("系統參數");
       } catch (e) {
         showDetailError(String(e && e.message ? e.message : e));
       }
@@ -289,6 +294,7 @@
           roster_code_definitions: collectRosterCodeDefinitions(),
         });
         fillDetailSettings(data);
+        clearUnsavedChanges("系統參數");
         shoppingRiceConfig = {
           ...(shoppingRiceConfig || {}),
           cooked_to_raw_brown: data.rice.cooked_to_raw_brown,
@@ -491,6 +497,7 @@
       try {
         showCatalogError("");
         renderNutritionCatalog(await loadNutritionCatalog());
+        clearUnsavedChanges("營養清單");
       } catch (x) {
         showCatalogError(String(x));
       }
@@ -514,6 +521,7 @@
       rows.splice(insertIndex, 0, emptyCatalogRow());
       nutritionCatalogPayload.rows = rows;
       renderNutritionCatalog(nutritionCatalogPayload);
+      setUnsavedChanges("營養清單");
       catalogCursorRowIndex = insertIndex;
       document.querySelector(`#catalog-editor tr[data-catalog-index="${insertIndex}"] input[data-catalog-field="category"]`)?.focus();
     }
@@ -521,6 +529,7 @@
     function removeNutritionCatalogRow(idx) {
       nutritionCatalogPayload.rows = collectNutritionCatalogRows().filter((_, rowIdx) => rowIdx !== idx);
       renderNutritionCatalog(nutritionCatalogPayload);
+      setUnsavedChanges("營養清單");
       setCatalogStatus("Row removed locally. Save Catalog to persist.");
     }
 
@@ -616,10 +625,12 @@
       if (!input) return;
       if (input.type === "checkbox") {
         input.checked = /^(1|true|yes|y|checked)$/i.test(String(value || "").trim());
+        setUnsavedChanges("營養清單");
         return;
       }
       input.value = value;
       endCatalogCellEdit(input);
+      setUnsavedChanges("營養清單");
     }
 
     function catalogClipboardMatrix(text) {
@@ -673,6 +684,7 @@
       try {
         const saved = await persistNutritionCatalog({ rows: collectNutritionCatalogRows() });
         renderNutritionCatalog(saved);
+        clearUnsavedChanges("營養清單");
         shoppingCatalogByName = {};
         setCatalogStatus(`Save Catalog ${new Date().toLocaleTimeString("en-GB")}`);
       } catch (x) {
@@ -686,6 +698,7 @@
       try {
         showTargetError("");
         renderTargetEditors(await loadTargets());
+        clearUnsavedChanges("目標");
       } catch (x) {
         showTargetError(String(x));
       }
@@ -703,6 +716,7 @@
           nonworkday: collectTargetValues("nonworkday", source),
         });
         renderTargetEditors(saved);
+        clearUnsavedChanges("目標");
         await loadMemoryPayload();
         renderFromMemory(captureViewportAnchor());
         setTargetStatus(`Save Targets ${new Date().toLocaleTimeString("en-GB")}`);

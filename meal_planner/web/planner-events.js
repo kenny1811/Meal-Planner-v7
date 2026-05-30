@@ -145,6 +145,19 @@
       renderFromMemory(anchor);
       await persistColumnWidths();
     });
+    document.addEventListener("input", (ev) => {
+      const area = editableAreaName(ev.target);
+      if (area) setUnsavedChanges(area);
+    });
+    document.addEventListener("change", (ev) => {
+      const area = editableAreaName(ev.target);
+      if (area) setUnsavedChanges(area);
+    });
+    window.addEventListener("beforeunload", (ev) => {
+      if (!unsavedChanges) return;
+      ev.preventDefault();
+      ev.returnValue = "";
+    });
 
     document.getElementById("menu-planner").addEventListener("click", () => setActivePanel("planner"));
     document.getElementById("menu-config").addEventListener("click", () => {

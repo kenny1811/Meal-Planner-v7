@@ -25,6 +25,8 @@
     let maintSheetPayload = { sheet_key: null, display_name: "", rows: [] };
     let rosterReportSources = { payroll_times: [], overtime: [], public_holidays: [], medical_appointments: [] };
     let diagnosticsPayload = null;
+    let unsavedChanges = false;
+    let unsavedArea = "";
     let menuOrder = {
       top: ["config", "maint", "planner", "shopping", "diagnostics"],
       config: ["target", "catalog", "details"],
@@ -108,6 +110,61 @@
 
     function br(s) {
       return esc(s).replace(/\n/g, "<br />");
+    }
+
+    function setSaveButtonVisible(id, visible) {
+      const btn = document.getElementById(id);
+      if (btn) btn.style.display = visible ? "" : "none";
+    }
+
+    function setUnsavedChanges(area = "資料") {
+      unsavedChanges = true;
+      unsavedArea = area;
+      const label = area || "資料";
+      if (area === "目標") {
+        setSaveButtonVisible("target-save", true);
+        setSaveButtonVisible("planner-target-save", true);
+        if (typeof setTargetStatus === "function") setTargetStatus(`${label}未儲存`);
+      } else if (area === "營養清單") {
+        setSaveButtonVisible("catalog-save", true);
+        if (typeof setCatalogStatus === "function") setCatalogStatus(`${label}未儲存`);
+      } else if (area === "系統參數") {
+        setSaveButtonVisible("detail-save", true);
+        if (typeof setDetailStatus === "function") setDetailStatus(`${label}未儲存`);
+      } else if (area === "餐單參數") {
+        setSaveButtonVisible("maint-save", true);
+        if (typeof setMaintStatus === "function") setMaintStatus(`${label}未儲存`);
+      }
+    }
+
+    function clearUnsavedChanges(area = "") {
+      if (!area || unsavedArea === area) {
+        unsavedChanges = false;
+        unsavedArea = "";
+      }
+      if (!area || area === "目標") {
+        setSaveButtonVisible("target-save", false);
+        setSaveButtonVisible("planner-target-save", false);
+      }
+      if (!area || area === "營養清單") setSaveButtonVisible("catalog-save", false);
+      if (!area || area === "系統參數") setSaveButtonVisible("detail-save", false);
+      if (!area || area === "餐單參數") setSaveButtonVisible("maint-save", false);
+    }
+
+    function confirmDiscardUnsaved() {
+      if (!unsavedChanges) return true;
+      const ok = window.confirm(`${unsavedArea || "資料"}有未儲存更新。要繼續並放棄未儲存內容嗎？`);
+      if (ok) clearUnsavedChanges();
+      return ok;
+    }
+
+    function editableAreaName(el) {
+      if (!el || !el.closest) return "";
+      if (el.closest("#target-editor") || el.closest("#out input[data-target-source='planner']")) return "目標";
+      if (el.closest("#catalog-editor")) return "營養清單";
+      if (el.closest(".detail-editor")) return "系統參數";
+      if (el.closest("#maint-editor")) return "餐單參數";
+      return "";
     }
 
     function playGenerateChime() {
@@ -281,6 +338,7 @@
     }
 
     function setActivePanel(panel, persist = true) {
+      if (persist && panel !== activePanel && !confirmDiscardUnsaved()) return false;
       const planner = document.getElementById("planner-panel");
       const config = document.getElementById("config-panel");
       const maint = document.getElementById("maint-panel");
@@ -313,6 +371,7 @@
       mShopping.classList.toggle("active", activePanel === "shopping");
       mDiagnostics.classList.toggle("active", activePanel === "diagnostics");
       if (persist) persistColumnWidths();
+      return true;
     }
 
     function setConfigMenuTreeOpen(open, persist = true) {
@@ -789,6 +848,7 @@
     }
 
     function openConfigChild(viewName) {
+      if (!confirmDiscardUnsaved()) return;
       setActivePanel("config");
       setConfigMenuTreeOpen(true);
       setConfigView(viewName);
