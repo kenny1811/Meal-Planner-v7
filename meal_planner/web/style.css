@@ -33,6 +33,10 @@
       font-size: 11px;
       position: sticky;
       top: 6px;
+      max-height: calc(100vh - 14px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 0;
     }
     .sidebar h2 { margin: 0 0 6px; font-size: 12px; }
     .sidebar .menu-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
