@@ -527,6 +527,7 @@
 
     let currentMaintFilter = "";
     let currentMaintEffectiveFilter = "";
+    let currentMaintYearFilter = "";
 
     function renderMaintEditor() {
       const editor = document.getElementById("maint-editor");
@@ -534,6 +535,7 @@
       if (maintSheetPayload.sheet_key === "roster") {
         currentMaintFilter = "";
         currentMaintEffectiveFilter = "";
+        currentMaintYearFilter = "";
         renderRosterMaintEditor();
         return;
       }
@@ -551,11 +553,16 @@
       
       let shiftCodeColIdx = undefined;
       let effectiveColIdx = undefined;
+      let dateColIdx = undefined;
       for (let i = 0; i < cols; i++) {
         if (isShiftCodeCol(i)) {
           shiftCodeColIdx = i;
           break;
         }
+      }
+      if (Array.isArray(rows[0])) {
+        dateColIdx = rows[0].findIndex((cell) => String(cell || "").trim() === "日期");
+        if (dateColIdx < 0) dateColIdx = undefined;
       }
       if (maintSheetPayload.sheet_key === "schedule_grid" && Array.isArray(rows[0])) {
         effectiveColIdx = rows[0].findIndex((cell) => {
@@ -601,6 +608,22 @@
         currentMaintFilter = "";
         currentMaintEffectiveFilter = "";
       }
+      if (dateColIdx !== undefined) {
+        const years = new Set();
+        for (let i = 1; i < rows.length; i++) {
+          if (!Array.isArray(rows[i])) continue;
+          const d = parseYmd(rows[i][dateColIdx]);
+          if (d && Number.isInteger(d.year)) years.add(String(d.year));
+        }
+        const yearOptions = Array.from(years).sort();
+        if (!yearOptions.includes(currentMaintYearFilter)) currentMaintYearFilter = "";
+        filterHtml += `<select id="maint-year-filter" class="maint-filter-select" style="margin-left: 8px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: inherit; cursor: pointer;">
+          <option value="">全部年份</option>
+          ${yearOptions.map(y => `<option value="${esc(y)}" ${y === currentMaintYearFilter ? "selected" : ""}>${esc(y)}</option>`).join("")}
+        </select>`;
+      } else {
+        currentMaintYearFilter = "";
+      }
 
       const body = rows.map((row, rIdx) => {
         const cells = Array.from({ length: cols }, (_, cIdx) => {
@@ -632,25 +655,36 @@
       
       const filterSelect = editor.querySelector("#maint-table-filter");
       const effectiveSelect = editor.querySelector("#maint-effective-filter");
-      if (filterSelect && shiftCodeColIdx !== undefined) {
+      const yearSelect = editor.querySelector("#maint-year-filter");
+      if ((filterSelect && shiftCodeColIdx !== undefined) || yearSelect) {
         const applyFilter = () => {
-          const codeValFilter = filterSelect.value;
+          const codeValFilter = filterSelect ? filterSelect.value : "";
           const effectiveValFilter = effectiveSelect ? effectiveSelect.value : "";
+          const yearValFilter = yearSelect ? yearSelect.value : "";
           currentMaintFilter = codeValFilter;
           currentMaintEffectiveFilter = effectiveValFilter;
+          currentMaintYearFilter = yearValFilter;
           editor.querySelectorAll("tr[data-maint-row-index]").forEach(tr => {
             const idx = Number(tr.getAttribute("data-maint-row-index"));
             if (idx === 0) return;
-            const codeInput = tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${shiftCodeColIdx}"]`);
+            const codeInput = shiftCodeColIdx !== undefined
+              ? tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${shiftCodeColIdx}"]`)
+              : null;
             const codeVal = codeInput ? String(codeInput.value).trim() : "";
             const versionInput = effectiveColIdx !== undefined
               ? tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${effectiveColIdx}"]`)
               : null;
             const versionVal = versionInput ? String(versionInput.value).trim() : "";
             const versionKey = versionVal || "__blank__";
+            const dateInput = dateColIdx !== undefined
+              ? tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${dateColIdx}"]`)
+              : null;
+            const parsedDate = dateInput ? parseYmd(dateInput.value) : null;
+            const rowYear = parsedDate ? String(parsedDate.year) : "";
             const codeMatches = !codeValFilter || codeVal === codeValFilter || codeVal === "";
             const versionMatches = !effectiveValFilter || versionKey === effectiveValFilter;
-            if (codeMatches && versionMatches) {
+            const yearMatches = !yearValFilter || rowYear === yearValFilter || rowYear === "";
+            if (codeMatches && versionMatches && yearMatches) {
               tr.style.display = "";
               setTimeout(() => {
                 tr.querySelectorAll("textarea[data-auto-row-height]").forEach(autoResizeTextarea);
@@ -660,9 +694,10 @@
             }
           });
         };
-        filterSelect.addEventListener("change", applyFilter);
+        if (filterSelect) filterSelect.addEventListener("change", applyFilter);
         if (effectiveSelect) effectiveSelect.addEventListener("change", applyFilter);
-        if (currentMaintFilter || currentMaintEffectiveFilter) applyFilter();
+        if (yearSelect) yearSelect.addEventListener("change", applyFilter);
+        if (currentMaintFilter || currentMaintEffectiveFilter || currentMaintYearFilter) applyFilter();
       }
 
       applyTableOffsets(editor);
