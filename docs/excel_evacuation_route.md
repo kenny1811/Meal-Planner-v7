@@ -12,8 +12,8 @@
 | `行位表` | Schedule events used to resolve meal clock times | SQLite `reference_schedule_rows` |
 | `更表` | Monthly day-to-roster-code input | Workbook runtime input |
 | `加班表` | Date-specific start/end override input | Workbook runtime input |
-| `更時表` | Required and reloaded for workbook parity; no planning reader yet | Workbook pending classification |
-| `公眾假期` | Required and reloaded for workbook parity; no planning reader yet | Workbook pending classification |
+| `更時表` | SQLite maintenance/reporting input for diagnostics and roster report views | SQLite `maintenance_sheet_rows` (`payroll_times`) |
+| `公眾假期` | SQLite maintenance/reporting input for roster report context | SQLite `maintenance_sheet_rows` (`public_holidays`) |
 
 ## First slice
 
@@ -37,7 +37,19 @@ The generic maintenance editor endpoints remain available for manual updates:
 
 For runtime inputs, use `sheet_key` values `roster` and `overtime`.
 
+## Workbook validation scope
+
+Full workbook validation now covers the core planning/import sheets only:
+
+- `更表`
+- `飯時`
+- `餐廳選擇`
+- `加班表`
+- `行位表`
+
+`更時表` and `公眾假期` are no longer core planning validation requirements. They can be imported and edited independently through the maintenance endpoints. Single-sheet maintenance imports are sheet-scoped, so importing `公眾假期` does not require unrelated workbook sheets to exist.
+
 ## Next extraction points
 
-1. Decide whether `更時表` and `公眾假期` are unused legacy parity checks or should become modeled inputs.
-2. Narrow full workbook validation to legacy/bootstrap paths only; runtime input import is already sheet-scoped.
+1. Add a UI shortcut for `POST /api/runtime-inputs/import` if the maintenance page should expose a one-click "refresh live inputs" action.
+2. Decide whether `醫療行程` should remain reporting-only or feed meal-time visibility in a future rule.

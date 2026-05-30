@@ -69,8 +69,6 @@ def validate_workbook_structure(wb: Workbook, settings: AppSettings | None = Non
         "餐廳選擇": settings.sheets.restaurant,
         "加班表": settings.sheets.overtime,
         "行位表": settings.sheets.schedule_grid,
-        "更時表": settings.sheets.payroll_times,
-        "公眾假期": settings.sheets.public_holidays,
     }
     missing_sheets = [name for name in sheet_names.values() if name not in wb.sheetnames]
     errors: list[str] = []
@@ -116,15 +114,16 @@ def _build_validation_message(errors: list[str], sheetnames: list[str]) -> str:
     return f"Excel 結構有問題，請先修正工作簿：\n{body}\n現有工作表：{available}"
 
 
-def load_workbook_data(path: Path | None = None) -> Workbook:
+def load_workbook_data(path: Path | None = None, *, validate: bool = True) -> Workbook:
     p = path or get_settings().workbook_path
     # 唔用 read_only：要跨多個 sheet 隨機讀儲存格，read_only 會觸發 ZIP 已關閉錯誤。
     wb = load_workbook(filename=p, read_only=False, data_only=True)
-    try:
-        validate_workbook_structure(wb, get_settings())
-    except Exception:
-        wb.close()
-        raise
+    if validate:
+        try:
+            validate_workbook_structure(wb, get_settings())
+        except Exception:
+            wb.close()
+            raise
     return wb
 
 

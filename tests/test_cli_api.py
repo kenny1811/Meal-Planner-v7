@@ -130,6 +130,32 @@ class CliApiTests(unittest.TestCase):
             os.environ["MENU_PROJECT_ROOT"] = old_root
         clear_settings_cache()
 
+    def test_api_single_maintenance_import_only_requires_target_sheet(self):
+        old_root = os.environ.get("MENU_PROJECT_ROOT")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["MENU_PROJECT_ROOT"] = tmp
+            clear_settings_cache()
+            settings = get_settings()
+            wb = Workbook()
+            wb.active.title = settings.sheets.public_holidays
+            wb[settings.sheets.public_holidays].append(["日期", "假期名稱"])
+            wb[settings.sheets.public_holidays].append(["2026-01-01", "元旦"])
+            wb.save(settings.workbook_path)
+
+            client = TestClient(app)
+            response = client.post("/api/maint/sheets/public_holidays/import")
+            payload = response.json()
+
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["rows"][1], ["2026-01-01", "元旦"])
+
+        if old_root is None:
+            os.environ.pop("MENU_PROJECT_ROOT", None)
+        else:
+            os.environ["MENU_PROJECT_ROOT"] = old_root
+        clear_settings_cache()
+
 
 if __name__ == "__main__":
     unittest.main()

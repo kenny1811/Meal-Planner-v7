@@ -55,6 +55,14 @@ class WorkbookValidationTests(unittest.TestCase):
 
         validate_workbook_structure(wb, get_settings())
 
+    def test_payroll_and_public_holiday_sheets_are_not_core_validation_requirements(self):
+        settings = get_settings()
+        wb = _make_valid_workbook()
+        del wb[settings.sheets.payroll_times]
+        del wb[settings.sheets.public_holidays]
+
+        validate_workbook_structure(wb, settings)
+
     def test_missing_sheet_message_names_sheet_and_existing_sheets(self):
         settings = get_settings()
         wb = _make_valid_workbook()

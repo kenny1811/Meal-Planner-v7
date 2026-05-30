@@ -10,7 +10,6 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
-from openpyxl import load_workbook
 from pydantic import BaseModel, Field
 
 from meal_planner.dates_input import DateValidationError, cutoff_date, parse_date_expression
@@ -507,7 +506,7 @@ def api_runtime_inputs() -> dict[str, Any]:
 def api_import_runtime_inputs() -> dict[str, Any]:
     try:
         settings = get_settings()
-        wb = load_workbook(filename=settings.workbook_path, read_only=False, data_only=True)
+        wb = load_workbook_data(settings.workbook_path, validate=False)
         try:
             payload = import_runtime_inputs_from_workbook(settings, wb, replace_existing=True)
         finally:
@@ -553,7 +552,7 @@ def api_import_maint_sheet(sheet_key: str) -> dict[str, Any]:
     sheet_key = _validate_maintenance_key(sheet_key)
     try:
         settings = get_settings()
-        wb = load_workbook_data(settings.workbook_path)
+        wb = load_workbook_data(settings.workbook_path, validate=False)
         try:
             bootstrap_sheet_from_workbook(settings, wb, sheet_key, replace_existing=True)
         finally:
