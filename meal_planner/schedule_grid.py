@@ -100,6 +100,7 @@ class ScheduleRow:
     t: time | None
     content: str
     duration_min: int | None
+    effective_from: date | None = None
 
 
 def load_schedule_rows(ws: Worksheet) -> list[ScheduleRow]:
@@ -113,6 +114,7 @@ def load_schedule_rows(ws: Worksheet) -> list[ScheduleRow]:
     c_time = h.get("時間")
     c_content = h.get("內容")
     c_dur = h.get("時長")
+    c_eff = h.get("生效日期") or h.get("生效") or h.get("Effective From")
     if not c_code or not c_time or not c_content:
         return []
     rows: list[ScheduleRow] = []
@@ -133,13 +135,62 @@ def load_schedule_rows(ws: Worksheet) -> list[ScheduleRow]:
                 t=_to_time(ws.cell(r, c_time).value),
                 content=str(ws.cell(r, c_content).value or ""),
                 duration_min=dur,
+                effective_from=_to_date(ws.cell(r, c_eff).value) if c_eff else None,
             )
         )
     return rows
 
 
-def rows_for_roster(rows: list[ScheduleRow], roster_code: str) -> list[ScheduleRow]:
-    return [x for x in rows if grid_row_matches_roster(x.code, roster_code)]
+def rows_for_roster(rows: list[ScheduleRow], roster_code: str, day: date | None = None) -> list[ScheduleRow]:
+    matched = [x for x in rows if grid_row_matches_roster(x.code, roster_code)]
+    if day is None:
+        return matched
+    dated = [x for x in matched if x.effective_from is not None and x.effective_from <= day]
+    if not dated:
+        return [x for x in matched if x.effective_from is None]
+    latest = max(x.effective_from for x in dated if x.effective_from is not None)
+    return [x for x in dated if x.effective_from == latest]
+
+
+def load_schedule_rows_from_rows(rows: list[list[Any]]) -> list[ScheduleRow]:
+    if not rows:
+        return []
+    headers = {str(v).strip(): idx for idx, v in enumerate(rows[0]) if v is not None and str(v).strip()}
+    c_code = headers.get("更碼")
+    c_time = headers.get("時間")
+    c_content = headers.get("內容")
+    c_dur = headers.get("時長")
+    c_eff = headers.get("生效日期")
+    if c_eff is None:
+        c_eff = headers.get("生效")
+    if c_eff is None:
+        c_eff = headers.get("Effective From")
+    if c_code is None or c_time is None or c_content is None:
+        return []
+    out: list[ScheduleRow] = []
+    for row in rows[1:]:
+        if not isinstance(row, list) or c_code >= len(row):
+            continue
+        code = str(row[c_code] or "").strip()
+        if not code:
+            continue
+        dur_raw = row[c_dur] if c_dur is not None and c_dur < len(row) else None
+        dur: int | None = None
+        if dur_raw is not None:
+            try:
+                dur = int(float(dur_raw))
+            except (TypeError, ValueError):
+                dur = None
+        out.append(
+            ScheduleRow(
+                code=code,
+                t=_to_time(row[c_time]) if c_time < len(row) else None,
+                content=str(row[c_content] if c_content < len(row) and row[c_content] is not None else ""),
+                duration_min=dur,
+                effective_from=_to_date(row[c_eff]) if c_eff is not None and c_eff < len(row) else None,
+            )
+        )
+    return out
 
 
 def report_start_end(rows: list[ScheduleRow]) -> tuple[time | None, time | None]:
@@ -311,7 +362,7 @@ def resolve_meal_times_display(
         all_rows = load_schedule_rows(sg_ws)
     else:
         all_rows = schedule_rows
-    my_rows = rows_for_roster(all_rows, roster_code)
+    my_rows = rows_for_roster(all_rows, roster_code, day)
     g_start, g_end = report_start_end(my_rows)
 
     ot_start, ot_end = None, None

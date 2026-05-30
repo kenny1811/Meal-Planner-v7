@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import closing
-from datetime import time
+from datetime import date, time
 import sqlite3
 from typing import Any
 
@@ -66,10 +66,17 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             code TEXT NOT NULL,
             time_text TEXT,
             content TEXT NOT NULL,
-            duration_min INTEGER
+            duration_min INTEGER,
+            effective_from TEXT
         );
         """
     )
+    cols = {
+        str(row["name"])
+        for row in conn.execute("PRAGMA table_info(reference_schedule_rows)").fetchall()
+    }
+    if "effective_from" not in cols:
+        conn.execute("ALTER TABLE reference_schedule_rows ADD COLUMN effective_from TEXT")
     conn.commit()
 
 
@@ -83,6 +90,14 @@ def _time_text(value: time | None) -> str | None:
 
 def _read_time(value: str | None) -> time | None:
     return time.fromisoformat(value) if value else None
+
+
+def _date_text(value: date | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def _read_date(value: str | None) -> date | None:
+    return date.fromisoformat(value) if value else None
 
 
 def _seed_reference_tables(conn: sqlite3.Connection, settings: AppSettings, wb: Workbook) -> None:
@@ -144,11 +159,11 @@ def _seed_reference_tables(conn: sqlite3.Connection, settings: AppSettings, wb: 
     conn.executemany(
         """
         INSERT INTO reference_schedule_rows(
-            row_index, code, time_text, content, duration_min
-        ) VALUES (?, ?, ?, ?, ?)
+            row_index, code, time_text, content, duration_min, effective_from
+        ) VALUES (?, ?, ?, ?, ?, ?)
         """,
         [
-            (idx, row.code, _time_text(row.t), row.content, row.duration_min)
+            (idx, row.code, _time_text(row.t), row.content, row.duration_min, _date_text(row.effective_from))
             for idx, row in enumerate(schedule_rows, start=1)
         ],
     )
@@ -204,7 +219,7 @@ def load_planning_references(
         bootstrap_from_workbook(settings, wb)
 
     from meal_planner.meal_schedule import MEAL_LABELS, MealTimeRule
-    from meal_planner.schedule_grid import ScheduleRow
+    from meal_planner.schedule_grid import ScheduleRow, load_schedule_rows_from_rows
 
     with closing(_connect(settings)) as conn:
         _ensure_schema(conn)
@@ -251,7 +266,17 @@ def load_planning_references(
             t=_read_time(row["time_text"]),
             content=str(row["content"]),
             duration_min=int(row["duration_min"]) if row["duration_min"] is not None else None,
+            effective_from=_read_date(row["effective_from"]),
         )
         for row in schedule_rows
     ]
+    try:
+        from meal_planner.maintenance_db import load_sheet_rows
+
+        sheet = load_sheet_rows("schedule_grid", settings)
+        maint_schedule = load_schedule_rows_from_rows(sheet.get("rows", []))
+        if maint_schedule:
+            schedule = maint_schedule
+    except Exception:
+        pass
     return rules, patterns, restaurants, schedule

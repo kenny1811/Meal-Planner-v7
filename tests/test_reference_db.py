@@ -7,6 +7,7 @@ from openpyxl import Workbook
 
 from meal_planner.nutrition_catalog import NUTRIENT_HEADER_BY_KEY
 from meal_planner.reference_db import load_planning_references
+from meal_planner.maintenance_db import save_sheet_rows
 from meal_planner.settings import clear_settings_cache, get_settings
 
 
@@ -71,6 +72,24 @@ class ReferenceDatabaseTests(unittest.TestCase):
         self.assertEqual(second_rules[0].code_pattern, "EleM")
         self.assertEqual(second_restaurants[0]["store"], "店")
         self.assertEqual(second_schedule[0].content, "飯")
+
+    def test_schedule_grid_maintenance_rows_override_reference_rows(self):
+        settings = get_settings()
+        wb = _make_workbook()
+        load_planning_references(settings, wb)
+        save_sheet_rows(
+            "schedule_grid",
+            [
+                ["更碼", "時間", "內容", "時長", "生效日期"],
+                ["EleM", "13:10", "飯", "45", "2026-06-01"],
+            ],
+            settings,
+        )
+
+        _, _, _, schedule = load_planning_references(settings)
+
+        self.assertEqual(schedule[0].t, time(13, 10))
+        self.assertEqual(schedule[0].effective_from.isoformat(), "2026-06-01")
 
 
 if __name__ == "__main__":
