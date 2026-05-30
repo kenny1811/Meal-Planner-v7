@@ -283,6 +283,15 @@
       return data || {};
     }
 
+    async function importRuntimeInputs() {
+      const r = await fetch("/api/runtime-inputs/import", { method: "POST" });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Import runtime inputs failed.", r.status));
+      }
+      return data || {};
+    }
+
     async function loadDiagnostics() {
       const r = await fetch("/api/diagnostics");
       const data = await r.json().catch(() => ({}));

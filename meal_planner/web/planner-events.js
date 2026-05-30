@@ -196,6 +196,7 @@
     document.getElementById("catalog-save").addEventListener("click", saveNutritionCatalog);
     document.getElementById("detail-save").addEventListener("click", saveDetailSettings);
     document.getElementById("maint-save").addEventListener("click", saveMaintEditor);
+    document.getElementById("runtime-import").addEventListener("click", importLiveRuntimeInputs);
     document.getElementById("detail-code-definitions").addEventListener("contextmenu", (ev) => {
       const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-detail-code-row]") : null;
       const idx = row ? Number(row.getAttribute("data-detail-code-row")) : -1;

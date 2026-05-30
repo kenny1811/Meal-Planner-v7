@@ -749,6 +749,29 @@
       }
     }
 
+    async function importLiveRuntimeInputs() {
+      const btn = document.getElementById("runtime-import");
+      if (btn) btn.disabled = true;
+      showMaintError("");
+      setMaintStatus("Importing live inputs...");
+      try {
+        const payload = await importRuntimeInputs();
+        await refreshMaintSheets();
+        if (activeMaintSheetKey === "roster" || activeMaintSheetKey === "overtime") {
+          await openMaintSheet(activeMaintSheetKey, false);
+        }
+        const counts = (payload.sheets || [])
+          .map((sheet) => `${menuLabel(sheet.sheet_key)} ${sheet.row_count || 0}`)
+          .join(", ");
+        setMaintStatus(`Imported ${counts || "live inputs"}`);
+      } catch (e) {
+        showMaintError(String(e.message || e));
+        setMaintStatus("");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
     function diagnosticMark(ok) {
       return ok ? "OK" : "Missing";
     }
