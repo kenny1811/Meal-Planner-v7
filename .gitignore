@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local runtime data and generated backups
+*.sqlite3
+plans_store.json
+.plans_store_backups/
+.project_backups/
+temp.jsonl
+raw.txt
+
+# Local Excel workbooks and lock files
+*.xlsm
+~$*
+
+# OS/editor noise
+Thumbs.db
+.DS_Store

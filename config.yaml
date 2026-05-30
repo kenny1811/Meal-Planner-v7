@@ -1,0 +1,91 @@
+# 餐單生成 — 預設組態（§2：禁止在程式內寫死；此檔為預設來源）
+# 可用環境變數覆寫：MENU_WORKBOOK、MENU_DATABASE、MENU_CONFIG、MENU_PROJECT_ROOT
+
+workbook:
+  # 相對於專案根目錄；或由 MENU_WORKBOOK 指定絕對路徑
+  filename: "餐單AI版測試.xlsm"
+
+database:
+  # Phase 1：營養清單與 targets SQLite；可由 MENU_DATABASE 指定絕對路徑
+  filename: "meal_planner.sqlite3"
+
+sheets:
+  menu_v5: "餐單v5"
+  roster: "更表"
+  meal_times: "飯時"
+  nutrition_list: "營養清單"
+  restaurant: "餐廳選擇"
+  overtime: "加班表"
+  schedule_grid: "行位表"
+  payroll_times: "更時表"
+  public_holidays: "公眾假期"
+
+# 餐單v5 指標列（1-based 列號，與現有試算表對齊；若表結構變更請改此處）
+menu_v5_layout:
+  indicator_header_row: 1
+  workday_indicator_row: 2
+  nonworkday_indicator_row: 3
+  # 營養欄由 F 欄起共 10 欄（卡路里…反式脂肪）
+  nutrient_first_col: 6
+  nutrient_col_count: 10
+
+nutrition_format:
+  tolerance: 5
+  kcal_per_fat_g: 9
+  fat_pct_total: 0.275
+  fat_pct_saturated: 0.07
+  fat_pct_trans: 0.01
+
+nutrition_portion:
+  default_g: 100
+
+rice:
+  cooked_to_raw_brown: 2.623
+  cooked_to_raw_other: 2.67
+  water_multiplier: 2
+  rice_category_exact: "米"
+  # 米類備註：食材名稱包含以下字串即計入熟重；包含 brown_name_contains 則用糙米換算率。
+  note_name_contains: ["米"]
+  brown_name_contains: "糙米"
+
+dates:
+  reject_days_before_today: 6
+  timezone: "Asia/Hong_Kong"
+
+pattern:
+  item_separator: "+"
+  item_alt_separator: "/"
+
+# 飯時：更碼「PenC」「PenM」等只命中 PenC*／PenM 單列時，試算表仍按 2–5 行拆四餐 Pattern（EleM 早餐、IFCM* 午餐…）
+meal_times_stack:
+  enabled: true
+  roster_prefix: "Pen"
+  pattern_rules: ["EleM", "IFCM*", "PenC*", "PenM"]
+
+# 業務規則：把原本散落在程式內的餐單行為集中在此。
+meal_business_rules:
+  # 固定餐不交由 solver 調整，只按候選輪替揀食材並把營養扣入全日總數。
+  fixed_meals: ["小食"]
+  # 餐廳午餐只在返工日套用；命中後午餐由餐廳固定營養提供。
+  restaurant_lunch_workday_only: true
+
+# LP 次目標：貼近 Hi 之帶寬（與 §4 對應；優化器實作時讀取）
+optimizer:
+  band_delta_default: 50
+  # 快速生成：以下三項會增加多輪 solver 次數；需要深入診斷時先手動打開。
+  replacement_search_enabled: false
+  auto_retry_enabled: false
+  relaxation_simulation_enabled: false
+  weights:
+    kcal: 1.0
+    protein: 1.0
+    carb: 15.0
+    sugar: 0.5
+    cholesterol: 0.5
+    sodium: 0.5
+    calcium: 1.0
+  # 無法全部達標時，優先避免脂肪超標；鈣可以高過下限。
+  fat_cap_weights:
+    total: 50.0
+    saturated: 10.0
+    trans: 10.0

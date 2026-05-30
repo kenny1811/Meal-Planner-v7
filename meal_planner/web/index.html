@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Meal Planner v6</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260520-favicon" />
+  <link rel="stylesheet" href="style.css?v=20260530-menu-context-v1" />
+</head>
+<body>
+  <div id="clock-top-right" class="clock-top-right">--/--/---- --- --:--:--</div>
+  <div class="app-shell">
+  <aside id="sidebar" class="sidebar">
+    <h2>Menu</h2>
+    <div class="menu-list" data-menu-drop-group="top">
+      <div class="menu-tree is-open" id="config-menu-tree">
+        <button type="button" class="menu-item menu-tree-toggle" data-panel="config" data-menu-group="top" data-menu-key="config" id="menu-config" aria-expanded="true">
+          <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Config</span><span class="menu-tree-mark" aria-hidden="true"></span>
+        </button>
+        <div class="menu-tree-children" data-menu-drop-group="config">
+          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="target" id="menu-config-target"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Target</span></button>
+          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="catalog" id="menu-config-catalog"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Catalog</span></button>
+          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="details" id="menu-config-details"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Detail Settings</span></button>
+        </div>
+      </div>
+      <div class="menu-tree" id="maint-menu-tree">
+        <button type="button" class="menu-item menu-tree-toggle" data-panel="maint" data-menu-group="top" data-menu-key="maint" id="menu-maint" aria-expanded="false">
+          <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Maint</span><span class="menu-tree-mark" aria-hidden="true"></span>
+        </button>
+        <div class="menu-tree-children" id="maint-menu-children" data-menu-drop-group="maint"></div>
+      </div>
+      <button type="button" class="menu-item active" data-panel="planner" data-menu-group="top" data-menu-key="planner" id="menu-planner"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Menu Planner</span></button>
+      <button type="button" class="menu-item" data-panel="shopping" data-menu-group="top" data-menu-key="shopping" id="menu-shopping"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Shopping List</span></button>
+      <button type="button" class="menu-item" data-panel="diagnostics" data-menu-group="top" data-menu-key="diagnostics" id="menu-diagnostics"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Diagnostics</span></button>
+    </div>
+  </aside>
+  <div id="sidebar-resizer" class="sidebar-resizer" title="Drag to resize sidebar"></div>
+  <main class="main">
+  <section id="planner-panel">
+  <h1>Meal Planner v6</h1>
+  <div class="top">
+    <span><label for="year">Year</label><input type="number" id="year" min="2000" max="2100" required /></span>
+    <span><label for="month">Month</label><input type="number" id="month" min="1" max="12" required /></span>
+    <span><label for="dates_expr">Date(s)</label><input type="text" id="dates_expr" placeholder="11 / 3 5 7 / 12-15 / 12 13 14 15-17 / 12-15,27-3" required /></span>
+    <button type="button" class="btn" id="go">Generate</button>
+    <button type="button" class="btn" id="recalc">Recalculate</button>
+    <button type="button" class="btn" id="planner-target-save" style="display:none;">Save Targets</button>
+    <label class="chk"><input type="checkbox" id="fast_mode" checked />Fast mode</label>
+    <label class="chk"><input type="checkbox" id="show_past" checked />Show past dates</label>
+    <label class="chk"><input type="checkbox" id="skip" />Skip cutoff check</label>
+    <span class="cutoff-inline" id="cutoff"></span>
+  </div>
+  <div id="err" class="err"></div>
+  <div id="out"></div>
+  </section>
+  <section id="config-panel" style="display:none;">
+    <h1>Config</h1>
+    <div class="config-views">
+      <section class="config-view" data-config-view="targets">
+        <h2>Targets</h2>
+        <div class="config-toolbar">
+          <button type="button" class="btn" id="target-save" style="display:none;">Save Targets</button>
+          <span id="target-status" class="target-status"></span>
+        </div>
+        <div id="target-err" class="err"></div>
+        <div id="target-editor" class="target-editor"></div>
+      </section>
+      <section class="config-view catalog-section" data-config-view="catalog" style="display:none;">
+        <h2>Nutrition Catalog</h2>
+        <div class="config-toolbar catalog-toolbar">
+          <button type="button" class="btn" id="catalog-save" style="display:none;">Save Catalog</button>
+          <span><label for="catalog-filter">Filter</label><input type="text" id="catalog-filter" /></span>
+          <span id="catalog-status" class="target-status"></span>
+        </div>
+        <div id="catalog-err" class="err"></div>
+        <div id="catalog-editor"></div>
+        <div id="catalog-row-menu" class="catalog-row-menu" hidden>
+          <button type="button" data-catalog-row-action="insert">Insert Row</button>
+          <button type="button" data-catalog-row-action="delete">Delete Row</button>
+        </div>
+      </section>
+      <section class="config-view detail-section" data-config-view="details" style="display:none;">
+        <h2>Detail Settings</h2>
+        <div class="config-toolbar">
+          <button type="button" class="btn" id="detail-save" style="display:none;">Save Settings</button>
+          <span id="detail-status" class="target-status"></span>
+        </div>
+        <div id="detail-err" class="err"></div>
+        <div class="detail-editor">
+          <table class="detail-table" data-form-table>
+            <colgroup>
+              <col data-form-col-key="detail_rice_label" data-form-col-default="190" />
+              <col data-form-col-key="detail_rice_value" data-form-col-default="170" />
+            </colgroup>
+            <tbody>
+              <tr>
+                <th scope="row" data-form-col-key="detail_rice_label">Brown rice cooked/raw ratio</th>
+                <td><input type="number" id="detail-rice-brown" min="0.001" step="0.001" /></td>
+              </tr>
+              <tr>
+                <th scope="row" data-form-col-key="detail_rice_label">Other rice cooked/raw ratio</th>
+                <td><input type="number" id="detail-rice-other" min="0.001" step="0.001" /></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="detail-subtitle">Roster code definitions</div>
+          <div id="detail-code-definitions"></div>
+        </div>
+        <div id="detail-row-menu" class="maint-row-menu" hidden>
+          <button type="button" data-detail-row-action="insert">Insert Row</button>
+          <button type="button" data-detail-row-action="delete">Delete Row</button>
+          <button type="button" data-detail-row-action="append">Append Row</button>
+        </div>
+      </section>
+    </div>
+  </section>
+  <section id="maint-panel" style="display:none;">
+    <h1>Maint</h1>
+    <div class="config-toolbar">
+      <button type="button" class="btn" id="maint-save" title="Ctrl+S" style="display:none;">Save</button>
+      <span id="maint-status" class="target-status"></span>
+    </div>
+    <div id="maint-err" class="err"></div>
+    <div id="maint-editor" class="maint-editor"></div>
+    <div id="maint-row-menu" class="maint-row-menu" hidden>
+      <button type="button" data-maint-row-action="insert">Insert Row</button>
+      <button type="button" data-maint-row-action="delete">Delete Row</button>
+      <button type="button" data-maint-row-action="append">Append Row</button>
+    </div>
+  </section>
+  <section id="shopping-panel" style="display:none;">
+    <h1>Shopping List</h1>
+    <div class="top">
+      <span><label for="shop_start">Start Date</label><input type="date" id="shop_start" /></span>
+      <span><label for="shop_end">End Date</label><input type="date" id="shop_end" /></span>
+      <button type="button" class="btn" id="shop_generate">Generate List</button>
+    </div>
+    <div id="shopping-out"></div>
+  </section>
+  <section id="diagnostics-panel" style="display:none;">
+    <h1>Diagnostics</h1>
+    <div class="config-toolbar">
+      <button type="button" class="btn" id="diagnostics-refresh">Refresh</button>
+      <span id="diagnostics-status" class="target-status"></span>
+    </div>
+    <div id="diagnostics-err" class="err"></div>
+    <div id="diagnostics-out" class="diagnostics-out"></div>
+  </section>
+  <footer>Local API: <code>/api/preview</code></footer>
+  </main>
+  </div>
+  <div id="menu-context-menu" class="menu-context-menu" hidden>
+    <button type="button" data-menu-context-action="insert-before">Insert Above</button>
+    <button type="button" data-menu-context-action="insert-after">Insert Below</button>
+    <button type="button" data-menu-context-action="rename">Rename</button>
+    <button type="button" data-menu-context-action="delete">Delete Item</button>
+  </div>
+  <script defer src="api.js?v=20260530-menu-tree-open-v1"></script>
+  <script defer src="shopping.js?v=20260523-ui-en"></script>
+  <script defer src="planner.js?v=20260530-menu-dedupe-v1"></script>
+  <script defer src="planner-maint.js?v=20260530-menu-tree-open-v1"></script>
+  <script defer src="planner-config.js?v=20260525-detail-row-menu-v1"></script>
+  <script defer src="planner-render.js?v=20260523-planner-offset-v1"></script>
+  <script defer src="planner-events.js?v=20260530-menu-tree-open-v1"></script>
+</body>
+</html>
