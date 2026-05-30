@@ -159,8 +159,11 @@
       ev.returnValue = "";
     });
 
-    document.getElementById("menu-planner").addEventListener("click", () => setActivePanel("planner"));
-    document.getElementById("menu-config").addEventListener("click", () => {
+    document.getElementById("menu-planner").addEventListener("click", async () => {
+      if (await resolveUnsavedBeforeLeaving()) setActivePanel("planner");
+    });
+    document.getElementById("menu-config").addEventListener("click", async () => {
+      if (!(await resolveUnsavedBeforeLeaving())) return;
       const tree = document.getElementById("config-menu-tree");
       const wasOpen = !!(tree && tree.classList.contains("is-open"));
       openConfigChild("targets");
@@ -169,7 +172,8 @@
     document.getElementById("menu-config-target").addEventListener("click", () => openConfigChild("targets"));
     document.getElementById("menu-config-catalog").addEventListener("click", () => openConfigChild("catalog"));
     document.getElementById("menu-config-details").addEventListener("click", () => openConfigChild("details"));
-    document.getElementById("menu-maint").addEventListener("click", () => {
+    document.getElementById("menu-maint").addEventListener("click", async () => {
+      if (!(await resolveUnsavedBeforeLeaving())) return;
       const tree = document.getElementById("maint-menu-tree");
       const wasOpen = !!(tree && tree.classList.contains("is-open"));
       if (wasOpen) {
@@ -186,12 +190,14 @@
         setActivePanel("maint");
       }
     });
-    document.getElementById("menu-shopping").addEventListener("click", () => {
+    document.getElementById("menu-shopping").addEventListener("click", async () => {
+      if (!(await resolveUnsavedBeforeLeaving())) return;
       setActivePanel("shopping");
       seedShoppingDateRange();
       if (!Object.keys(shoppingCatalogByName).length) loadShoppingCatalog();
     });
-    document.getElementById("menu-diagnostics").addEventListener("click", () => {
+    document.getElementById("menu-diagnostics").addEventListener("click", async () => {
+      if (!(await resolveUnsavedBeforeLeaving())) return;
       setActivePanel("diagnostics");
       refreshDiagnostics();
     });

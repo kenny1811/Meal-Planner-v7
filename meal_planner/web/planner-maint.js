@@ -686,7 +686,7 @@
 
     async function openMaintSheet(sheetKey, openTree = true) {
       if (!sheetKey) return;
-      if (sheetKey !== activeMaintSheetKey && !confirmDiscardUnsaved()) return;
+      if (sheetKey !== activeMaintSheetKey && !(await resolveUnsavedBeforeLeaving())) return;
       setActivePanel("maint");
       if (openTree) setMaintMenuTreeOpen(true);
       activeMaintSheetKey = sheetKey;

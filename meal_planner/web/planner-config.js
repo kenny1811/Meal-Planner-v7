@@ -658,21 +658,19 @@
 
     function saveActiveEditor() {
       if (activePanel === "planner") {
-        saveTargetEditor("planner");
-        return;
+        return saveTargetEditor("planner");
       }
       if (activePanel === "maint") {
-        saveMaintEditor();
-        return;
+        return saveMaintEditor();
       }
-      if (activePanel !== "config") return;
+      if (activePanel !== "config") return Promise.resolve();
       const catalog = document.querySelector('.config-view[data-config-view="catalog"]');
       if (catalog && catalog.style.display !== "none") {
-        saveNutritionCatalog();
+        return saveNutritionCatalog();
       } else if (document.querySelector('.config-view[data-config-view="details"]')?.style.display !== "none") {
-        saveDetailSettings();
+        return saveDetailSettings();
       } else {
-        saveTargetEditor("config");
+        return saveTargetEditor("config");
       }
     }
 

@@ -151,11 +151,63 @@
       if (!area || area === "餐單參數") setSaveButtonVisible("maint-save", false);
     }
 
-    function confirmDiscardUnsaved() {
+    function showUnsavedDialog() {
+      return new Promise((resolve) => {
+        const backdrop = document.getElementById("unsaved-dialog");
+        const message = document.getElementById("unsaved-message");
+        const save = document.getElementById("unsaved-save");
+        const ignore = document.getElementById("unsaved-ignore");
+        const cancel = document.getElementById("unsaved-cancel");
+        if (!backdrop || !save || !ignore || !cancel) {
+          resolve("cancel");
+          return;
+        }
+        if (message) message.textContent = `${unsavedArea || "資料"}有未儲存更新。`;
+        backdrop.hidden = false;
+        const cleanup = (choice) => {
+          backdrop.hidden = true;
+          save.disabled = false;
+          ignore.disabled = false;
+          cancel.disabled = false;
+          save.removeEventListener("click", onSave);
+          ignore.removeEventListener("click", onIgnore);
+          cancel.removeEventListener("click", onCancel);
+          document.removeEventListener("keydown", onKey);
+          resolve(choice);
+        };
+        const onSave = () => {
+          save.disabled = true;
+          ignore.disabled = true;
+          cancel.disabled = true;
+          cleanup("save");
+        };
+        const onIgnore = () => cleanup("ignore");
+        const onCancel = () => cleanup("cancel");
+        const onKey = (ev) => {
+          if (ev.key === "Escape") cleanup("cancel");
+        };
+        save.addEventListener("click", onSave);
+        ignore.addEventListener("click", onIgnore);
+        cancel.addEventListener("click", onCancel);
+        document.addEventListener("keydown", onKey);
+        save.focus();
+      });
+    }
+
+    async function resolveUnsavedBeforeLeaving() {
       if (!unsavedChanges) return true;
-      const ok = window.confirm(`${unsavedArea || "資料"}有未儲存更新。要繼續並放棄未儲存內容嗎？`);
-      if (ok) clearUnsavedChanges();
-      return ok;
+      const choice = await showUnsavedDialog();
+      if (choice === "cancel") return false;
+      if (choice === "ignore") {
+        clearUnsavedChanges();
+        return true;
+      }
+      try {
+        await saveActiveEditor();
+        return !unsavedChanges;
+      } catch (_) {
+        return false;
+      }
     }
 
     function editableAreaName(el) {
@@ -338,7 +390,6 @@
     }
 
     function setActivePanel(panel, persist = true) {
-      if (persist && panel !== activePanel && !confirmDiscardUnsaved()) return false;
       const planner = document.getElementById("planner-panel");
       const config = document.getElementById("config-panel");
       const maint = document.getElementById("maint-panel");
@@ -847,8 +898,8 @@
       });
     }
 
-    function openConfigChild(viewName) {
-      if (!confirmDiscardUnsaved()) return;
+    async function openConfigChild(viewName) {
+      if (!(await resolveUnsavedBeforeLeaving())) return;
       setActivePanel("config");
       setConfigMenuTreeOpen(true);
       setConfigView(viewName);
