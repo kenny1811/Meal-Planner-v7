@@ -397,10 +397,10 @@
       }).join("");
       const topHeight = Number(formColumnWidths.maint_roster_top_height);
       const splitStyle = Number.isFinite(topHeight) ? ` style="grid-template-rows:${Math.max(0, topHeight)}px 6px 1fr"` : "";
-      editor.innerHTML = `<div class="maint-sheet-title">Roster</div>
+      editor.innerHTML = `<div class="maint-sheet-title">${esc(menuLabel("roster"))}</div>
         <div class="maint-roster-split"${splitStyle}>
           <section class="maint-roster-pane">
-            <div class="maint-pane-title">Monthly roster</div>
+            <div class="maint-pane-title">${esc(menuLabel("roster"))}</div>
             <table class="maint-roster-table" data-form-table>
               <colgroup>
                 <col data-form-col-key="maint_roster_text" data-form-col-default="760" />
@@ -410,7 +410,7 @@
           </section>
           <div id="maint-roster-report-resizer" class="maint-roster-report-resizer" title="Drag to resize report height"></div>
           <section class="maint-roster-pane" id="maint-roster-report-pane">
-            <div class="maint-pane-title" title="Drag left or right to move report">Roster report</div>
+            <div class="maint-pane-title" title="Drag left or right to move report">${esc(menuLabel("roster"))}報表</div>
             <div id="maint-roster-report">${renderRosterMaintReport(rows)}</div>
           </section>
         </div>`;
@@ -526,18 +526,20 @@
     }
 
     let currentMaintFilter = "";
+    let currentMaintEffectiveFilter = "";
 
     function renderMaintEditor() {
       const editor = document.getElementById("maint-editor");
       if (!editor) return;
       if (maintSheetPayload.sheet_key === "roster") {
         currentMaintFilter = "";
+        currentMaintEffectiveFilter = "";
         renderRosterMaintEditor();
         return;
       }
       const rows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows : [];
       const cols = maintColumnCount(rows);
-      const title = MAINT_SHEET_LABELS[maintSheetPayload.sheet_key] || maintSheetPayload.display_name || "Sheet";
+      const title = menuLabel(maintSheetPayload.sheet_key) || maintSheetPayload.display_name || "Sheet";
       const formKey = `maint_${maintSheetPayload.sheet_key || "sheet"}`;
       const colGroup = Array.from(
         { length: cols },
@@ -548,11 +550,19 @@
       };
       
       let shiftCodeColIdx = undefined;
+      let effectiveColIdx = undefined;
       for (let i = 0; i < cols; i++) {
         if (isShiftCodeCol(i)) {
           shiftCodeColIdx = i;
           break;
         }
+      }
+      if (maintSheetPayload.sheet_key === "schedule_grid" && Array.isArray(rows[0])) {
+        effectiveColIdx = rows[0].findIndex((cell) => {
+          const text = String(cell || "").trim();
+          return text === "生效日期" || text === "生效" || text === "Effective From";
+        });
+        if (effectiveColIdx < 0) effectiveColIdx = undefined;
       }
 
       let filterHtml = "";
@@ -565,11 +575,31 @@
         }
         const codes = Array.from(uniqueCodes).filter(Boolean).sort();
         filterHtml = `<select id="maint-table-filter" class="maint-filter-select" style="margin-left: 16px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: inherit; cursor: pointer;">
-          <option value="">全部更碼 (All)</option>
+          <option value="">全部更碼</option>
           ${codes.map(c => `<option value="${esc(c)}" ${c === currentMaintFilter ? "selected" : ""}>${esc(c)}</option>`).join("")}
         </select>`;
+        if (effectiveColIdx !== undefined) {
+          const uniqueVersions = new Set();
+          for (let i = 1; i < rows.length; i++) {
+            if (!Array.isArray(rows[i])) continue;
+            const version = String(rows[i][effectiveColIdx] || "").trim();
+            uniqueVersions.add(version || "__blank__");
+          }
+          const versions = Array.from(uniqueVersions).sort((a, b) => {
+            if (a === "__blank__") return -1;
+            if (b === "__blank__") return 1;
+            return a.localeCompare(b);
+          });
+          filterHtml += `<select id="maint-effective-filter" class="maint-filter-select" style="margin-left: 8px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: inherit; cursor: pointer;">
+            <option value="">全部生效日期</option>
+            ${versions.map(v => `<option value="${esc(v)}" ${v === currentMaintEffectiveFilter ? "selected" : ""}>${esc(v === "__blank__" ? "未填生效日期" : v)}</option>`).join("")}
+          </select>`;
+        } else {
+          currentMaintEffectiveFilter = "";
+        }
       } else {
         currentMaintFilter = "";
+        currentMaintEffectiveFilter = "";
       }
 
       const body = rows.map((row, rIdx) => {
@@ -601,35 +631,38 @@
       });
       
       const filterSelect = editor.querySelector("#maint-table-filter");
+      const effectiveSelect = editor.querySelector("#maint-effective-filter");
       if (filterSelect && shiftCodeColIdx !== undefined) {
         const applyFilter = () => {
-          const val = filterSelect.value;
-          currentMaintFilter = val;
+          const codeValFilter = filterSelect.value;
+          const effectiveValFilter = effectiveSelect ? effectiveSelect.value : "";
+          currentMaintFilter = codeValFilter;
+          currentMaintEffectiveFilter = effectiveValFilter;
           editor.querySelectorAll("tr[data-maint-row-index]").forEach(tr => {
             const idx = Number(tr.getAttribute("data-maint-row-index"));
             if (idx === 0) return;
-            if (!val) {
+            const codeInput = tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${shiftCodeColIdx}"]`);
+            const codeVal = codeInput ? String(codeInput.value).trim() : "";
+            const versionInput = effectiveColIdx !== undefined
+              ? tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${effectiveColIdx}"]`)
+              : null;
+            const versionVal = versionInput ? String(versionInput.value).trim() : "";
+            const versionKey = versionVal || "__blank__";
+            const codeMatches = !codeValFilter || codeVal === codeValFilter || codeVal === "";
+            const versionMatches = !effectiveValFilter || versionKey === effectiveValFilter;
+            if (codeMatches && versionMatches) {
               tr.style.display = "";
               setTimeout(() => {
                 tr.querySelectorAll("textarea[data-auto-row-height]").forEach(autoResizeTextarea);
               }, 0);
             } else {
-              const input = tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${shiftCodeColIdx}"]`);
-              const codeVal = input ? String(input.value).trim() : "";
-              if (codeVal === val || codeVal === "") {
-                tr.style.display = "";
-                // Delay auto resize to ensure browser has applied display: "" and reflowed
-                setTimeout(() => {
-                  tr.querySelectorAll("textarea[data-auto-row-height]").forEach(autoResizeTextarea);
-                }, 0);
-              } else {
-                tr.style.display = "none";
-              }
+              tr.style.display = "none";
             }
           });
         };
         filterSelect.addEventListener("change", applyFilter);
-        if (currentMaintFilter) applyFilter();
+        if (effectiveSelect) effectiveSelect.addEventListener("change", applyFilter);
+        if (currentMaintFilter || currentMaintEffectiveFilter) applyFilter();
       }
 
       applyTableOffsets(editor);
