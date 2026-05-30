@@ -392,8 +392,7 @@
         const parsed = parseRosterMaintLine(text);
         const label = parsed ? parsed.label : `Row ${rIdx + 1}`;
         return `<tr data-maint-row-index="${rIdx}" class="${rIdx === activeRosterMonthIndex ? "active-roster-row" : ""}">
-          <th scope="row" data-form-col-key="maint_roster_month">${esc(label)}</th>
-          <td data-form-col-key="maint_roster_text"><textarea data-auto-row-height data-maint-roster-row="${rIdx}" spellcheck="false">${esc(text ?? "")}</textarea></td>
+          <td data-form-col-key="maint_roster_text"><textarea data-auto-row-height data-maint-roster-row="${rIdx}" aria-label="${esc(label)}" spellcheck="false">${esc(text ?? "")}</textarea></td>
         </tr>`;
       }).join("");
       const topHeight = Number(formColumnWidths.maint_roster_top_height);
@@ -404,7 +403,6 @@
             <div class="maint-pane-title">Monthly roster</div>
             <table class="maint-roster-table" data-form-table>
               <colgroup>
-                <col data-form-col-key="maint_roster_month" data-form-col-default="120" />
                 <col data-form-col-key="maint_roster_text" data-form-col-default="760" />
               </colgroup>
               <tbody>${monthRows || '<tr><td class="maint-empty">No roster months</td></tr>'}</tbody>
