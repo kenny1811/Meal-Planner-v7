@@ -9,6 +9,11 @@ database:
   # Phase 1：營養清單與 targets SQLite；可由 MENU_DATABASE 指定絕對路徑
   filename: "meal_planner.sqlite3"
 
+folders:
+  # system_folder 為 v7 程式根目錄；data_folder 可放 workbook / sqlite / plans_store。
+  system_folder: "."
+  data_folder: "."
+
 sheets:
   menu_v5: "餐單v5"
   roster: "更表"
@@ -49,7 +54,6 @@ rice:
   brown_name_contains: "糙米"
 
 dates:
-  reject_days_before_today: 6
   timezone: "Asia/Hong_Kong"
 
 pattern:

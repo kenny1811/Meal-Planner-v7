@@ -60,6 +60,22 @@ class PreviewRecalcTests(unittest.TestCase):
         self.assertFalse(summary["error_red_flags"][NUTRIENT_KEYS.index("kcal")])
         self.assertFalse(summary["total_red_flags"][NUTRIENT_KEYS.index("kcal")])
 
+    def test_calc_day_summary_red_flags_values_outside_range(self):
+        settings = get_settings()
+        indicators = DayIndicatorProfile.from_row_cells(["1500-1600", "95-110"])
+        meal_plan = {
+            "meal_times_resolved": {"早餐": "08:00"},
+            "meal_nutrients": {"早餐": nutrient_map(kcal=1500.1, protein_g=113.3)},
+        }
+
+        summary = _calc_day_summary(meal_plan, indicators, settings)
+        protein_idx = NUTRIENT_KEYS.index("protein_g")
+
+        self.assertEqual(summary["totals"][protein_idx], 113.3)
+        self.assertEqual(summary["errors"][protein_idx], 3.3)
+        self.assertTrue(summary["total_red_flags"][protein_idx])
+        self.assertTrue(summary["error_red_flags"][protein_idx])
+
     def test_summary_score_prioritizes_red_count_then_violation_then_total_deviation(self):
         self.assertLess(
             _summary_score({"total_red_flags": [False, True], "errors": [100, 2]}),

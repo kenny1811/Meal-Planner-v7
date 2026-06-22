@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kenny Battery Wear</string>
+    <string name="phone_battery_complication_label">Phone Battery</string>
+</resources>

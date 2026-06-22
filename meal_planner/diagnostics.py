@@ -52,10 +52,12 @@ def _matching_pattern(patterns: list[str], code: str) -> str | None:
 
 
 def _payroll_pattern(patterns: list[str], code: str) -> str | None:
+    code_cmp = code.casefold()
     for pattern in patterns:
-        if pattern.endswith("*") and code.startswith(pattern[:-1]):
+        pattern_cmp = pattern.casefold()
+        if pattern_cmp.endswith("*") and code_cmp.startswith(pattern_cmp[:-1]):
             return pattern
-        if pattern == code:
+        if pattern_cmp == code_cmp:
             return pattern
     return None
 
@@ -67,8 +69,10 @@ def _schedule_hits(rows: list[list[Any]], code: str) -> list[str]:
         pattern = _cell(row, 0)
         if not pattern:
             continue
+        pattern_cmp = pattern.casefold()
+        code_cmp = code.casefold()
         matched = grid_row_matches_roster(pattern, code) or (
-            pattern.endswith("*") and code.startswith(pattern[:-1])
+            pattern_cmp.endswith("*") and code_cmp.startswith(pattern_cmp[:-1])
         )
         if matched and pattern not in seen:
             seen.add(pattern)

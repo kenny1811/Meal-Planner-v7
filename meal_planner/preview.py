@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import date
 from typing import Any
 
-from meal_planner.dates_input import validate_dates_not_before
+from meal_planner.dates_input import validate_dates_within_allowed_months
 from meal_planner.excel_io import load_roster_map
 from meal_planner.format_rules import (
     error_font_red_calcium,
@@ -240,7 +240,7 @@ def _validate_indicator_rows_or_raise(work_vals: list[Any], nonwork_vals: list[A
 def preview_days(
     dates: list[date],
     *,
-    skip_date_validation: bool = False,
+    skip_allowed_month_validation: bool = False,
     reroll_nonce: int = 0,
     fast_mode: bool = True,
 ) -> dict[str, Any]:
@@ -255,13 +255,7 @@ def preview_days(
                 relaxation_simulation_enabled=True,
             ),
         )
-    if not skip_date_validation:
-        validate_dates_not_before(
-            dates,
-            timezone=settings.dates.timezone,
-            reject_days_before_today=settings.dates.reject_days_before_today,
-        )
-        from meal_planner.dates_input import validate_dates_within_allowed_months
+    if not skip_allowed_month_validation:
         validate_dates_within_allowed_months(
             dates,
             timezone=settings.dates.timezone,
@@ -318,21 +312,8 @@ def preview_days(
         "nutrient_keys": list(NUTRIENT_KEYS),
         "days": days_out,
         "source_reload": source_reload,
-        "cutoff": None,
         "fast_mode": bool(fast_mode),
     }
-
-
-def preview_days_with_cutoff(dates: list[date], **kwargs: Any) -> dict[str, Any]:
-    from meal_planner.dates_input import cutoff_date
-
-    settings = get_settings()
-    data = preview_days(dates, **kwargs)
-    data["cutoff"] = cutoff_date(
-        settings.dates.timezone,
-        settings.dates.reject_days_before_today,
-    ).isoformat()
-    return data
 
 
 def _parse_edited_line(line: str | None) -> list[tuple[str, float | str | None]]:

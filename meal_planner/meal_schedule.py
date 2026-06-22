@@ -29,9 +29,11 @@ def roster_matches_rule(rule_cell: str | None, roster_code: str) -> bool:
         return False
     if rule == "其他":
         return False
-    if rule.endswith("*"):
-        return code.startswith(rule[:-1])
-    return code == rule
+    rule_cmp = rule.casefold()
+    code_cmp = code.casefold()
+    if rule_cmp.endswith("*"):
+        return code_cmp.startswith(rule_cmp[:-1])
+    return code_cmp == rule_cmp
 
 
 def _cell_str(v: Any) -> str | None:
@@ -257,6 +259,11 @@ def choose_ingredients_for_meals(
     依 §11.2：每個 item 先類別 exact，再名稱 contains；左右候選取第一個可用。
     回傳每餐對應食材名稱列表（按 pattern item 次序）。
     """
+    def default_grams_for_entry(entry: Any) -> float:
+        if entry.min_g is not None:
+            return float(round(float(entry.min_g)))
+        return 0.0
+
     if nutrition_entries is None:
         entries = load_catalog_entries(settings, wb)
     else:
@@ -297,7 +304,7 @@ def choose_ingredients_for_meals(
                     fixed_names[meal].append(raw)
                     fixed_items[meal].append({"name": raw, "grams": None, "row": None})
                 continue
-            grams = float(round(float(entry.min_g) if entry.min_g is not None else float(settings.nutrition_portion.default_g)))
+            grams = default_grams_for_entry(entry)
             fixed_names[meal].append(f"{entry.name}({grams:.0f}g)")
             fixed_items[meal].append({"name": entry.name, "grams": grams, "row": entry.row_index})
             ratio = grams / 100.0
@@ -375,8 +382,8 @@ def choose_ingredients_for_meals(
                 entry = candidates[idx]
                 pick_cursor[key] = base + 1
             if entry is not None:
-                # Min(g) 有值就照用（包括 0）；只在 Min 空白時才用 default_g。
-                grams = float(round(float(entry.min_g) if entry.min_g is not None else float(settings.nutrition_portion.default_g)))
+                # Min(g) 有值就照用（包括 0）；Min 空白時用 default_g，但不可超過 Max/DayMax。
+                grams = default_grams_for_entry(entry)
                 chosen.append(f"{entry.name}({grams:.0f}g)")
                 chosen_items.append({"name": entry.name, "grams": grams, "row": entry.row_index})
                 ratio = grams / 100.0
@@ -551,7 +558,15 @@ def build_day_meal_plan(
         }
         # 餐廳午餐由餐廳固定營養值提供；唔應再用求解器午餐食材去計米類熟重。
         meal_items["午餐"] = []
-        meal_ingredients["午餐"] = []
+        choice = str(rest.get("choice") or "").strip()
+        store = str(rest.get("store") or "").strip()
+        if choice or store:
+            label = f'Lunch — "{choice}"'
+            if store:
+                label += f" ({store})"
+            meal_ingredients["午餐"] = [label]
+        else:
+            meal_ingredients["午餐"] = ["Lunch — restaurant meal"]
 
     return {
         "primary_rule": primary_dict,

@@ -1,5 +1,8 @@
 import json
 import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
 
 with open(r'C:\Users\Kenny\.gemini\antigravity\brain\83673466-2775-45af-ae81-334e55086000\.system_generated\logs\transcript.jsonl', 'r', encoding='utf-8') as f:
     lines = f.read().splitlines()
@@ -48,7 +51,7 @@ if content:
                 out.append(x)
                 
         # Some lines might be empty or missing due to weird parsing, we want exactly 475
-        with open(r'd:\Projects\餐單生成v6\meal_planner\web\planner-render.js', 'w', encoding='utf-8') as f:
+        with open(ROOT / 'meal_planner' / 'web' / 'planner-render.js', 'w', encoding='utf-8') as f:
             f.write('\n'.join(out))
         print("Recovered perfectly! Total lines: ", len(out))
     except Exception as e:

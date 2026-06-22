@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Meal Planner v6</title>
+  <title>Meal Planner v7</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260520-favicon" />
-  <link rel="stylesheet" href="style.css?v=20260530-sidebar-scroll-v1" />
+  <link rel="stylesheet" href="style.css?v=20260622-activity-tooltip-v37" />
 </head>
 <body>
   <div id="clock-top-right" class="clock-top-right">--/--/---- --- --:--:--</div>
@@ -31,13 +31,13 @@
       </div>
       <button type="button" class="menu-item active" data-panel="planner" data-menu-group="top" data-menu-key="planner" id="menu-planner"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Menu Planner</span></button>
       <button type="button" class="menu-item" data-panel="shopping" data-menu-group="top" data-menu-key="shopping" id="menu-shopping"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Shopping List</span></button>
-      <button type="button" class="menu-item" data-panel="diagnostics" data-menu-group="top" data-menu-key="diagnostics" id="menu-diagnostics"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Diagnostics</span></button>
+      <button type="button" class="menu-item" data-menu-group="top" data-menu-key="alarm_sync" id="menu-alarm-sync"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">電話I/O</span></button>
     </div>
   </aside>
   <div id="sidebar-resizer" class="sidebar-resizer" title="Drag to resize sidebar"></div>
   <main class="main">
   <section id="planner-panel">
-  <h1>Meal Planner v6</h1>
+  <h1 data-title-key="planner">Meal Planner v7</h1>
   <div class="top">
     <span><label for="year">Year</label><input type="number" id="year" min="2000" max="2100" required /></span>
     <span><label for="month">Month</label><input type="number" id="month" min="1" max="12" required /></span>
@@ -47,26 +47,78 @@
     <button type="button" class="btn" id="planner-target-save" style="display:none;">Save Targets</button>
     <label class="chk"><input type="checkbox" id="fast_mode" checked />Fast mode</label>
     <label class="chk"><input type="checkbox" id="show_past" checked />Show past dates</label>
-    <label class="chk"><input type="checkbox" id="skip" />Skip cutoff check</label>
-    <span class="cutoff-inline" id="cutoff"></span>
   </div>
   <div id="err" class="err"></div>
   <div id="out"></div>
   </section>
   <section id="config-panel" style="display:none;">
-    <h1>Config</h1>
+    <h1 data-title-key="config">Config</h1>
     <div class="config-views">
       <section class="config-view" data-config-view="targets">
-        <h2>Targets</h2>
+        <h2 data-title-key="target">Targets</h2>
         <div class="config-toolbar">
           <button type="button" class="btn" id="target-save" style="display:none;">Save Targets</button>
           <span id="target-status" class="target-status"></span>
         </div>
         <div id="target-err" class="err"></div>
-        <div id="target-editor" class="target-editor"></div>
+        <div class="target-config-blocks">
+          <section class="target-section-block" data-target-block="profile">
+            <h3>個人資料 / Profile</h3>
+            <table class="target-profile-table" data-form-table>
+              <colgroup>
+                <col data-form-col-key="target_profile_label" data-form-col-default="118" />
+                <col data-form-col-key="target_profile_value" data-form-col-default="160" />
+              </colgroup>
+              <tbody>
+                <tr>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-dob">DOB</label></th>
+                  <td data-form-col-key="target_profile_value"><input type="date" id="target-profile-dob" /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-age">年齡</label></th>
+                  <td data-form-col-key="target_profile_value"><input type="text" id="target-profile-age" readonly /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-gender">性別</label></th>
+                  <td data-form-col-key="target_profile_value">
+                    <select id="target-profile-gender">
+                      <option value=""></option>
+                      <option value="male">男</option>
+                      <option value="female">女</option>
+                    </select>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-height">身高 (cm)</label></th>
+                  <td data-form-col-key="target_profile_value"><input type="number" id="target-profile-height" min="0.001" step="0.1" inputmode="decimal" /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-weight">體重 (kg)</label></th>
+                  <td data-form-col-key="target_profile_value"><input type="number" id="target-profile-weight" min="0.001" step="0.1" inputmode="decimal" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="target-section-block" data-target-block="weight">
+            <h3>體重記錄 / Weight History</h3>
+            <div id="target-weight-history"></div>
+          </section>
+          <section class="target-section-block target-section-table" data-target-block="calc">
+            <h3>計算設定 / Calculation Settings</h3>
+            <div id="target-calc-settings"></div>
+          </section>
+          <section class="target-section-block target-section-table" data-target-block="targets">
+            <h3>營養指標 / Nutrition Targets</h3>
+            <div id="target-editor" class="target-editor"></div>
+          </section>
+          <section class="target-section-block target-section-table" data-target-block="preview">
+            <h3>預覽指標 / Preview Targets</h3>
+            <div id="target-preview-editor" class="target-editor"></div>
+          </section>
+        </div>
       </section>
       <section class="config-view catalog-section" data-config-view="catalog" style="display:none;">
-        <h2>Nutrition Catalog</h2>
+        <h2 data-title-key="catalog">Nutrition Catalog</h2>
         <div class="config-toolbar catalog-toolbar">
           <button type="button" class="btn" id="catalog-save" style="display:none;">Save Catalog</button>
           <span><label for="catalog-filter">Filter</label><input type="text" id="catalog-filter" /></span>
@@ -80,31 +132,55 @@
         </div>
       </section>
       <section class="config-view detail-section" data-config-view="details" style="display:none;">
-        <h2>Detail Settings</h2>
+        <h2 data-title-key="details">Detail Settings</h2>
         <div class="config-toolbar">
           <button type="button" class="btn" id="detail-save" style="display:none;">Save Settings</button>
           <span id="detail-status" class="target-status"></span>
         </div>
         <div id="detail-err" class="err"></div>
         <div class="detail-editor">
-          <table class="detail-table" data-form-table>
-            <colgroup>
-              <col data-form-col-key="detail_rice_label" data-form-col-default="190" />
-              <col data-form-col-key="detail_rice_value" data-form-col-default="170" />
-            </colgroup>
-            <tbody>
-              <tr>
-                <th scope="row" data-form-col-key="detail_rice_label">Brown rice cooked/raw ratio</th>
-                <td><input type="number" id="detail-rice-brown" min="0.001" step="0.001" /></td>
-              </tr>
-              <tr>
-                <th scope="row" data-form-col-key="detail_rice_label">Other rice cooked/raw ratio</th>
-                <td><input type="number" id="detail-rice-other" min="0.001" step="0.001" /></td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="detail-subtitle">Roster code definitions</div>
-          <div id="detail-code-definitions"></div>
+          <section class="detail-section-block" data-detail-block="folders">
+            <h3>Folders</h3>
+            <table class="detail-field-table" data-form-table>
+              <colgroup>
+                <col data-form-col-key="detail_folders_label" data-form-col-default="330" />
+                <col data-form-col-key="detail_folders_value" data-form-col-default="1440" />
+              </colgroup>
+              <tbody>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_folders_label"><label for="detail-system-folder">System folder</label></th>
+                  <td data-form-col-key="detail_folders_value"><input type="text" id="detail-system-folder" /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_folders_label"><label for="detail-data-folder">Data folder</label></th>
+                  <td data-form-col-key="detail_folders_value"><input type="text" id="detail-data-folder" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="detail-section-block" data-detail-block="rice">
+            <h3>Rice conversion</h3>
+            <table class="detail-field-table" data-form-table>
+              <colgroup>
+                <col data-form-col-key="detail_rice_label" data-form-col-default="454" />
+                <col data-form-col-key="detail_rice_value" data-form-col-default="290" />
+              </colgroup>
+              <tbody>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_rice_label"><label for="detail-rice-brown">Brown rice cooked/raw ratio</label></th>
+                  <td data-form-col-key="detail_rice_value"><input type="number" id="detail-rice-brown" min="0.001" step="0.001" /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_rice_label"><label for="detail-rice-other">Other rice cooked/raw ratio</label></th>
+                  <td data-form-col-key="detail_rice_value"><input type="number" id="detail-rice-other" min="0.001" step="0.001" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="detail-section-block detail-section-table" data-detail-block="codes">
+            <h3>Roster code definitions</h3>
+            <div id="detail-code-definitions"></div>
+          </section>
         </div>
         <div id="detail-row-menu" class="maint-row-menu" hidden>
           <button type="button" data-detail-row-action="insert">Insert Row</button>
@@ -115,10 +191,9 @@
     </div>
   </section>
   <section id="maint-panel" style="display:none;">
-    <h1>Maint</h1>
+    <h1 data-title-key="maint">Maint</h1>
     <div class="config-toolbar">
-      <button type="button" class="btn" id="maint-save" title="Ctrl+S" style="display:none;">Save</button>
-      <button type="button" class="btn btn-quiet" id="runtime-import" title="Import roster and overtime from Excel">Refresh Live Inputs</button>
+      <button type="button" class="btn" id="maint-save" title="Ctrl+S" style="visibility:hidden;">Save</button>
       <span id="maint-status" class="target-status"></span>
     </div>
     <div id="maint-err" class="err"></div>
@@ -127,10 +202,13 @@
       <button type="button" data-maint-row-action="insert">Insert Row</button>
       <button type="button" data-maint-row-action="delete">Delete Row</button>
       <button type="button" data-maint-row-action="append">Append Row</button>
+      <button type="button" data-maint-row-action="add-shift-code">Add New Shift Code</button>
+      <button type="button" data-maint-row-action="new-version">New Version</button>
+      <button type="button" data-maint-row-action="delete-version">Delete This Version</button>
     </div>
   </section>
   <section id="shopping-panel" style="display:none;">
-    <h1>Shopping List</h1>
+    <h1 data-title-key="shopping">Shopping List</h1>
     <div class="top">
       <span><label for="shop_start">Start Date</label><input type="date" id="shop_start" /></span>
       <span><label for="shop_end">End Date</label><input type="date" id="shop_end" /></span>
@@ -138,14 +216,41 @@
     </div>
     <div id="shopping-out"></div>
   </section>
-  <section id="diagnostics-panel" style="display:none;">
-    <h1>Diagnostics</h1>
-    <div class="config-toolbar">
-      <button type="button" class="btn" id="diagnostics-refresh">Refresh</button>
-      <span id="diagnostics-status" class="target-status"></span>
+  <section id="alarm-sync-panel" style="display:none;">
+    <h1 data-title-key="alarm_sync">電話I/O</h1>
+    <div class="alarm-sync-body">
+    <div class="alarm-sync-toolbar">
+      <span class="alarm-sync-server">Server IP: <span id="alarm-sync-server-ip">偵測中...</span></span>
+      <span class="status-inline" id="alarm-sync-status"></span>
     </div>
-    <div id="diagnostics-err" class="err"></div>
-    <div id="diagnostics-out" class="diagnostics-out"></div>
+      <div id="alarm-sync-err" class="err"></div>
+      <div id="alarm-preview-wrap" class="alarm-preview-wrap">
+        <div id="alarm-preview-title" class="alarm-preview-title"></div>
+        <table id="alarm-preview-table" class="alarm-preview-table" data-form-table>
+          <colgroup>
+            <col data-form-col-key="alarm_sync_code" data-form-col-default="130" />
+            <col data-form-col-key="alarm_sync_time" data-form-col-default="85" />
+            <col data-form-col-key="alarm_sync_content" data-form-col-default="360" />
+            <col data-form-col-key="alarm_sync_duration" data-form-col-default="90" />
+            <col data-form-col-key="alarm_sync_effective" data-form-col-default="170" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th data-form-col-key="alarm_sync_code">更碼</th>
+              <th data-form-col-key="alarm_sync_time">時間</th>
+              <th data-form-col-key="alarm_sync_content">內容</th>
+              <th data-form-col-key="alarm_sync_duration">時長</th>
+              <th data-form-col-key="alarm_sync_effective">生效日期</th>
+            </tr>
+          </thead>
+          <tbody id="alarm-preview-body"></tbody>
+        </table>
+      </div>
+      <div id="alarm-meal-plan-preview" class="alarm-meal-plan-preview">
+        <div id="alarm-meal-plan-title" class="alarm-meal-plan-preview-title">餐單預覽</div>
+        <pre id="alarm-meal-plan-content" class="alarm-meal-plan-preview-content"></pre>
+      </div>
+    </div>
   </section>
   <footer>Local API: <code>/api/preview</code></footer>
   </main>
@@ -167,12 +272,14 @@
       </div>
     </div>
   </div>
-  <script defer src="api.js?v=20260530-runtime-import-v1"></script>
+    <script defer src="api.js?v=20260617-phone-push-picker-v1"></script>
   <script defer src="shopping.js?v=20260523-ui-en"></script>
-  <script defer src="planner.js?v=20260530-unsaved-dialog-v1"></script>
-  <script defer src="planner-maint.js?v=20260530-maint-year-filter-v1"></script>
-  <script defer src="planner-config.js?v=20260530-unsaved-warning-v1"></script>
-  <script defer src="planner-render.js?v=20260523-planner-offset-v1"></script>
-  <script defer src="planner-events.js?v=20260530-unsaved-dialog-v1"></script>
+  <script defer src="planner.js?v=20260623-generate-date-guard-v1"></script>
+  <script defer src="planner-menu.js?v=20260622-activity-tooltip-v37"></script>
+  <script defer src="planner-maint.js?v=20260618-duration-next-non-marker-v39"></script>
+  <script defer src="planner-maint-editor.js?v=20260618-schedule-duration-reload-v6"></script>
+  <script defer src="planner-config.js?v=20260622-activity-tooltip-v37"></script>
+  <script defer src="planner-render.js?v=20260623-generate-date-guard-v1"></script>
+    <script defer src="planner-events.js?v=20260623-generate-date-guard-v1"></script>
 </body>
 </html>

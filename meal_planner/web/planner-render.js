@@ -349,7 +349,8 @@
       const days = Array.isArray(memoryPayload.days) ? memoryPayload.days : [];
       if (showPast) return sortDaysByDate(days);
       const today = todayIsoHK();
-      return sortDaysByDate(days.filter((d) => String(d.date || "") >= today));
+      const filtered = days.filter((d) => String(d.date || "") >= today);
+      return sortDaysByDate(filtered.length || !days.length ? filtered : days);
     }
 
     function captureViewportAnchor(referenceRatio = 0.5) {
@@ -419,6 +420,7 @@
       applyPlannerOffset();
       attachPlannerDrag();
       restoreViewportAnchor(anchor);
+      if (typeof updateGenerateButtonState === "function") updateGenerateButtonState();
     }
 
     function plannerOffsetPx() {
@@ -427,7 +429,7 @@
     }
 
     function applyPlannerOffset() {
-      document.querySelectorAll("#out .day-wrap").forEach((el) => {
+      document.querySelectorAll("#planner-panel > .top, #out .day-wrap").forEach((el) => {
         el.style.marginLeft = `${plannerOffsetPx()}px`;
       });
     }

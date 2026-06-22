@@ -194,6 +194,32 @@ def bootstrap_from_workbook(settings: AppSettings, wb: Workbook) -> None:
         conn.commit()
 
 
+def replace_from_workbook(settings: AppSettings, wb: Workbook) -> dict[str, int]:
+    """Replace planning reference tables from the current workbook."""
+    with closing(_connect(settings)) as conn:
+        _ensure_schema(conn)
+        table_names = (
+            "reference_meal_time_rules",
+            "reference_meal_patterns",
+            "reference_restaurant_rows",
+            "reference_schedule_rows",
+        )
+        try:
+            for table in table_names:
+                conn.execute(f"DELETE FROM {table}")
+            _seed_reference_tables(conn, settings, wb)
+        except Exception as exc:
+            conn.rollback()
+            raise ReferenceDatabaseError(
+                "SQLite planning reference refresh from Excel failed."
+            ) from exc
+        conn.commit()
+        return {
+            table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in table_names
+        }
+
+
 def load_planning_references(
     settings: AppSettings | None = None,
     wb: Workbook | None = None,

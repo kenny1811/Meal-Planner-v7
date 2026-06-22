@@ -5,24 +5,45 @@
       --muted: #5a6169;
       --bg: #e8ecf0;
       --accent: #0b57d0;
+      --panel: #fff;
+      --fg: var(--text);
       --sticky-row-h: 24px;
     }
     * { box-sizing: border-box; }
     :root { color-scheme: light; }
     html {
-      height: 100%;
-      overflow: hidden;
+      min-height: 100%;
+      overflow: auto;
     }
     body {
       margin: 0;
       padding: 4px 6px 8px;
-      height: 100vh;
-      overflow: hidden;
+      min-height: 0;
+      overflow: auto;
       font-family: "Segoe UI", "Microsoft JhengHei", "PingFang HK", sans-serif;
       font-size: 11px;
       line-height: 1.22;
       color: var(--text);
       background: var(--bg);
+    }
+    select,
+    option {
+      color-scheme: light;
+      background: #fff !important;
+      color: #000 !important;
+    }
+    input[type="number"] {
+      appearance: textfield;
+      -moz-appearance: textfield;
+    }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    option:checked {
+      background: #dbeafe !important;
+      color: #000 !important;
     }
     .app-shell { display: flex; gap: 0; align-items: flex-start; }
     .sidebar {
@@ -144,13 +165,16 @@
       right: 12px;
       z-index: 1000;
       font-size: 11px;
-      color: var(--muted);
-      background: rgba(17, 21, 26, 0.9);
-      border: 1px solid var(--grid);
+      color: #374151;
+      background: #d8dee8;
+      border: 1px solid #aeb8c7;
       padding: 3px 8px;
       border-radius: 2px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
+      cursor: move;
+      user-select: none;
     }
     h1 {
       margin: 0 0 2px;
@@ -177,27 +201,20 @@
       white-space: nowrap;
     }
     .top .hint { color: var(--muted); font-size: 10px; }
-    .top .cutoff-inline {
-      font-size: 10px;
-      color: var(--muted);
-      white-space: nowrap;
-      align-self: auto;
-      margin-left: 2px;
-      line-height: 1.2;
-    }
     .top label { font-size: 10px; color: var(--muted); margin-right: 2px; }
     .top input[type="number"] {
-      width: 4.2rem;
       padding: 1px 4px;
       font-size: 11px;
       border: 1px solid var(--grid);
     }
     .top input[type="text"] {
-      width: min(22rem, 100%);
       padding: 1px 4px;
       font-size: 11px;
       border: 1px solid var(--grid);
     }
+    .top #year { width: calc(4ch + 10px); }
+    .top #month { width: calc(2ch + 10px); }
+    .top #dates_expr { width: calc(13ch + 10px); }
     .top .btn {
       padding: 2px 10px;
       font-size: 11px;
@@ -223,6 +240,7 @@
       align-items: center;
       gap: 8px;
       margin: 4px 0;
+      min-height: 23px;
     }
     #config-panel {
       height: calc(100vh - 20px);
@@ -243,6 +261,8 @@
     }
     .config-view h2 { margin: 4px 0; font-size: 12px; }
     .config-toolbar .btn {
+      min-width: 48px;
+      min-height: 19px;
       padding: 2px 10px;
       font-size: 11px;
       border: 1px solid #1a5fb4;
@@ -324,6 +344,7 @@
       padding: 2px 4px;
       font: inherit;
       line-height: 1.35;
+      min-height: calc(1.35em + 4px);
       color: inherit;
       background: transparent;
       resize: none;
@@ -336,10 +357,23 @@
       outline: 0;
       background: #fff;
     }
+    table.maint-table td textarea[data-maint-keyboard-selected="1"],
+    table.maint-table td input[type="text"][data-maint-keyboard-selected="1"] {
+      caret-color: transparent;
+    }
     table.maint-table td.maint-money-cell,
     table.maint-table td.maint-money-cell textarea,
     table.maint-table td.maint-money-cell input[type="text"] {
       text-align: right;
+    }
+    table.maint-table td.maint-duration-cell,
+    table.maint-table td.maint-duration-cell textarea,
+    table.maint-table td.maint-duration-cell input[type="text"] {
+      text-align: right;
+    }
+    table.maint-table td.maint-duration-cell textarea,
+    table.maint-table td.maint-duration-cell input[type="text"] {
+      padding-right: 12px;
     }
     table.maint-table td:focus-within {
       outline: 2px solid var(--accent);
@@ -559,7 +593,8 @@
     }
     table.maint-roster-table tr.active-roster-row th,
     table.maint-roster-table tr.active-roster-row td {
-      background: #172033;
+      background: #e8f1ff;
+      color: var(--text);
     }
     table.maint-roster-table textarea {
       display: block;
@@ -629,32 +664,329 @@
       background: #fff;
       border: 1px solid var(--grid);
     }
-    .detail-editor {
-      width: fit-content;
-      max-width: 100%;
-      overflow-x: hidden;
-      overflow-y: visible;
+    .target-config-blocks {
+      --target-config-row-height: 28px;
+      --target-config-control-height: 20px;
+      position: relative;
+      width: max-content;
+      max-width: none;
+      min-height: 260px;
+      overflow: visible;
+    }
+    .target-section-block {
+      position: relative;
+      width: max-content;
+      display: inline-block;
+      min-width: 0;
+      margin-bottom: 8px;
       border: 1px solid var(--grid);
       background: #fff;
     }
-    table.detail-table {
+    .target-config-blocks.is-draggable-layout .target-section-block {
+      position: absolute;
+      margin-bottom: 0;
+    }
+    .target-section-block.is-target-block-selected {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .target-section-block.is-target-block-selected > h3 {
+      background: #dbeafe;
+      color: var(--text);
+    }
+    .target-section-block h3 {
+      margin: 0;
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--grid);
+      background: #eef2f7;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: move;
+      user-select: none;
+    }
+    .target-section-table .target-editor {
+      border: 0;
+    }
+    .target-profile-table {
       border-collapse: collapse;
       table-layout: fixed;
       width: max-content;
       background: #fff;
     }
-    table.detail-table th,
-    table.detail-table td {
+    .target-profile-table th,
+    .target-profile-table td {
       border: 1px solid var(--grid);
-      padding: 4px 6px;
+      box-sizing: border-box;
+      height: var(--target-config-row-height, 28px);
+      padding: 3px 6px;
       font-size: 11px;
       vertical-align: middle;
+      white-space: nowrap;
     }
-    .detail-subtitle {
-      padding: 6px 8px 3px;
-      border-top: 1px solid var(--grid);
+    .target-profile-table th {
+      color: var(--muted);
+      font-weight: 600;
+      text-align: right;
+      background: #f8fafc;
+    }
+    .target-profile-table label {
+      display: block;
+    }
+    .target-profile-table input,
+    .target-profile-table select {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      height: var(--target-config-control-height, 20px);
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      outline: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+    }
+    .target-profile-table select {
+      padding-right: 18px;
+    }
+    .target-profile-table input:focus,
+    .target-profile-table select:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+      background: #fffef5;
+    }
+    .target-profile-table input[readonly] {
+      color: var(--muted);
+    }
+    .target-profile-table input[type="number"] {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .target-weight-history {
+      border-collapse: collapse;
+      table-layout: fixed;
+      width: max-content;
+      background: #fff;
+    }
+    .target-weight-history th,
+    .target-weight-history td {
+      border: 1px solid var(--grid);
+      padding: 3px 6px;
+      box-sizing: border-box;
+      height: var(--target-config-row-height, 28px);
+      font-size: 11px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .target-weight-history thead th {
+      background: #eef2f7;
       color: var(--muted);
       font-weight: 700;
+      text-align: left;
+    }
+    .target-weight-history .target-weight-value,
+    .target-weight-history .target-weight-value input {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .target-weight-history .target-weight-delete {
+      text-align: center;
+      background: #fff;
+    }
+    .target-weight-delete-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+    }
+    .target-empty-row {
+      color: var(--muted);
+      text-align: center;
+      background: #fffef5;
+    }
+    .target-weight-history input {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      height: var(--target-config-control-height, 20px);
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+    }
+    .target-weight-history td:has(input) {
+      background: #fffef5;
+    }
+    .target-weight-history td:has(input:focus) {
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+    .target-weight-history input:focus {
+      outline: 0;
+    }
+    .target-calc-table {
+      border-collapse: collapse;
+      table-layout: fixed;
+      width: max-content;
+      background: #fff;
+    }
+    .target-calc-table th,
+    .target-calc-table td {
+      border: 1px solid var(--grid);
+      box-sizing: border-box;
+      height: var(--target-config-row-height, 28px);
+      padding: 3px 6px;
+      font-size: 11px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .target-calc-table thead th {
+      background: #eef2f7;
+      color: var(--muted);
+      font-weight: 700;
+      text-align: center;
+      height: auto;
+      min-height: var(--target-config-row-height, 28px);
+      padding-top: 5px;
+      padding-bottom: 5px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 1.15;
+    }
+    .target-calc-table tbody th {
+      color: var(--muted);
+      font-weight: 600;
+      text-align: right;
+      background: #f8fafc;
+    }
+    .target-calc-table input {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      height: var(--target-config-control-height, 20px);
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      outline: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .target-calc-table .target-calc-readonly {
+      background: #f8fafc;
+      color: var(--muted);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .target-calc-table td:has(input) {
+      background: #fffef5;
+    }
+    .target-calc-table td:has(input:focus) {
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+    .target-calc-table input:focus {
+      outline: 0;
+    }
+    .detail-editor {
+      display: grid;
+      gap: 8px;
+      width: max-content;
+      max-width: none;
+      overflow: visible;
+    }
+    .detail-section-block {
+      position: relative;
+      width: max-content;
+      min-width: 0;
+      border: 1px solid var(--grid);
+      background: #fff;
+    }
+    .detail-section-block:first-child {
+      border-top: 1px solid var(--grid);
+    }
+    .detail-section-block h3 {
+      margin: 0;
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--grid);
+      background: #eef2f7;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: move;
+      user-select: none;
+    }
+    table.detail-field-table {
+      border-collapse: collapse;
+      table-layout: fixed;
+      width: max-content;
+      background: #fff;
+    }
+    table.detail-field-table th,
+    table.detail-field-table td {
+      border: 1px solid var(--grid);
+      padding: 0;
+      height: 23px;
+      vertical-align: middle;
+    }
+    table.detail-field-table th {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-align: right;
+      padding: 4px 6px;
+      background: #f8fafc;
+    }
+    table.detail-field-table label {
+      display: block;
+    }
+    table.detail-field-table input,
+    table.detail-field-table select {
+      width: 100%;
+      min-width: 0;
+      min-height: 22px;
+      padding: 2px 5px;
+      border: 0;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-size: 11px;
+      border-radius: 0;
+    }
+    table.detail-field-table input:focus,
+    table.detail-field-table select:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+      background: #fffef5;
+    }
+    table.detail-field-table input[readonly] {
+      background: #f8fafc;
+      color: var(--muted);
+    }
+    table.detail-field-table input[type="number"] {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .detail-section-table {
+      min-width: 0;
+      width: max-content;
+      max-width: none;
+    }
+    #detail-code-definitions {
+      overflow: visible;
     }
     table.detail-code-table {
       border-collapse: collapse;
@@ -665,51 +997,41 @@
     table.detail-code-table th,
     table.detail-code-table td {
       border: 1px solid var(--grid);
-      padding: 2px 4px;
+      padding: 0;
+      height: 20px;
       vertical-align: middle;
-    }
-    table.detail-code-table th:first-child {
-      color: var(--muted);
-      text-align: right;
-      font-weight: 600;
     }
     table.detail-code-table thead th {
       background: #eef2f7;
       color: var(--muted);
       text-align: left;
       font-weight: 700;
+      padding: 2px 4px;
     }
     table.detail-code-table textarea {
       display: block;
-      border: 1px solid transparent;
+      width: 100%;
+      height: 20px;
+      border: 0;
       padding: 2px 4px;
       font: inherit;
-      line-height: 1.35;
+      line-height: 1.2;
+      min-height: 0;
       color: inherit;
       background: transparent;
       resize: none;
       overflow: hidden;
+      vertical-align: top;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
     table.detail-code-table textarea:focus {
       outline: 0;
-      background: #fff;
+      background: #fffef5;
     }
     table.detail-code-table td:focus-within {
       outline: 2px solid var(--accent);
       outline-offset: -2px;
-    }
-    table.detail-table th {
-      text-align: right;
-      background: var(--foot);
-      font-weight: 600;
-    }
-    table.detail-table input {
-      padding: 2px 4px;
-      border: 1px solid var(--grid);
-      font: inherit;
-      text-align: right;
     }
     table.target-table {
       border-collapse: collapse;
@@ -720,7 +1042,10 @@
     table.target-table td {
       border: 1px solid var(--grid);
       padding: 3px 4px;
+      box-sizing: border-box;
+      height: var(--target-config-row-height, 28px);
       font-size: 11px;
+      text-align: center;
       vertical-align: middle;
     }
     table.target-table th {
@@ -731,19 +1056,40 @@
       overflow-wrap: anywhere;
       position: relative;
     }
-    table.target-table .target-profile-col { width: 96px; }
+    table.target-table .target-profile-col { width: 74px; }
     table.target-table .target-profile-head {
-      width: 96px;
+      width: 74px;
       text-align: right;
       white-space: nowrap;
       font-size: 11px;
     }
+    table.target-table thead .target-profile-head {
+      white-space: normal;
+      text-align: center;
+    }
     table.target-table input {
+      display: block;
+      width: 100%;
+      height: var(--target-config-control-height, 20px);
+      min-width: 0;
       padding: 0;
       border: 0;
       border-radius: 0;
       outline: 0;
       background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: center;
+    }
+    table.target-table select {
+      width: 100%;
+      height: var(--target-config-control-height, 20px);
+      min-width: 0;
+      padding: 0 18px 0 0;
+      border: 0;
+      border-radius: 0;
+      outline: 0;
+      background-color: transparent;
       color: inherit;
       font: inherit;
     }
@@ -873,23 +1219,22 @@
       cursor: col-resize;
       user-select: none;
     }
-    .cutoff { font-size: 10px; color: var(--muted); margin: 0 0 4px; }
-
     #out {
       width: 100%;
-      height: calc(100vh - 120px);
-      overflow: hidden;
+      height: auto;
+      overflow: visible;
     }
     .day-wrap {
       margin-bottom: 6px;
       background: #fff;
       border: 1px solid var(--grid);
-      height: 100%;
+      height: auto;
+      overflow: auto;
     }
     .period-panels {
       display: flex;
       flex-direction: column;
-      height: 100%;
+      height: auto;
       min-height: 0;
     }
     .panel-top {
@@ -900,9 +1245,9 @@
       box-sizing: border-box;
     }
     .panel-bottom {
-      flex: 1 1 auto;
+      flex: 0 0 auto;
       min-height: 0;
-      overflow: auto;
+      overflow: visible;
     }
     table.sheet {
       border-collapse: collapse;
@@ -1255,4 +1600,254 @@
 
     .diag-status-ok span {
       color: #8fd18f;
+    }
+
+    #runtime-import-panel {
+      max-width: 980px;
+    }
+
+    .runtime-import-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0 16px;
+      flex-wrap: wrap;
+    }
+
+    #alarm-sync-panel {
+      height: calc(100vh - 20px);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .alarm-sync-body {
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      padding-top: 4px;
+    }
+
+    .alarm-sync-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .alarm-sync-server {
+      flex: 0 0 auto;
+      font-size: 12px;
+      color: #2f3b5f;
+      white-space: nowrap;
+    }
+
+    .alarm-sync-server #alarm-sync-server-ip {
+      font-family: Consolas, "Courier New", monospace;
+      font-weight: 700;
+    }
+
+    .alarm-sync-toolbar .btn {
+      min-height: 22px;
+      border-radius: 2px;
+    }
+
+    .alarm-sync-form {
+      width: max-content;
+      min-width: 0;
+    }
+
+    .runtime-import-options {
+      display: grid;
+      gap: 16px;
+      max-width: 860px;
+    }
+
+    .runtime-import-group h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      color: var(--fg);
+    }
+
+    .runtime-import-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 8px;
+    }
+
+    .runtime-import-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      border: 1px solid var(--grid);
+      background: var(--panel);
+      padding: 8px 10px;
+      border-radius: 6px;
+      color: var(--fg);
+    }
+
+    .runtime-import-option input {
+      width: 16px;
+      height: 16px;
+    }
+
+    .runtime-import-result {
+      margin-top: 18px;
+    }
+
+    .runtime-import-table {
+      border-collapse: collapse;
+      width: max-content;
+      min-width: 460px;
+      background: #f8fafc;
+      color: #111;
+    }
+
+    .runtime-import-table th,
+    .runtime-import-table td {
+      border: 1px solid var(--grid);
+      padding: 7px 10px;
+      text-align: left;
+    }
+
+    .runtime-import-table th {
+      background: #a8c8f4;
+    }
+
+    .alarm-preview-wrap {
+      margin-top: 8px;
+      width: max-content;
+      max-width: 100%;
+      overflow: auto;
+    }
+
+    .alarm-preview-title {
+      padding: 4px 6px;
+      border: 1px solid var(--grid);
+      border-bottom: 0;
+      background: #eef2f7;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .alarm-meal-plan-preview {
+      margin-top: 8px;
+      width: min(860px, calc(100% - 2px));
+      border: 1px solid var(--grid);
+      background: #ffffff;
+      color: var(--text);
+      display: none;
+    }
+
+    .alarm-meal-plan-preview-title {
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--grid);
+      background: #eef2f7;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .alarm-meal-plan-preview-content {
+      margin: 0;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      line-height: 1.5;
+      max-height: 240px;
+      overflow: auto;
+    }
+
+    table.alarm-sync-settings,
+    table.alarm-preview-table {
+      border-collapse: collapse;
+      table-layout: fixed;
+      width: max-content;
+      background: var(--panel);
+    }
+
+    table.alarm-sync-settings th,
+    table.alarm-sync-settings td,
+    table.alarm-preview-table th,
+    table.alarm-preview-table td {
+      position: relative;
+      border: 1px solid var(--grid);
+      height: 24px;
+      padding: 2px 6px;
+      color: var(--text);
+      font-size: 11px;
+      line-height: 1.2;
+      vertical-align: middle;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    table.alarm-sync-settings th,
+    table.alarm-preview-table th {
+      background: #eef2f7;
+      color: var(--muted);
+      font-weight: 700;
+      text-align: left;
+    }
+
+    table.alarm-sync-settings input {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      height: 20px;
+      border: 0;
+      padding: 1px 4px;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+    }
+
+    table.alarm-sync-settings input:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+      background: #fffef5;
+    }
+
+    table.alarm-sync-settings .btn {
+      width: 100%;
+      min-height: 20px;
+      padding: 2px 8px;
+      border: 1px solid #1a5fb4;
+      border-radius: 2px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    table.alarm-sync-settings .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #alarm-sync-status {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .alarm-preview-time {
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }
+
+    .alarm-preview-duration {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .alarm-preview-empty {
+      color: var(--muted) !important;
+      font-style: italic;
     }

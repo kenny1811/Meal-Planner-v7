@@ -1,15 +1,7 @@
 import unittest
 from datetime import date
-from unittest.mock import patch
 
-from meal_planner import dates_input
-from meal_planner.dates_input import DateValidationError, parse_date_expression, validate_dates_not_before
-
-
-class FixedDateTime(dates_input.datetime):
-    @classmethod
-    def now(cls, tz=None):
-        return cls(2026, 5, 20, 9, 0, tzinfo=tz)
+from meal_planner.dates_input import parse_date_expression
 
 
 class DatesInputTests(unittest.TestCase):
@@ -56,17 +48,6 @@ class DatesInputTests(unittest.TestCase):
             parse_date_expression("12/a", year=2026, month=5)
         with self.assertRaisesRegex(ValueError, "超出"):
             parse_date_expression("31", year=2026, month=4)
-
-    def test_validate_dates_uses_timezone_cutoff_and_reports_bad_dates(self):
-        with patch.object(dates_input, "datetime", FixedDateTime):
-            with self.assertRaises(DateValidationError) as ctx:
-                validate_dates_not_before(
-                    [date(2026, 5, 13), date(2026, 5, 14), date(2026, 5, 20)],
-                    timezone="Asia/Hong_Kong",
-                    reject_days_before_today=6,
-                )
-        self.assertEqual(ctx.exception.rejected_dates, (date(2026, 5, 13),))
-        self.assertIn("2026-05-14", str(ctx.exception))
 
 
 if __name__ == "__main__":

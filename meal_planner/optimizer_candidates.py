@@ -30,6 +30,24 @@ def build_active_items_and_candidates(
 ) -> tuple[list[tuple[str, int, dict[str, object]]], list[_Candidate]]:
     active_items: list[tuple[str, int, dict[str, object]]] = []
     candidates: list[_Candidate] = []
+    singleton_min_pressure: dict[int, float] = {}
+
+    for meal, items in meal_pattern_parts.items():
+        if meal not in visible_meals:
+            continue
+        for i, item in enumerate(items):
+            alts = item.get("alternatives", [])
+            alts_list = [str(x) for x in alts] if isinstance(alts, list) else []
+            item_candidates = candidates_by_item.get((meal, i), [])
+            forced_row = (forced_item_rows or {}).get((meal, i))
+            if forced_row is not None:
+                item_candidates = [x for x in item_candidates if int(x.row_index) == int(forced_row)]
+            if len(item_candidates) != 1:
+                continue
+            e = item_candidates[0]
+            if e.daymax_g is None or e.min_g is None:
+                continue
+            singleton_min_pressure[e.row_index] = singleton_min_pressure.get(e.row_index, 0.0) + float(e.min_g)
 
     for meal, items in meal_pattern_parts.items():
         if meal not in visible_meals:
@@ -51,6 +69,19 @@ def build_active_items_and_candidates(
                 eff_daymax = (
                     float(ov_daymax) if ov_daymax is not None else (float(e.daymax_g) if e.daymax_g is not None else None)
                 )
+                pressure = singleton_min_pressure.get(e.row_index, 0.0)
+                if (
+                    eff_daymax is not None
+                    and pressure > eff_daymax
+                    and len(item_candidates) == 1
+                    and e.min_g is not None
+                ):
+                    # DayMax is the harder daily safety bound.  If a pattern repeats
+                    # the same fixed ingredient so often that summed Min(g) already
+                    # exceeds DayMax(g), reduce the slot minimum proportionally
+                    # instead of making the whole MILP infeasible and falling back
+                    # to non-optimised default portions.
+                    eff_min = min(eff_min, float(int(max(0.0, eff_daymax * float(e.min_g) / pressure))))
                 eff_max = _effective_max_g(e, settings)
                 if e.max_g is None and eff_daymax is not None:
                     eff_max = max(eff_max, eff_daymax)

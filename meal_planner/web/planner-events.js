@@ -1,18 +1,24 @@
 
+    const DESKTOP_LAN_SERVER = "http://192.168.15.125:8765";
     let rerollNonce = 0;
+
+    document.addEventListener("contextmenu", (ev) => {
+      const insideApp = ev.target && ev.target.closest && ev.target.closest(".app-shell");
+      if (insideApp) ev.preventDefault();
+    });
 
     document.getElementById("go").addEventListener("click", async () => {
       const err = document.getElementById("err");
       const go = document.getElementById("go");
       err.style.display = "none";
       err.textContent = "";
+      generateBusy = true;
       go.disabled = true;
       rerollNonce += 1;
       const body = {
         year: +document.getElementById("year").value,
         month: +document.getElementById("month").value,
         dates_expr: document.getElementById("dates_expr").value.trim(),
-        skip_date_validation: document.getElementById("skip").checked,
         reroll_nonce: rerollNonce,
         fast_mode: document.getElementById("fast_mode").checked,
       };
@@ -28,9 +34,6 @@
           err.style.display = "block";
           return;
         }
-        document.getElementById("cutoff").textContent = data.cutoff
-          ? "Cutoff date: " + data.cutoff + " (Hong Kong)"
-          : "";
         const headers = data.headers || [];
         const indicatorRows = data.indicator_rows || {};
         const nutrientKeys = data.nutrient_keys || [];
@@ -42,16 +45,18 @@
         memoryPayload.indicator_rows = indicatorRows;
         memoryPayload.nutrient_keys = nutrientKeys;
         memoryPayload.days = mergeDaysByDate(memoryPayload.days || [], days);
+        await saveMemoryPayload();
         renderFromMemory(anchor);
         seedShoppingDateRange();
-        await saveMemoryPayload();
         playGenerateChime();
         currentFocusedDate = (days[0] && days[0].date) || null;
+        updateGenerateButtonState();
       } catch (x) {
         err.textContent = String(x);
         err.style.display = "block";
       } finally {
-        go.disabled = false;
+        generateBusy = false;
+        updateGenerateButtonState();
       }
     });
 
@@ -59,12 +64,28 @@
       const t = ev.target;
       if (t && t.matches && t.matches("td.editable-content[data-date]")) {
         currentFocusedDate = t.getAttribute("data-date");
+        updateGenerateButtonState();
+      } else if (t && t.closest && t.closest("#planner-panel .top")) {
+        currentFocusedDate = null;
+        updateGenerateButtonState();
       }
     });
 
     document.addEventListener("mousedown", (ev) => {
       const t = ev.target && ev.target.closest ? ev.target.closest("td.editable-content[data-date]") : null;
-      if (t) currentFocusedDate = t.getAttribute("data-date");
+      if (t) {
+        currentFocusedDate = t.getAttribute("data-date");
+        updateGenerateButtonState();
+      } else if (ev.target && ev.target.closest && ev.target.closest("#planner-panel .top")) {
+        currentFocusedDate = null;
+        updateGenerateButtonState();
+      }
+    });
+
+    ["year", "month", "dates_expr"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", updateGenerateButtonState);
+      if (el) el.addEventListener("change", updateGenerateButtonState);
     });
 
     document.getElementById("recalc").addEventListener("click", async () => {
@@ -139,6 +160,368 @@
       }
     });
 
+    function renderAlarmPreview(plan) {
+      const wrap = document.getElementById("alarm-preview-wrap");
+      const title = document.getElementById("alarm-preview-title");
+      const body = document.getElementById("alarm-preview-body");
+      if (!wrap || !title || !body || !plan) return;
+      const alarms = Array.isArray(plan.alarms) ? plan.alarms : [];
+      const dateText = alarmSyncDateLabel(plan.date);
+      const roster = plan.roster_code ? ` / ${plan.roster_code}` : "";
+      title.textContent = `將發送鬧鐘：${dateText}${roster}`;
+      body.innerHTML = "";
+      if (!alarms.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.textContent = "呢日未有可同步鬧鐘";
+        td.className = "alarm-preview-empty";
+        tr.appendChild(td);
+        body.appendChild(tr);
+        applyFormColumnWidths(wrap);
+        attachFormColumnResizers(wrap);
+        return;
+      }
+      for (const alarm of alarms) {
+        const t = String(alarm.trigger_at || "");
+        const label = String(alarm.label || "");
+        const displayTime = t.includes("T") ? t.split("T")[1].slice(0, 5) : "";
+        const duration = (label.match(/(?:^|\s)(\d+)\s*$/) || [])[1] || "";
+        const tr = document.createElement("tr");
+        [
+          plan.roster_code || "",
+          displayTime,
+          label,
+          duration,
+          alarmSyncDateLabel(plan.date),
+        ].forEach((value, idx) => {
+          const td = document.createElement("td");
+          td.textContent = value;
+          if (idx === 1) td.className = "alarm-preview-time";
+          if (idx === 3) td.className = "alarm-preview-duration";
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      }
+      applyFormColumnWidths(wrap);
+      attachFormColumnResizers(wrap);
+    }
+
+    function isScheduleGridHeaderRow(row) {
+      if (!Array.isArray(row) || row.length < 5) return false;
+      const headers = ["更碼", "時間", "內容", "時長", "生效日期"];
+      return headers.every((value, idx) => String(row[idx] || "").trim() === value);
+    }
+
+    function normalizeScheduleGridDate(value) {
+      const text = String(value || "").trim();
+      if (!text) return "";
+      const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (iso) {
+        return `${iso[1]}-${String(iso[2]).padStart(2, "0")}-${String(iso[3]).padStart(2, "0")}`;
+      }
+      const dmy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (dmy) {
+        return `${dmy[3]}-${String(dmy[2]).padStart(2, "0")}-${String(dmy[1]).padStart(2, "0")}`;
+      }
+      return text;
+    }
+
+    function renderScheduleGridPreview(payload) {
+      const wrap = document.getElementById("alarm-preview-wrap");
+      const title = document.getElementById("alarm-preview-title");
+      const body = document.getElementById("alarm-preview-body");
+      if (!wrap || !title || !body) return;
+
+      let rows = Array.isArray((payload || {}).rows) ? payload.rows.filter((row) => Array.isArray(row)) : [];
+      if (rows.length && isScheduleGridHeaderRow(rows[0])) {
+        rows = rows.slice(1);
+      }
+
+      title.textContent = "行位表內容";
+      body.innerHTML = "";
+      if (!rows.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.textContent = "未有可顯示行位表資料";
+        td.className = "alarm-preview-empty";
+        tr.appendChild(td);
+        body.appendChild(tr);
+        applyFormColumnWidths(wrap);
+        attachFormColumnResizers(wrap);
+        return;
+      }
+
+      for (const row of rows) {
+        const line = row.map((value) => String(value || "").trim());
+        const dateText = line[4] ? alarmSyncDateLabel(normalizeScheduleGridDate(line[4])) : "";
+        const tr = document.createElement("tr");
+        [line[0], line[1], line[2], line[3], dateText].forEach((value, idx) => {
+          const td = document.createElement("td");
+          td.textContent = value;
+          if (idx === 1) td.className = "alarm-preview-time";
+          if (idx === 3) td.className = "alarm-preview-duration";
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      }
+      applyFormColumnWidths(wrap);
+      attachFormColumnResizers(wrap);
+    }
+
+    function clearAlarmSyncPreview() {
+      const wrap = document.getElementById("alarm-preview-wrap");
+      const title = document.getElementById("alarm-preview-title");
+      const body = document.getElementById("alarm-preview-body");
+      if (!wrap || !title || !body) return;
+      title.textContent = "行位表內容";
+      body.innerHTML = "";
+      applyFormColumnWidths(wrap);
+      attachFormColumnResizers(wrap);
+    }
+
+    function clearAlarmMealPlanPreview() {
+      const panel = document.getElementById("alarm-meal-plan-preview");
+      const title = document.getElementById("alarm-meal-plan-title");
+      const content = document.getElementById("alarm-meal-plan-content");
+      if (!panel || !title || !content) return;
+      title.textContent = "餐單預覽";
+      content.textContent = "";
+      panel.style.display = "none";
+    }
+
+    function renderAlarmMealPlanTextPreview(payload) {
+      const panel = document.getElementById("alarm-meal-plan-preview");
+      const title = document.getElementById("alarm-meal-plan-title");
+      const content = document.getElementById("alarm-meal-plan-content");
+      if (!panel || !title || !content) return;
+
+      const rawText = String(
+        (payload && payload.meal_plan_text) ||
+          (payload && payload.meal_plan && payload.meal_plan.text) ||
+          (payload && payload.note) ||
+          ""
+      ).trim();
+      title.textContent = `餐單預覽（${alarmSyncDateLabel(payload && payload.date)}）`;
+
+      if (!rawText) {
+        content.textContent = "未有可同步餐單內容";
+        panel.style.display = "";
+        return;
+      }
+
+      content.textContent = rawText;
+      panel.style.display = "";
+    }
+
+    function buildAlarmSyncImportedPayload(sheetPayload, importedVersions) {
+      const versionSet = Array.isArray(importedVersions)
+        ? new Set(importedVersions.map((v) => String(v || "").trim()))
+        : new Set();
+      const rawRows = Array.isArray((sheetPayload || {}).rows)
+        ? sheetPayload.rows.filter((row) => Array.isArray(row))
+        : [];
+      if (!rawRows.length) return { rows: [] };
+      if (!versionSet.size) return { rows: rawRows };
+      const hasHeader = isScheduleGridHeaderRow(rawRows[0]);
+      const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
+      const filtered = dataRows.filter((row) => versionSet.has(
+        row.length >= 5 ? normalizeScheduleGridDate(row[4]) : ""
+      ));
+      return { rows: hasHeader ? [rawRows[0], ...filtered] : filtered };
+    }
+
+    function alarmSyncDateLabel(iso) {
+      const text = String(iso || "").trim();
+      const m = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return text || "未指定日期";
+      const year = Number(m[1]);
+      const month = Number(m[2]);
+      const day = Number(m[3]);
+      if (typeof dateDmyDow === "function") return dateDmyDow(year, month, day);
+      return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year} ${dowZh(text)}`;
+    }
+
+    function autoSyncDeviceId() {
+      const input = document.getElementById("auto-sync-device");
+      const inputRaw = input ? String(input.value || "").trim() : "";
+      if (inputRaw) {
+        return inputRaw;
+      }
+      const stored = (window.localStorage && window.localStorage.getItem("mealplanner_auto_sync_device")) || "";
+      return String(stored || "default").trim();
+    }
+
+    function syncAutoDeviceStateFromUi() {
+      const input = document.getElementById("auto-sync-device");
+      const serverInput = document.getElementById("auto-sync-server");
+      if (!window.localStorage) return;
+      if (!input && !serverInput) return;
+      const stored = window.localStorage.getItem("mealplanner_auto_sync_device") || "";
+      const storedServer = window.localStorage.getItem("mealplanner_auto_sync_server") || "";
+      if (input) {
+        if (!input.value && stored) {
+          input.value = stored;
+        }
+        if (!input.value) {
+          input.value = "default";
+        }
+        if (input.dataset.autoSyncBound !== "1") {
+          input.dataset.autoSyncBound = "1";
+          input.addEventListener("input", () => {
+            if (!window.localStorage) return;
+            window.localStorage.setItem("mealplanner_auto_sync_device", String(input.value || "").trim() || "default");
+          });
+        }
+      }
+      if (serverInput) {
+        serverInput.value = DESKTOP_LAN_SERVER;
+        if (storedServer !== DESKTOP_LAN_SERVER) {
+          window.localStorage.setItem("mealplanner_auto_sync_server", DESKTOP_LAN_SERVER);
+        }
+        if (serverInput.dataset.autoSyncBound !== "1") {
+          serverInput.dataset.autoSyncBound = "1";
+          serverInput.addEventListener("input", () => {
+            if (!window.localStorage) return;
+            window.localStorage.setItem("mealplanner_auto_sync_server", String(serverInput.value || "").trim());
+          });
+        }
+      }
+    }
+
+    function autoSyncServerUrl() {
+      const input = document.getElementById("auto-sync-server");
+      const inputRaw = input ? String(input.value || "").trim() : "";
+      if (inputRaw) {
+        return inputRaw;
+      }
+      return DESKTOP_LAN_SERVER;
+    }
+
+    async function syncAutoServerSuggestionFromBackend() {
+      const input = document.getElementById("auto-sync-server");
+      if (!input) return;
+      const current = String(input.value || "").trim();
+      if (current === DESKTOP_LAN_SERVER) return;
+      try {
+        const r = await fetch("/api/network-info");
+        const data = await r.json().catch(() => ({}));
+        const suggested = String(data.suggested_auto_server || "").trim();
+        if (!r.ok || !suggested) return;
+        input.value = suggested;
+        if (window.localStorage) {
+          window.localStorage.setItem("mealplanner_auto_sync_server", suggested);
+        }
+      } catch (_) {}
+    }
+
+    async function refreshAlarmSyncServerDisplay() {
+      const display = document.getElementById("alarm-sync-server-ip");
+      if (!display) return;
+      display.textContent = "偵測中...";
+      try {
+        const r = await fetch("/api/network-info");
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          const msg = String(data.detail || data.message || "").trim();
+          display.textContent = msg ? `無法取得 (${msg})` : "無法取得";
+          return;
+        }
+        const suggested = String(data.suggested_auto_server || "").trim();
+        const lanIps = Array.isArray(data.lan_ips) ? data.lan_ips : [];
+        const port = Number.isFinite(Number(data.port)) ? Number(data.port) : 8765;
+        if (suggested) {
+          display.textContent = suggested;
+          return;
+        }
+        display.textContent = lanIps.length
+          ? `http://${lanIps[0]}:${port}`
+          : "未有可用 LAN IP";
+      } catch (_) {
+        display.textContent = "無法取得";
+      }
+    }
+
+    const xmlImportBtn = document.getElementById("alarm-sync-import-xml");
+    if (xmlImportBtn) {
+      xmlImportBtn.addEventListener("click", async () => {
+        const status = document.getElementById("alarm-sync-status");
+        const err = document.getElementById("alarm-sync-err");
+        const confirmBtn = document.getElementById("alarm-sync-confirm-import");
+        if (status) status.textContent = "";
+        if (err) {
+          err.style.display = "none";
+          err.textContent = "";
+        }
+        if (confirmBtn) confirmBtn.style.display = "none";
+        xmlImportBtn.disabled = true;
+        try {
+          const data = await importScheduleGridFromAdbPhone();
+          const importedRows = Number.isFinite(Number(data.row_count)) ? Number(data.row_count) : null;
+          const phoneUrl = String(data.phone_url || "").trim();
+          if (status) {
+            const prefix = phoneUrl ? `已從電話 ${phoneUrl} 載入：` : "已從電話載入：";
+            status.textContent = importedRows === null
+              ? `${prefix}請檢查列表，確認後按 confirm`
+              : `${prefix}${importedRows} 行；確認後按 confirm 更新行位表`;
+          }
+          renderScheduleGridPreview(data);
+          if (confirmBtn) confirmBtn.style.display = "";
+        } catch (x) {
+          if (err) {
+            err.textContent = String(x && x.message ? x.message : x);
+            err.style.display = "block";
+          }
+          if (status) status.textContent = "";
+        } finally {
+          xmlImportBtn.disabled = false;
+        }
+      });
+    }
+
+    const confirmImportBtn = document.getElementById("alarm-sync-confirm-import");
+    if (confirmImportBtn) {
+      confirmImportBtn.addEventListener("click", async () => {
+        const status = document.getElementById("alarm-sync-status");
+        const err = document.getElementById("alarm-sync-err");
+        if (status) status.textContent = "更新行位表中...";
+        if (err) {
+          err.style.display = "none";
+          err.textContent = "";
+        }
+        confirmImportBtn.disabled = true;
+        try {
+          const data = await confirmScheduleGridFromPhoneIp();
+          const importedRows = Number.isFinite(Number(data.imported_row_count)) ? Number(data.imported_row_count) : null;
+          const replacedRows = Number.isFinite(Number(data.replaced_row_count)) ? Number(data.replaced_row_count) : null;
+          if (status) {
+            status.textContent = importedRows === null || replacedRows === null
+              ? "已更新行位表"
+              : `已更新行位表：${importedRows} 行；取代舊版：${replacedRows} 行`;
+          }
+          confirmImportBtn.style.display = "none";
+          try {
+            const sheetPayload = await loadMaintSheet("schedule_grid");
+            const importedVersions = Array.isArray(data.imported_versions) ? data.imported_versions : [];
+            renderScheduleGridPreview(buildAlarmSyncImportedPayload(sheetPayload, importedVersions));
+          } catch (x) {
+            if (status) {
+              status.textContent = `${status.textContent}；未能列出行位表：${String(x && x.message ? x.message : x)}`;
+            }
+          }
+        } catch (x) {
+          if (err) {
+            err.textContent = String(x && x.message ? x.message : x);
+            err.style.display = "block";
+          }
+          if (status) status.textContent = "";
+        } finally {
+          confirmImportBtn.disabled = false;
+        }
+      });
+    }
+
     document.getElementById("show_past").addEventListener("change", async (ev) => {
       showPast = !!ev.target.checked;
       const anchor = captureViewportAnchor();
@@ -147,11 +530,17 @@
     });
     document.addEventListener("input", (ev) => {
       const area = editableAreaName(ev.target);
-      if (area) setUnsavedChanges(area);
+      if (area) {
+        if (ev.target && ev.target.dataset) ev.target.dataset.autosaveDirty = "1";
+        setUnsavedChanges(area);
+      }
     });
     document.addEventListener("change", (ev) => {
       const area = editableAreaName(ev.target);
-      if (area) setUnsavedChanges(area);
+      if (area) {
+        if (ev.target && ev.target.dataset) ev.target.dataset.autosaveDirty = "1";
+        setUnsavedChanges(area);
+      }
     });
     window.addEventListener("beforeunload", (ev) => {
       if (!unsavedChanges) return;
@@ -160,14 +549,27 @@
     });
 
     document.getElementById("menu-planner").addEventListener("click", async () => {
-      if (await resolveUnsavedBeforeLeaving()) setActivePanel("planner");
+      if (await resolveUnsavedBeforeLeaving()) {
+        const anchor = captureViewportAnchor();
+        await loadMemoryPayload();
+        renderFromMemory(anchor);
+        seedShoppingDateRange();
+        setActiveMenuPathForKey("planner");
+        setActivePanel("planner");
+      }
     });
     document.getElementById("menu-config").addEventListener("click", async () => {
       if (!(await resolveUnsavedBeforeLeaving())) return;
       const tree = document.getElementById("config-menu-tree");
       const wasOpen = !!(tree && tree.classList.contains("is-open"));
-      openConfigChild("targets");
-      setConfigMenuTreeOpen(!wasOpen);
+      if (wasOpen) {
+        setConfigMenuTreeOpen(false);
+        activeMenuPath = ["top", "config"];
+        persistActiveMenuPathState();
+        setActivePanel("config");
+        return;
+      }
+      await openConfigChild("targets");
     });
     document.getElementById("menu-config-target").addEventListener("click", () => openConfigChild("targets"));
     document.getElementById("menu-config-catalog").addEventListener("click", () => openConfigChild("catalog"));
@@ -178,6 +580,8 @@
       const wasOpen = !!(tree && tree.classList.contains("is-open"));
       if (wasOpen) {
         setMaintMenuTreeOpen(false);
+        activeMenuPath = ["top", "maint"];
+        persistActiveMenuPathState();
         setActivePanel("maint");
         return;
       }
@@ -192,16 +596,12 @@
     });
     document.getElementById("menu-shopping").addEventListener("click", async () => {
       if (!(await resolveUnsavedBeforeLeaving())) return;
+      setActiveMenuPathForKey("shopping");
       setActivePanel("shopping");
       seedShoppingDateRange();
       if (!Object.keys(shoppingCatalogByName).length) loadShoppingCatalog();
     });
-    document.getElementById("menu-diagnostics").addEventListener("click", async () => {
-      if (!(await resolveUnsavedBeforeLeaving())) return;
-      setActivePanel("diagnostics");
-      refreshDiagnostics();
-    });
-    document.getElementById("diagnostics-refresh").addEventListener("click", refreshDiagnostics);
+    document.getElementById("menu-alarm-sync").addEventListener("click", openAlarmSyncPanel);
     document.getElementById("shop_start").addEventListener("change", () => {
       shoppingStartWasAuto = false;
       syncDefaultShoppingEnd();
@@ -215,7 +615,8 @@
     document.getElementById("catalog-save").addEventListener("click", saveNutritionCatalog);
     document.getElementById("detail-save").addEventListener("click", saveDetailSettings);
     document.getElementById("maint-save").addEventListener("click", saveMaintEditor);
-    document.getElementById("runtime-import").addEventListener("click", importLiveRuntimeInputs);
+    const maintImport = document.getElementById("maint-import");
+    if (maintImport) maintImport.addEventListener("click", importActiveMaintSheet);
     document.getElementById("detail-code-definitions").addEventListener("contextmenu", (ev) => {
       const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-detail-code-row]") : null;
       const idx = row ? Number(row.getAttribute("data-detail-code-row")) : -1;
@@ -237,6 +638,18 @@
       hideMaintRowMenu();
       applyMaintRowAction(action.getAttribute("data-maint-row-action"), Number.isInteger(idx) ? idx : -1);
     });
+    document.getElementById("maint-editor").addEventListener("copy", (ev) => {
+      const input = ev.target && ev.target.matches && ev.target.matches("#maint-editor [data-maint-row][data-maint-col]") ? ev.target : null;
+      if (!input || input.dataset.maintEditing === "1" || !ev.clipboardData) return;
+      ev.preventDefault();
+      ev.clipboardData.setData("text/plain", maintInputClipboardValue(input));
+    });
+    document.getElementById("maint-editor").addEventListener("paste", (ev) => {
+      const input = ev.target && ev.target.matches && ev.target.matches("#maint-editor [data-maint-row][data-maint-col]") ? ev.target : null;
+      if (!input || input.dataset.maintEditing === "1" || !ev.clipboardData) return;
+      ev.preventDefault();
+      pasteMaintClipboard(input, ev.clipboardData.getData("text/plain"));
+    });
     document.getElementById("catalog-filter").addEventListener("input", applyCatalogFilter);
     document.getElementById("catalog-editor").addEventListener("focusin", (ev) => {
       const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-catalog-index]") : null;
@@ -256,10 +669,14 @@
         return;
       }
       if (input.dataset.catalogEditing === "1") {
-        if (ev.key === "Escape" || ev.key === "Enter") {
+        if (ev.key === "Escape" || ev.key === "Enter" || ev.key === "ArrowUp" || ev.key === "ArrowDown") {
           ev.preventDefault();
-          endCatalogCellEdit(input);
-          input.focus();
+          const next = ev.key === "Enter"
+            ? catalogCellInputFrom(input, 0, 1)
+            : (ev.key === "ArrowUp" || ev.key === "ArrowDown" ? catalogCellInputFrom(input, ev.key === "ArrowUp" ? -1 : 1, 0) : null);
+          if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
+          endCatalogCellEdit(input, { cancel: ev.key === "Escape" });
+          focusCatalogCell(next || input);
         }
         return;
       }
@@ -272,7 +689,11 @@
         beginCatalogCellEdit(input);
         return;
       }
-      if ((ev.key.length === 1 || ev.key === "Process") && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+      if (ev.key === "Process" && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+        beginCatalogCellEdit(input, true);
+        return;
+      }
+      if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
         beginCatalogCellEdit(input, true);
       }
     });
@@ -282,7 +703,17 @@
     });
     document.getElementById("catalog-editor").addEventListener("compositionstart", (ev) => {
       const input = ev.target && ev.target.matches && ev.target.matches("input.catalog-cell-input") ? ev.target : null;
-      if (input && input.readOnly) beginCatalogCellEdit(input, true);
+      if (!input) return;
+      if (input && input.readOnly) {
+        beginCatalogCellEdit(input, true);
+      }
+      const timer = catalogDirectKeyTimers.get(input);
+      if (timer) {
+        clearTimeout(timer);
+        catalogDirectKeyTimers.delete(input);
+      }
+      delete input.dataset.catalogPendingDirectKey;
+      delete input.dataset.catalogReplaceOnComposition;
     });
     document.getElementById("catalog-editor").addEventListener("copy", (ev) => {
       const input = ev.target && ev.target.matches && ev.target.matches("#catalog-editor td input") ? ev.target : null;
@@ -335,6 +766,16 @@
         saveActiveEditor();
       }
     });
+    document.addEventListener("keydown", async (ev) => {
+      const isReloadKey = ev.key === "F5"
+        || ((ev.ctrlKey || ev.metaKey) && !ev.altKey && String(ev.key).toLowerCase() === "r");
+      if (!isReloadKey || !unsavedChanges) return;
+      ev.preventDefault();
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      if (await resolveUnsavedBeforeLeaving()) {
+        window.location.reload();
+      }
+    });
 
     (async function bootUi() {
       await loadUiState();
@@ -342,20 +783,31 @@
       applyMenuTreeOpen();
       attachMenuDragHandles();
       await loadMemoryPayload();
+      updateGenerateButtonState();
       await loadShoppingCatalog();
       await refreshTargetEditor();
       await refreshNutritionCatalog();
       await refreshDetailSettings();
       await refreshMaintSheets();
-      await loadCutoffInline();
       document.getElementById("show_past").checked = !!showPast;
       renderFromMemory(null);
       seedShoppingDateRange();
+      applyActiveMenuPathToState();
       setActivePanel(activePanel, false);
-      if (activePanel === "maint" && activeMaintSheetKey) await openMaintSheet(activeMaintSheetKey, false);
-      if (activePanel === "diagnostics") await refreshDiagnostics();
+      applyActiveMenuPathTree();
+      if (activePanel === "config") applyActiveConfigView(false);
+      if (activePanel === "maint" && activeMaintSheetKey) {
+        try {
+          await openMaintSheet(activeMaintSheetKey, false);
+        } catch (_) {
+          if (maintSheets.length) await openMaintSheet(maintSheets[0].sheet_key, false);
+        }
+      }
+      if (activePanel === "alarm_sync") await openAlarmSyncPanel();
       applyTableOffsets();
       attachTableDragHandles();
+      applyFormColumnWidths();
+      attachFormColumnResizers();
       applyMenuOrder();
       applyMenuTreeOpen();
       attachMenuDragHandles();
@@ -365,13 +817,12 @@
       startTopRightClock();
     })();
 
-    // Auto format 4-digit time and Auto-save
-    let globalAutoSaveTimer = null;
+    // Auto format 4-digit time on blur. Saving is explicit via Save, Ctrl+S, or the unsaved-change prompt.
     document.addEventListener("focusout", (ev) => {
       const el = ev.target;
       if (!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA" && el.tagName !== "SELECT")) return;
+      if (el.closest && el.closest(".maint-filter-select")) return;
 
-      // 1. Auto format 4 digits to hh:mm
       if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
         const val = el.value.trim();
         if (/^\d{4}$/.test(val)) {
@@ -384,16 +835,5 @@
         }
       }
 
-      // 2. Auto save
-      if (el.closest("#maint-editor, #target-editor, #catalog-editor, .detail-editor, .target-editor-host")) {
-        clearTimeout(globalAutoSaveTimer);
-        globalAutoSaveTimer = setTimeout(() => {
-          if (typeof saveActiveEditor === "function") saveActiveEditor();
-        }, 500);
-      } else if (el.closest("#planner-out")) {
-        clearTimeout(globalAutoSaveTimer);
-        globalAutoSaveTimer = setTimeout(() => {
-          if (typeof saveMemoryPayload === "function") saveMemoryPayload();
-        }, 500);
-      }
+      if (el.dataset) delete el.dataset.skipAutosaveOnce;
     });

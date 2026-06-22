@@ -43,6 +43,9 @@ def _to_date(v: Any) -> date | None:
         return v
     if isinstance(v, str):
         s = v.strip()
+        m = re.match(r"^(\d{1,2}/\d{1,2}/\d{2,4})(?:\s+\w+)?$", s)
+        if m:
+            s = m.group(1)
         for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
             try:
                 return datetime.strptime(s, fmt).date()
@@ -65,9 +68,11 @@ def grid_row_matches_roster(cell_code: str | None, roster_code: str) -> bool:
         return False
     c = str(cell_code).strip()
     r = str(roster_code).strip()
-    if c == r:
+    c_cmp = c.casefold()
+    r_cmp = r.casefold()
+    if c_cmp == r_cmp:
         return True
-    if c.startswith(r + "(") or c.startswith(r + "（"):
+    if c_cmp.startswith(r_cmp + "(") or c_cmp.startswith(r_cmp + "（"):
         return True
     return False
 

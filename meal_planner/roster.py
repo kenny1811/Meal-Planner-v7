@@ -21,7 +21,8 @@ class RosterMonth:
 
 def parse_roster_line(cell_text: str) -> RosterMonth | None:
     """
-    解析更表單格全文：開頭 YYYY年M月，其後為「日 更碼」成對 token。
+    解析更表單格全文：開頭 YYYY年M月，其後為「日 更碼」。
+    更碼可包含空格，會一路讀到下一個日期 token。
     """
     if cell_text is None:
         return None
@@ -36,12 +37,21 @@ def parse_roster_line(cell_text: str) -> RosterMonth | None:
     tokens = rest.split()
     day_to_code: dict[int, str] = {}
     i = 0
-    while i + 1 < len(tokens):
-        d_tok, code = tokens[i], tokens[i + 1]
+    while i < len(tokens):
+        d_tok = tokens[i]
         if not d_tok.isdigit():
             break
-        day_to_code[int(d_tok)] = code
-        i += 2
+        day = int(d_tok)
+        if day < 1 or day > 31:
+            break
+        i += 1
+        code_parts: list[str] = []
+        while i < len(tokens) and not (tokens[i].isdigit() and 1 <= int(tokens[i]) <= 31):
+            code_parts.append(tokens[i])
+            i += 1
+        if not code_parts:
+            break
+        day_to_code[day] = " ".join(code_parts)
     return RosterMonth(year=y, month=mo, day_to_code=day_to_code)
 
 

@@ -8,9 +8,9 @@ import sys
 import time
 from pathlib import Path
 
-from meal_planner.dates_input import DateValidationError, cutoff_date, parse_date_expression
+from meal_planner.dates_input import DateValidationError, parse_date_expression
 from meal_planner.excel_io import WorkbookValidationError
-from meal_planner.preview import preview_days_with_cutoff
+from meal_planner.preview import preview_days
 
 
 def _json_dump(payload: dict, *, pretty: bool) -> str:
@@ -50,11 +50,6 @@ def main(argv: list[str] | None = None) -> int:
         help='日期：空格分隔「3 5 7」或混範圍「12 13 14 15-17」、單段「12-15」、逗號多段「12-15,27-3」或「12,13,15-17」',
     )
     p.add_argument(
-        "--skip-date-check",
-        action="store_true",
-        help="略過「早於界限日」拒絕（僅除錯用）",
-    )
-    p.add_argument(
         "--workbook",
         type=str,
         default=None,
@@ -75,11 +70,6 @@ def main(argv: list[str] | None = None) -> int:
         "--health",
         action="store_true",
         help="輸出 CLI/API 共用健康檢查資料後結束",
-    )
-    p.add_argument(
-        "--cutoff",
-        action="store_true",
-        help="輸出目前日期拒絕界限後結束",
     )
     p.add_argument(
         "--debug-stats",
@@ -130,21 +120,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    if args.cutoff:
-        settings = get_settings()
-        _print_json(
-            _success_payload(
-                {
-                    "cutoff": cutoff_date(
-                        settings.dates.timezone,
-                        settings.dates.reject_days_before_today,
-                    ).isoformat()
-                }
-            ),
-            pretty=pretty,
-        )
-        return 0
-
     missing = [name for name in ("year", "month", "dates") if getattr(args, name) is None]
     if missing:
         _print_json(
@@ -165,9 +140,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        out = preview_days_with_cutoff(
+        out = preview_days(
             dates,
-            skip_date_validation=args.skip_date_check,
             reroll_nonce=args.reroll_nonce,
             fast_mode=not args.full_mode,
         )

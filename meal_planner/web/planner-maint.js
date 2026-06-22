@@ -1,10 +1,20 @@
+    const SCHEDULE_GRID_NEW_SHIFT_FILTER = "__new_shift_code__";
+    let scheduleGridNewShiftBatchId = "";
+    let scheduleGridNewShiftStartIndex = -1;
+    let scheduleGridNewShiftCount = 0;
+    let scheduleGridSkipNextRenderSort = false;
+    const maintDirectKeyTimers = new WeakMap();
+
     function emptyMaintRow(rows = null) {
       if (activeMaintSheetKey === "roster") return [""];
       const cols = maintColumnCount(rows || collectMaintRows());
       return Array.from({ length: cols }, () => "");
     }
 
-    function setMaintRowsAndRender(rows) {
+    function setMaintRowsAndRender(rows, options = {}) {
+      if (activeMaintSheetKey === "schedule_grid" && options.preserveOrder) {
+        scheduleGridSkipNextRenderSort = true;
+      }
       maintSheetPayload.rows = rows;
       renderMaintEditor();
     }
@@ -15,6 +25,20 @@
       ev.preventDefault();
       menu.hidden = false;
       menu.setAttribute("data-maint-row-index", Number.isInteger(rowIndex) ? String(rowIndex) : "-1");
+      const newVersion = menu.querySelector('[data-maint-row-action="new-version"]');
+      const deleteVersion = menu.querySelector('[data-maint-row-action="delete-version"]');
+      const addShiftCode = menu.querySelector('[data-maint-row-action="add-shift-code"]');
+      const versionActionVisible = activeMaintSheetKey === "schedule_grid" && Number.isInteger(rowIndex) && rowIndex > 0;
+      const scheduleGridVisible = activeMaintSheetKey === "schedule_grid";
+      if (addShiftCode) {
+        addShiftCode.style.display = scheduleGridVisible ? "" : "none";
+      }
+      if (newVersion) {
+        newVersion.style.display = versionActionVisible ? "" : "none";
+      }
+      if (deleteVersion) {
+        deleteVersion.style.display = versionActionVisible ? "" : "none";
+      }
       menu.style.left = `${ev.clientX}px`;
       menu.style.top = `${ev.clientY}px`;
     }
@@ -27,6 +51,22 @@
     }
 
     function applyMaintRowAction(action, rowIndex) {
+      if (action === "new-version") {
+        createScheduleGridVersion(rowIndex);
+        return;
+      }
+      if (action === "delete-version") {
+        deleteScheduleGridVersion(rowIndex);
+        return;
+      }
+      if (action === "add-shift-code") {
+        addScheduleGridShiftCodeRows(rowIndex);
+        return;
+      }
+      if (activeMaintSheetKey === "schedule_grid" && (action === "insert" || action === "append")) {
+        applyScheduleGridRowAction(action, rowIndex);
+        return;
+      }
       const rows = collectMaintRows();
       const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
       if (action === "insert") {
@@ -37,7 +77,854 @@
         rows.push(emptyMaintRow(rows));
       }
       setUnsavedChanges("餐單參數");
-      setMaintRowsAndRender(rows);
+      if (activeMaintSheetKey === "schedule_grid" && action === "delete") {
+        setMaintRowsAndRender(rows, { preserveOrder: true });
+        return;
+      }
+      if (!applyMaintRowsFast(rows, action, idx)) setMaintRowsAndRender(rows);
+    }
+
+    function scheduleGridFilledEmptyRow(rows, insertAt, sourceRowIndex = null) {
+      const row = emptyMaintRow(rows);
+      const cols = scheduleGridColumnIndexes(rows);
+      if (cols.code < 0) return row;
+      const references = [];
+      if (Number.isInteger(sourceRowIndex) && sourceRowIndex > 0 && Array.isArray(rows[sourceRowIndex])) {
+        references.push(rows[sourceRowIndex]);
+      }
+      if (Array.isArray(rows[insertAt]) && insertAt > 0) references.push(rows[insertAt]);
+      if (Array.isArray(rows[insertAt - 1]) && insertAt - 1 > 0) references.push(rows[insertAt - 1]);
+      const ref = references.find((item) => String(item[cols.code] || "").trim()) || null;
+      if (ref) {
+        row[cols.code] = String(ref[cols.code] || "").trim();
+        if (cols.effective >= 0) row[cols.effective] = String(ref[cols.effective] || "").trim();
+      }
+      if (!ref && currentMaintFilter && currentMaintFilter !== SCHEDULE_GRID_NEW_SHIFT_FILTER) {
+        row[cols.code] = currentMaintFilter;
+        if (cols.effective >= 0) {
+          if (currentMaintEffectiveFilter) {
+            row[cols.effective] = currentMaintEffectiveFilter === "__blank__" ? "" : currentMaintEffectiveFilter;
+          } else {
+            const sameCodeRef = rows
+              .slice(1, insertAt)
+              .reverse()
+              .find((item) => Array.isArray(item) && String(item[cols.code] || "").trim() === currentMaintFilter);
+            if (sameCodeRef) row[cols.effective] = String(sameCodeRef[cols.effective] || "").trim();
+          }
+        }
+      }
+      return row;
+    }
+
+    function scheduleGridAppendIndex(rows, cols) {
+      if (!currentMaintFilter || currentMaintFilter === SCHEDULE_GRID_NEW_SHIFT_FILTER || cols.code < 0) return rows.length;
+      let lastMatch = -1;
+      const filterEffective = currentMaintEffectiveFilter || "";
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!Array.isArray(row)) continue;
+        if (String(row[cols.code] || "").trim() !== currentMaintFilter) continue;
+        if (filterEffective && cols.effective >= 0) {
+          const rowEffective = String(row[cols.effective] || "").trim() || "__blank__";
+          if (rowEffective !== filterEffective) continue;
+        }
+        lastMatch = i;
+      }
+      return lastMatch >= 0 ? lastMatch + 1 : rows.length;
+    }
+
+    function applyScheduleGridRowAction(action, rowIndex) {
+      const rows = collectMaintRows();
+      const cols = scheduleGridColumnIndexes(rows);
+      const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
+      const insertAt = action === "append" ? scheduleGridAppendIndex(rows, cols) : Math.max(1, Math.min(idx, rows.length));
+      const sourceRowIndex = action === "insert" ? idx : null;
+      const newRow = scheduleGridFilledEmptyRow(rows, insertAt, sourceRowIndex);
+      const inNewShiftBatch = scheduleGridNewShiftBatchId
+        && insertAt >= scheduleGridNewShiftStartIndex
+        && insertAt <= scheduleGridNewShiftStartIndex + scheduleGridNewShiftCount;
+      rows.splice(insertAt, 0, newRow);
+      if (inNewShiftBatch) scheduleGridNewShiftCount += 1;
+      setUnsavedChanges("餐單參數");
+      setMaintRowsAndRender(rows, { preserveOrder: true });
+      if (inNewShiftBatch) {
+        markScheduleGridNewShiftBatch(scheduleGridNewShiftStartIndex, scheduleGridNewShiftCount, scheduleGridNewShiftBatchId, false);
+      }
+      const focusCol = cols.time >= 0 ? cols.time : Math.max(cols.code, 0);
+      const focus = scheduleGridInput(insertAt, focusCol);
+      if (focus) focusMaintCell(focus, true);
+    }
+
+    function maintRowHtml(row, rIdx, cols, formKey, isShiftCodeCol) {
+      return Array.from({ length: cols }, (_, cIdx) => {
+        const value = formatMaintTimeValue(maintSheetPayload.sheet_key, rIdx, cIdx, Array.isArray(row) ? row[cIdx] : "");
+        const resizeKey = rIdx === 0 ? ` data-form-col-key="${formKey}_col_${cIdx}"` : "";
+        if (rIdx > 0 && isShiftCodeCol(cIdx)) {
+          return `<td${resizeKey}${maintCellClass(maintSheetPayload.sheet_key, rIdx, cIdx, value)}><input type="text" data-maint-shift-code="1" data-maint-row="${rIdx}" data-maint-col="${cIdx}" value="${esc(value ?? "")}" spellcheck="false" autocomplete="off" readonly /></td>`;
+        }
+        return `<td${resizeKey}${maintCellClass(maintSheetPayload.sheet_key, rIdx, cIdx, value)}><textarea data-auto-row-height data-maint-row="${rIdx}" data-maint-col="${cIdx}" spellcheck="false" readonly>${esc(value ?? "")}</textarea></td>`;
+      }).join("");
+    }
+
+    function bindMaintRowInputs(root) {
+      root.querySelectorAll("textarea[data-maint-row][data-maint-col], input[data-maint-row][data-maint-col]").forEach((input) => {
+        input.readOnly = true;
+        const cell = input.closest("td");
+        if (cell && cell.dataset.maintCellFocusBound !== "1") {
+          cell.dataset.maintCellFocusBound = "1";
+          cell.addEventListener("mousedown", (ev) => {
+            if (ev.target !== cell) return;
+            const cellInput = cell.querySelector("[data-maint-row][data-maint-col]");
+            if (!cellInput) return;
+            ev.preventDefault();
+            focusMaintCell(cellInput, true);
+          });
+        }
+        input.addEventListener("input", () => {
+          updateMaintInputFormatting(input, true);
+          if (activeMaintSheetKey === "schedule_grid") setUnsavedChanges("餐單參數");
+        });
+        input.addEventListener("blur", () => {
+          endMaintCellEdit(input);
+          updateMaintInputFormatting(input, false);
+          if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
+        });
+        input.addEventListener("mousedown", (ev) => {
+          if (ev.detail >= 2) beginMaintCellEdit(input);
+        });
+        input.addEventListener("dblclick", () => beginMaintCellEdit(input));
+        input.addEventListener("compositionstart", () => {
+          if (input.readOnly) {
+            beginMaintCellEdit(input, true);
+          } else if (input.dataset.maintKeyboardSelected === "1" && input.dataset.maintEditing !== "1") {
+            beginMaintCellEdit(input, true);
+          }
+          const timer = maintDirectKeyTimers.get(input);
+          if (timer) {
+            clearTimeout(timer);
+            maintDirectKeyTimers.delete(input);
+          }
+          delete input.dataset.maintPendingDirectKey;
+          delete input.dataset.maintReplaceOnComposition;
+        });
+        input.addEventListener("beforeinput", (ev) => {
+          if (input.dataset.maintKeyboardSelected !== "1" || input.dataset.maintEditing === "1") return;
+          if (String(ev.inputType || "").startsWith("insert")) {
+            beginMaintCellEdit(input, true);
+          }
+        });
+        input.addEventListener("keydown", handleMaintCellKeydown);
+      });
+      bindAutoRowHeight(root);
+    }
+
+    function maintCellInputFrom(input, rowDelta, colDelta) {
+      const row = input && input.closest ? input.closest("tr[data-maint-row-index]") : null;
+      const cell = input && input.closest ? input.closest("td") : null;
+      if (!row || !cell) return null;
+      const rows = Array.from(document.querySelectorAll("#maint-editor tr[data-maint-row-index]"))
+        .filter((item) => item.style.display !== "none");
+      const rowPos = rows.indexOf(row);
+      const targetRow = rows[rowPos + rowDelta];
+      const targetCell = (targetRow || row).cells[cell.cellIndex + colDelta];
+      return targetCell ? targetCell.querySelector("[data-maint-row][data-maint-col]") : null;
+    }
+
+    function focusMaintCell(input, fromKeyboard = false) {
+      if (!input) return;
+      delete input.dataset.maintEditing;
+      delete input.dataset.maintReplaceOnComposition;
+      delete input.dataset.maintPendingDirectKey;
+      if (fromKeyboard) {
+        input.readOnly = false;
+        input.dataset.maintKeyboardSelected = "1";
+      } else {
+        input.readOnly = true;
+        delete input.dataset.maintKeyboardSelected;
+      }
+      input.focus();
+      input.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+
+    function maintTextareaCanMoveWithin(input, key) {
+      if (!input || input.tagName.toLowerCase() !== "textarea") return false;
+      const value = String(input.value || "");
+      if (!value.includes("\n")) return false;
+      const pos = Number.isInteger(input.selectionStart) ? input.selectionStart : 0;
+      const before = value.slice(0, pos);
+      const after = value.slice(pos);
+      if (key === "ArrowUp") return before.includes("\n");
+      if (key === "ArrowDown") return after.includes("\n");
+      return false;
+    }
+
+    function maintInputClipboardValue(input) {
+      return input ? String(input.value ?? "") : "";
+    }
+
+    function maintClipboardMatrix(text) {
+      return String(text || "")
+        .replace(/\r/g, "")
+        .replace(/\n$/, "")
+        .split("\n")
+        .map((line) => line.split("\t"));
+    }
+
+    function pasteMaintInputValue(input, value) {
+      if (!input) return false;
+      input.value = value == null ? "" : String(value);
+      updateMaintInputFormatting(input, false);
+      syncScheduleGridNewShiftBatchFromCell(input);
+      syncScheduleGridEffectiveDateFromCell(input);
+      updateScheduleGridDurationsFromCell(input);
+      if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    }
+
+    function pasteMaintClipboard(startInput, text) {
+      const matrix = maintClipboardMatrix(text);
+      if (!matrix.length) return;
+      let lastInput = startInput;
+      matrix.forEach((values, rowIdx) => {
+        values.forEach((value, colIdx) => {
+          const input = maintCellInputFrom(startInput, rowIdx, colIdx);
+          if (!input) return;
+          if (pasteMaintInputValue(input, value)) lastInput = input;
+        });
+      });
+      focusMaintCell(lastInput);
+    }
+
+    function beginMaintCellEdit(input, replaceValue = false) {
+      if (!input) return;
+      delete input.dataset.maintKeyboardSelected;
+      const rowIndex = Number(input.getAttribute("data-maint-row"));
+      const colIndex = Number(input.getAttribute("data-maint-col"));
+      input.dataset.maintOriginalValue = input.value;
+      if (activeMaintSheetKey === "schedule_grid") {
+        const rows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows : [];
+        const cols = scheduleGridColumnIndexes(rows);
+        const row = Number.isInteger(rowIndex) && Array.isArray(rows[rowIndex]) ? rows[rowIndex] : null;
+        if (row && (colIndex === cols.code || colIndex === cols.effective)) {
+          input.dataset.maintOriginalGroupCode = String(row[cols.code] || "").trim();
+          input.dataset.maintOriginalGroupEffective = scheduleGridRowEffective(row, cols);
+        }
+      }
+      if (isScheduleGridEffectiveCol(colIndex)) {
+        input.dataset.maintOriginalEffective = normaliseScheduleGridEffectiveValue(input.value);
+      }
+      input.readOnly = false;
+      input.dataset.maintEditing = "1";
+      input.dataset.maintReplaceOnComposition = replaceValue ? "1" : "";
+      input.focus();
+      if (replaceValue) input.value = "";
+      if (typeof input.setSelectionRange === "function") {
+        const pos = replaceValue ? 0 : String(input.value || "").length;
+        input.setSelectionRange(pos, pos);
+      }
+    }
+
+    function queueMaintDirectKey(input, key) {
+      if (!input || !key) return;
+      const oldTimer = maintDirectKeyTimers.get(input);
+      if (oldTimer) clearTimeout(oldTimer);
+      input.dataset.maintPendingDirectKey = key;
+      const timer = setTimeout(() => {
+        maintDirectKeyTimers.delete(input);
+        if (input.dataset.maintEditing !== "1" || input.dataset.maintPendingDirectKey !== key) return;
+        input.value = `${key}${input.value || ""}`;
+        delete input.dataset.maintPendingDirectKey;
+        delete input.dataset.maintReplaceOnComposition;
+        if (typeof input.setSelectionRange === "function") {
+          const pos = String(input.value || "").length;
+          input.setSelectionRange(pos, pos);
+        }
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }, 40);
+      maintDirectKeyTimers.set(input, timer);
+    }
+
+    function endMaintCellEdit(input, options = {}) {
+      if (!input) return;
+      const wasEditing = input.dataset.maintEditing === "1";
+      if (!wasEditing) {
+        if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
+        return;
+      }
+      if (options.cancel) {
+        input.value = input.dataset.maintOriginalValue || "";
+        input.readOnly = true;
+        delete input.dataset.maintEditing;
+        delete input.dataset.maintOriginalValue;
+        delete input.dataset.maintOriginalEffective;
+        delete input.dataset.maintOriginalGroupCode;
+        delete input.dataset.maintOriginalGroupEffective;
+        delete input.dataset.maintReplaceOnComposition;
+        delete input.dataset.maintPendingDirectKey;
+        const timer = maintDirectKeyTimers.get(input);
+        if (timer) clearTimeout(timer);
+        maintDirectKeyTimers.delete(input);
+        if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
+        return;
+      }
+      updateMaintInputFormatting(input, false);
+      syncScheduleGridNewShiftBatchFromCell(input);
+      syncScheduleGridEffectiveDateFromCell(input);
+      updateScheduleGridDurationsFromCell(input);
+      input.readOnly = true;
+      delete input.dataset.maintEditing;
+      delete input.dataset.maintOriginalValue;
+      delete input.dataset.maintOriginalEffective;
+      delete input.dataset.maintOriginalGroupCode;
+      delete input.dataset.maintOriginalGroupEffective;
+      delete input.dataset.maintReplaceOnComposition;
+      delete input.dataset.maintPendingDirectKey;
+      const timer = maintDirectKeyTimers.get(input);
+      if (timer) clearTimeout(timer);
+      maintDirectKeyTimers.delete(input);
+      if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
+    }
+
+    function moveMaintActiveCell(input, key) {
+      const delta = {
+        ArrowUp: [-1, 0],
+        ArrowDown: [1, 0],
+        ArrowLeft: [0, -1],
+        ArrowRight: [0, 1],
+      }[key];
+      if (!delta) return false;
+      const next = maintCellInputFrom(input, delta[0], delta[1]);
+      if (!next) return false;
+      if (input.dataset) input.dataset.skipAutosaveOnce = "1";
+      focusMaintCell(next, true);
+      return true;
+    }
+
+    function handleMaintCellKeydown(ev) {
+      const input = ev.currentTarget;
+      if (!input) return;
+      if (input.dataset.maintEditing === "1") {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          const next = maintCellInputFrom(input, 1, 0);
+          if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
+          endMaintCellEdit(input);
+          focusMaintCell(next || input, true);
+        } else if (ev.key === "Escape") {
+          ev.preventDefault();
+          endMaintCellEdit(input, { cancel: true });
+          input.focus();
+        } else if (ev.key === "Tab") {
+          ev.preventDefault();
+          const next = maintCellInputFrom(input, 0, ev.shiftKey ? -1 : 1) || maintCellInputFrom(input, ev.shiftKey ? -1 : 1, 0);
+          if (input.dataset) input.dataset.skipAutosaveOnce = "1";
+          endMaintCellEdit(input);
+          focusMaintCell(next || input, true);
+        } else if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
+          if (maintTextareaCanMoveWithin(input, ev.key)) return;
+          ev.preventDefault();
+          const next = maintCellInputFrom(input, ev.key === "ArrowUp" ? -1 : 1, 0);
+          if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
+          endMaintCellEdit(input);
+          focusMaintCell(next || input, true);
+        }
+        return;
+      }
+      if (ev.key === "Tab") {
+        ev.preventDefault();
+        const next = maintCellInputFrom(input, 0, ev.shiftKey ? -1 : 1) || maintCellInputFrom(input, ev.shiftKey ? -1 : 1, 0);
+        if (input.dataset) input.dataset.skipAutosaveOnce = "1";
+        focusMaintCell(next || input, true);
+        return;
+      }
+      if (moveMaintActiveCell(input, ev.key)) {
+        ev.preventDefault();
+        return;
+      }
+      if (ev.key === "F2") {
+        ev.preventDefault();
+        beginMaintCellEdit(input);
+        return;
+      }
+      if (ev.key === "Delete") {
+        ev.preventDefault();
+        input.value = "";
+        updateMaintInputFormatting(input, false);
+        if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        return;
+      }
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const next = maintCellInputFrom(input, 1, 0);
+        if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
+        if (next) focusMaintCell(next, true);
+        return;
+      }
+      if ((ev.isComposing || ev.key === "Process") && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+        beginMaintCellEdit(input, true);
+        return;
+      }
+      if (input.dataset.maintKeyboardSelected === "1" && ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+        return;
+      }
+      if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+        beginMaintCellEdit(input, true);
+      }
+    }
+
+    function reindexMaintRowsFrom(startIdx) {
+      document.querySelectorAll("#maint-editor tr[data-maint-row-index]").forEach((tr) => {
+        const oldIdx = Number(tr.getAttribute("data-maint-row-index"));
+        if (!Number.isInteger(oldIdx) || oldIdx < startIdx) return;
+        const prevCount = tr.previousElementSibling
+          ? Number(tr.previousElementSibling.getAttribute("data-maint-row-index")) + 1
+          : oldIdx;
+        const nextIdx = Number.isInteger(prevCount) ? prevCount : oldIdx;
+        tr.setAttribute("data-maint-row-index", String(nextIdx));
+        tr.querySelectorAll("[data-maint-row]").forEach((input) => input.setAttribute("data-maint-row", String(nextIdx)));
+      });
+    }
+
+    function applyMaintRowsFast(rows, action, idx) {
+      if (activeMaintSheetKey === "roster") return false;
+      const table = document.querySelector("#maint-editor table.maint-table");
+      const tbody = table && table.tBodies ? table.tBodies[0] : null;
+      if (!tbody) return false;
+      const formKey = `maint_${maintSheetPayload.sheet_key || "sheet"}`;
+      const cols = maintColumnCount(rows);
+      const currentCols = table.querySelectorAll("col[data-form-col-key]").length || cols;
+      if (cols !== currentCols) return false;
+      const header = Array.isArray(rows[0]) ? rows[0] : [];
+      const shiftCodeColIdx = header.findIndex((cell) => String(cell || "").trim() === "更碼");
+      const isShiftCodeCol = (cIdx) => cIdx === shiftCodeColIdx;
+      maintSheetPayload.rows = rows;
+
+      if (action === "delete") {
+        const tr = tbody.querySelector(`tr[data-maint-row-index="${idx}"]`);
+        if (!tr) return false;
+        tr.remove();
+        reindexMaintRowsFrom(idx);
+        return true;
+      }
+
+      const targetIdx = action === "append" ? rows.length - 1 : Math.min(idx, rows.length - 1);
+      const tr = document.createElement("tr");
+      tr.setAttribute("data-maint-row-index", String(targetIdx));
+      tr.innerHTML = maintRowHtml(rows[targetIdx], targetIdx, cols, formKey, isShiftCodeCol);
+      const before = action === "insert" ? tbody.querySelector(`tr[data-maint-row-index="${targetIdx}"]`) : null;
+      tbody.insertBefore(tr, before);
+      reindexMaintRowsFrom(targetIdx);
+      bindMaintRowInputs(tr);
+      applyFormColumnWidths(tr);
+      autoResizeTextareas(tr);
+      const first = tr.querySelector("textarea,input");
+      if (first) first.focus();
+      return true;
+    }
+
+    function scheduleGridColumnIndexes(rows) {
+      const header = Array.isArray(rows[0]) ? rows[0].map((cell) => String(cell || "").trim()) : [];
+      return {
+        code: header.indexOf("更碼"),
+        time: header.indexOf("時間"),
+        content: header.indexOf("內容"),
+        duration: header.indexOf("時長"),
+        effective: header.findIndex((cell) => cell === "生效日期" || cell === "生效" || cell === "Effective From"),
+      };
+    }
+
+    function scheduleGridInput(rowIndex, colIndex) {
+      return document.querySelector(`#maint-editor [data-maint-row="${rowIndex}"][data-maint-col="${colIndex}"]`);
+    }
+
+    function setScheduleGridCellValue(rowIndex, colIndex, value) {
+      const input = scheduleGridInput(rowIndex, colIndex);
+      if (!input) return;
+      input.value = value == null ? "" : String(value);
+      updateMaintInputFormatting(input, false);
+      if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
+    }
+
+    function replaceTrailingDuration(text, minutes) {
+      const s = String(text ?? "");
+      if (!s.trim()) return s;
+      if (s.trimStart().startsWith("-")) return s;
+      if (!Number.isFinite(minutes)) return s.replace(/\s+\d+\s*$/, "").trimEnd();
+      const rounded = Math.round(minutes);
+      if (/\s+\d+\s*$/.test(s)) return s.replace(/\s+\d+\s*$/, ` ${rounded}`);
+      return `${s.trimEnd()} ${rounded}`;
+    }
+
+    function isScheduleGridMarkerRow(row, cols) {
+      if (!Array.isArray(row) || cols.content < 0) return false;
+      return String(row[cols.content] || "").trimStart().startsWith("-");
+    }
+
+    function scheduleGridGroupKey(row, cols) {
+      if (!Array.isArray(row) || !cols || cols.code < 0) return "";
+      const code = String(row[cols.code] || "").trim();
+      if (!code) return "";
+      const effective = cols.effective >= 0 ? String(row[cols.effective] || "").trim() : "";
+      return `${code}\u0000${effective}`;
+    }
+
+    function recalculateScheduleGridDurations(rows, onlyGroupKey = "") {
+      const cols = scheduleGridColumnIndexes(rows);
+      if (cols.code < 0 || cols.time < 0 || cols.duration < 0) return rows;
+      const groups = new Map();
+      rows.forEach((row, idx) => {
+        if (idx === 0 || !Array.isArray(row)) return;
+        const key = scheduleGridGroupKey(row, cols);
+        if (!key || (onlyGroupKey && key !== onlyGroupKey)) return;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push({ row, idx });
+      });
+      groups.forEach((group) => {
+        group.forEach((item, pos) => {
+          const isMarker = isScheduleGridMarkerRow(item.row, cols);
+          const next = group.slice(pos + 1).find((candidate) => !isScheduleGridMarkerRow(candidate.row, cols));
+          const duration = !isMarker && next ? minutesBetween(item.row[cols.time], next.row[cols.time]) : null;
+          const durationText = duration == null ? "" : String(Math.round(duration));
+          item.row[cols.duration] = durationText;
+          setScheduleGridCellValue(item.idx, cols.duration, durationText);
+          if (cols.content >= 0) {
+            const nextContent = replaceTrailingDuration(item.row[cols.content], duration);
+            if (nextContent !== item.row[cols.content]) {
+              item.row[cols.content] = nextContent;
+              setScheduleGridCellValue(item.idx, cols.content, nextContent);
+            }
+          }
+        });
+      });
+      return rows;
+    }
+
+    function updateScheduleGridDurationsFromCell(input) {
+      if (activeMaintSheetKey !== "schedule_grid" || !input) return;
+      const changedCol = Number(input.getAttribute("data-maint-col"));
+      const rows = collectMaintRows();
+      const cols = scheduleGridColumnIndexes(rows);
+      if (changedCol !== cols.time && changedCol !== cols.content) return;
+      if (cols.code < 0 || cols.time < 0 || cols.duration < 0) return;
+      const changedRow = Number(input.getAttribute("data-maint-row"));
+      const changed = Number.isInteger(changedRow) ? rows[changedRow] : null;
+      recalculateScheduleGridDurations(rows, scheduleGridGroupKey(changed, cols));
+      maintSheetPayload.rows = rows;
+      setUnsavedChanges("餐單參數");
+    }
+
+    function normaliseEffectiveDateInput(value) {
+      const parsed = parseYmd(value);
+      if (!parsed) return "";
+      return dateKey(parsed.year, parsed.month, parsed.day);
+    }
+
+    function normaliseScheduleGridEffectiveValue(value) {
+      return normaliseEffectiveDateInput(value) || String(value || "").trim();
+    }
+
+    function scheduleGridRowEffective(row, cols) {
+      return cols.effective >= 0 ? normaliseScheduleGridEffectiveValue(row && row[cols.effective]) : "";
+    }
+
+    function scheduleGridNewShiftBatchRows(input) {
+      if (activeMaintSheetKey !== "schedule_grid" || !input) return [];
+      const tr = input.closest ? input.closest("tr[data-schedule-new-shift-batch]") : null;
+      if (!tr) return [];
+      const batch = tr.getAttribute("data-schedule-new-shift-batch");
+      if (!batch) return [];
+      return Array.from(document.querySelectorAll("#maint-editor tr[data-schedule-new-shift-batch]"))
+        .filter((row) => row.getAttribute("data-schedule-new-shift-batch") === batch);
+    }
+
+    function scheduleGridCodeExistsOutsideBatch(rows, cols, code, batchRows) {
+      if (!code || cols.code < 0) return false;
+      const batchIndexes = new Set(batchRows.map((tr) => Number(tr.getAttribute("data-maint-row-index"))));
+      return rows.some((row, idx) => {
+        if (idx === 0 || batchIndexes.has(idx) || !Array.isArray(row)) return false;
+        return String(row[cols.code] || "").trim() === code;
+      });
+    }
+
+    function restoreScheduleGridChangedCell(input, rows, cols, changedRow, changedCol) {
+      let value = input.dataset.maintOriginalValue || "";
+      if (changedCol === cols.effective) {
+        value = input.dataset.maintOriginalEffective || normaliseScheduleGridEffectiveValue(value);
+      }
+      if (Array.isArray(rows[changedRow])) rows[changedRow][changedCol] = value;
+      setScheduleGridCellValue(changedRow, changedCol, value);
+      maintSheetPayload.rows = rows;
+    }
+
+    function syncScheduleGridNewShiftBatchFromCell(input) {
+      const batchRows = scheduleGridNewShiftBatchRows(input);
+      if (!batchRows.length) return false;
+      const changedCol = Number(input.getAttribute("data-maint-col"));
+      const rows = collectMaintRows();
+      const payloadRows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows : [];
+      while (rows.length < payloadRows.length) {
+        const source = payloadRows[rows.length];
+        rows.push(Array.isArray(source) ? [...source] : []);
+      }
+      const cols = scheduleGridColumnIndexes(rows);
+      if (cols.code < 0) return false;
+      const canSyncCode = changedCol === cols.code;
+      const canSyncEffective = cols.effective >= 0 && changedCol === cols.effective;
+      if (!canSyncCode && !canSyncEffective) return false;
+      const changedRow = Number(input.getAttribute("data-maint-row"));
+      const changed = rows[changedRow];
+      if (!Array.isArray(changed)) return false;
+      if (canSyncCode) {
+        const code = String(changed[cols.code] || "").trim();
+        if (!code) return false;
+        if (scheduleGridCodeExistsOutsideBatch(rows, cols, code, batchRows)) {
+          window.alert(`Shift code "${code}" already exists. Use New Version for an existing shift code.`);
+          restoreScheduleGridChangedCell(input, rows, cols, changedRow, changedCol);
+          return true;
+        }
+        batchRows.forEach((tr) => {
+          const idx = Number(tr.getAttribute("data-maint-row-index"));
+          if (!Array.isArray(rows[idx])) return;
+          rows[idx][cols.code] = code;
+          setScheduleGridCellValue(idx, cols.code, code);
+        });
+      }
+      if (canSyncEffective) {
+        const effective = normaliseScheduleGridEffectiveValue(changed[cols.effective]);
+        batchRows.forEach((tr) => {
+          const idx = Number(tr.getAttribute("data-maint-row-index"));
+          if (!Array.isArray(rows[idx])) return;
+          rows[idx][cols.effective] = effective;
+          setScheduleGridCellValue(idx, cols.effective, effective);
+        });
+        currentMaintEffectiveFilter = effective || "__blank__";
+        saveMaintFilterState("schedule_grid");
+      }
+      currentMaintFilter = SCHEDULE_GRID_NEW_SHIFT_FILTER;
+      applyScheduleGridNewShiftFilter();
+      maintSheetPayload.rows = rows;
+      setUnsavedChanges("餐單參數");
+      return true;
+    }
+
+    function syncScheduleGridEffectiveDateFromCell(input) {
+      if (activeMaintSheetKey !== "schedule_grid" || !input) return false;
+      if (scheduleGridNewShiftBatchRows(input).length) return false;
+      const changedCol = Number(input.getAttribute("data-maint-col"));
+      const rows = collectMaintRows();
+      const cols = scheduleGridColumnIndexes(rows);
+      if (cols.code < 0) return false;
+      const canSyncCode = changedCol === cols.code;
+      const canSyncEffective = cols.effective >= 0 && changedCol === cols.effective;
+      if (!canSyncCode && !canSyncEffective) return false;
+      const changedRow = Number(input.getAttribute("data-maint-row"));
+      const changed = rows[changedRow];
+      if (!Array.isArray(changed)) return false;
+      const originalRows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows : [];
+      const originalChanged = Array.isArray(originalRows[changedRow]) ? originalRows[changedRow] : changed;
+      const oldCode = input.dataset.maintOriginalGroupCode !== undefined
+        ? input.dataset.maintOriginalGroupCode
+        : String(originalChanged[cols.code] || "").trim();
+      const oldEffective = input.dataset.maintOriginalGroupEffective !== undefined
+        ? input.dataset.maintOriginalGroupEffective
+        : scheduleGridRowEffective(originalChanged, cols);
+      const newCode = String(changed[cols.code] || "").trim();
+      const newEffective = scheduleGridRowEffective(changed, cols);
+      if (!oldCode || !newCode) return false;
+      if (oldCode === newCode && oldEffective === newEffective) return false;
+      const targetIndexes = originalRows
+        .map((row, idx) => ({ row, idx }))
+        .filter(({ row, idx }) => {
+          if (idx === 0 || !Array.isArray(row)) return false;
+          const rowCode = String(row[cols.code] || "").trim();
+          const rowEffective = scheduleGridRowEffective(row, cols);
+          return rowCode === oldCode && rowEffective === oldEffective;
+        })
+        .map(({ idx }) => idx);
+      if (!targetIndexes.includes(changedRow)) targetIndexes.push(changedRow);
+      let updated = false;
+      for (const idx of targetIndexes) {
+        const row = rows[idx];
+        if (!Array.isArray(row)) continue;
+        row[cols.code] = newCode;
+        setScheduleGridCellValue(idx, cols.code, newCode);
+        if (cols.effective >= 0) {
+          row[cols.effective] = newEffective;
+          setScheduleGridCellValue(idx, cols.effective, newEffective);
+        }
+        updated = true;
+      }
+      if (!updated) return false;
+      maintSheetPayload.rows = rows;
+      currentMaintFilter = newCode;
+      if (cols.effective >= 0) currentMaintEffectiveFilter = newEffective || "__blank__";
+      saveMaintFilterState("schedule_grid");
+      setUnsavedChanges("餐單參數");
+      return true;
+    }
+
+    function ensureScheduleGridNewShiftFilterOption() {
+      const select = document.getElementById("maint-table-filter");
+      if (!select) return;
+      let option = Array.from(select.options).find((item) => item.value === SCHEDULE_GRID_NEW_SHIFT_FILTER);
+      if (!option) {
+        option = document.createElement("option");
+        option.value = SCHEDULE_GRID_NEW_SHIFT_FILTER;
+        option.textContent = "<new shift code>";
+        const afterAll = select.options.length > 0 ? select.options[1] || null : null;
+        select.insertBefore(option, afterAll);
+      }
+      select.value = SCHEDULE_GRID_NEW_SHIFT_FILTER;
+      select.disabled = false;
+      currentMaintFilter = SCHEDULE_GRID_NEW_SHIFT_FILTER;
+    }
+
+    function applyScheduleGridNewShiftFilter() {
+      ensureScheduleGridNewShiftFilterOption();
+      const effectiveSelect = document.getElementById("maint-effective-filter");
+      const yearSelect = document.getElementById("maint-year-filter");
+      if (effectiveSelect) effectiveSelect.value = "";
+      if (yearSelect) yearSelect.value = "";
+      document.querySelectorAll("#maint-editor tr[data-maint-row-index]").forEach((tr) => {
+        const idx = Number(tr.getAttribute("data-maint-row-index"));
+        const isBatch = tr.getAttribute("data-schedule-new-shift-batch") === scheduleGridNewShiftBatchId;
+        tr.style.display = idx === 0 || isBatch ? "" : "none";
+      });
+      setTimeout(() => {
+        document.querySelectorAll("#maint-editor tr[data-schedule-new-shift-batch] textarea[data-auto-row-height]").forEach(autoResizeTextarea);
+      }, 0);
+    }
+
+    function createScheduleGridVersion(rowIndex) {
+      if (activeMaintSheetKey !== "schedule_grid") return;
+      const rows = collectMaintRows();
+      const cols = scheduleGridColumnIndexes(rows);
+      if (cols.code < 0 || cols.effective < 0) return;
+      const selected = rows[rowIndex];
+      if (!Array.isArray(selected)) return;
+      const code = String(selected[cols.code] || "").trim();
+      const oldEffective = String(selected[cols.effective] || "").trim();
+      if (!code) return;
+      const rawDate = window.prompt(`New effective date for ${code}`, "");
+      if (rawDate == null) return;
+      const newEffective = normaliseEffectiveDateInput(rawDate);
+      if (!newEffective) {
+        window.alert("Please enter a valid date, for example 2026-06-01.");
+        return;
+      }
+      const copies = [];
+      let insertAt = rowIndex + 1;
+      rows.forEach((row, idx) => {
+        if (idx === 0 || !Array.isArray(row)) return;
+        const rowCode = String(row[cols.code] || "").trim();
+        const rowEffective = String(row[cols.effective] || "").trim();
+        if (rowCode !== code || rowEffective !== oldEffective) return;
+        const next = [...row];
+        next[cols.effective] = newEffective;
+        copies.push(next);
+        insertAt = Math.max(insertAt, idx + 1);
+      });
+      if (!copies.length) return;
+      rows.splice(insertAt, 0, ...copies);
+      currentMaintEffectiveFilter = newEffective;
+      saveMaintFilterState("schedule_grid");
+      setUnsavedChanges("餐單參數");
+      setMaintRowsAndRender(rows, { preserveOrder: true });
+    }
+
+    function markScheduleGridNewShiftBatch(startIdx, count, batch = "", focusFirst = true) {
+      if (!batch) batch = `new-shift-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      for (let i = startIdx; i < startIdx + count; i += 1) {
+        const tr = document.querySelector(`#maint-editor tr[data-maint-row-index="${i}"]`);
+        if (tr) tr.setAttribute("data-schedule-new-shift-batch", batch);
+      }
+      applyScheduleGridNewShiftFilter();
+      if (!focusFirst) return;
+      const first = scheduleGridInput(startIdx, scheduleGridColumnIndexes(collectMaintRows()).code);
+      if (first) {
+        focusMaintCell(first);
+        beginMaintCellEdit(first);
+      }
+    }
+
+    function appendScheduleGridNewShiftRowsFast(rows, startIdx, count, batch) {
+      const table = document.querySelector("#maint-editor table.maint-table");
+      const tbody = table && table.tBodies ? table.tBodies[0] : null;
+      if (!tbody) return false;
+      const cols = maintColumnCount(rows);
+      const currentCols = table.querySelectorAll("col[data-form-col-key]").length || cols;
+      if (cols !== currentCols) return false;
+      const formKey = `maint_${maintSheetPayload.sheet_key || "sheet"}`;
+      const header = Array.isArray(rows[0]) ? rows[0] : [];
+      const shiftCodeColIdx = header.findIndex((cell) => String(cell || "").trim() === "更碼");
+      const isShiftCodeCol = (cIdx) => cIdx === shiftCodeColIdx;
+      maintSheetPayload.rows = rows;
+      const fragment = document.createDocumentFragment();
+      const newRows = [];
+      for (let i = startIdx; i < startIdx + count; i += 1) {
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-maint-row-index", String(i));
+        tr.setAttribute("data-schedule-new-shift-batch", batch);
+        tr.innerHTML = maintRowHtml(rows[i], i, cols, formKey, isShiftCodeCol);
+        fragment.appendChild(tr);
+        newRows.push(tr);
+      }
+      tbody.appendChild(fragment);
+      newRows.forEach((tr) => {
+        bindMaintRowInputs(tr);
+        applyFormColumnWidths(tr);
+        autoResizeTextareas(tr);
+      });
+      return true;
+    }
+
+    function addScheduleGridShiftCodeRows(rowIndex) {
+      if (activeMaintSheetKey !== "schedule_grid") return;
+      const rows = collectMaintRows();
+      const cols = scheduleGridColumnIndexes(rows);
+      if (cols.code < 0 || cols.content < 0) return;
+      const count = 20;
+      const insertAt = rows.length;
+      const blanks = Array.from({ length: count }, () => emptyMaintRow(rows));
+      const batch = `new-shift-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      scheduleGridNewShiftBatchId = batch;
+      scheduleGridNewShiftStartIndex = insertAt;
+      scheduleGridNewShiftCount = count;
+      currentMaintFilter = SCHEDULE_GRID_NEW_SHIFT_FILTER;
+      currentMaintEffectiveFilter = "";
+      currentMaintYearFilter = "";
+      rows.splice(insertAt, 0, ...blanks);
+      setUnsavedChanges("餐單參數");
+      setMaintRowsAndRender(rows, { preserveOrder: true });
+      markScheduleGridNewShiftBatch(insertAt, count, batch);
+    }
+
+    function deleteScheduleGridVersion(rowIndex) {
+      if (activeMaintSheetKey !== "schedule_grid") return;
+      const rows = collectMaintRows();
+      const cols = scheduleGridColumnIndexes(rows);
+      if (cols.code < 0 || cols.effective < 0) return;
+      const selected = rows[rowIndex];
+      if (!Array.isArray(selected)) return;
+      const code = String(selected[cols.code] || "").trim();
+      const effective = String(selected[cols.effective] || "").trim();
+      if (!code) return;
+      const parsedEffective = parseYmd(effective);
+      const effectiveLabel = parsedEffective ? dateDmyDow(parsedEffective.year, parsedEffective.month, parsedEffective.day) : effective;
+      const label = effective ? `${code} ${effectiveLabel}` : `${code} 未填生效日期`;
+      const ok = window.confirm(`Delete this version?\n${label}`);
+      if (!ok) return;
+      const next = rows.filter((row, idx) => {
+        if (idx === 0 || !Array.isArray(row)) return true;
+        return String(row[cols.code] || "").trim() !== code || String(row[cols.effective] || "").trim() !== effective;
+      });
+      if (next.length === rows.length) return;
+      if (currentMaintEffectiveFilter === (effective || "__blank__")) currentMaintEffectiveFilter = "";
+      saveMaintFilterState("schedule_grid");
+      setUnsavedChanges("餐單參數");
+      setMaintRowsAndRender(next, { preserveOrder: true });
     }
 
     function parseRosterMaintLine(text) {
@@ -46,10 +933,22 @@
       if (!m) return null;
       const tokens = m[3].trim().split(/\s+/).filter(Boolean);
       const days = [];
-      for (let i = 0; i + 1 < tokens.length; i += 2) {
+      const isDayToken = (token) => {
+        if (!/^\d+$/.test(token)) return false;
+        const n = Number(token);
+        return Number.isInteger(n) && n >= 1 && n <= 31;
+      };
+      for (let i = 0; i < tokens.length;) {
         const day = Number(tokens[i]);
         if (!Number.isInteger(day) || day < 1 || day > 31) break;
-        days.push({ day, code: tokens[i + 1] });
+        i += 1;
+        const codeParts = [];
+        while (i < tokens.length && !isDayToken(tokens[i])) {
+          codeParts.push(tokens[i]);
+          i += 1;
+        }
+        if (!codeParts.length) break;
+        days.push({ day, code: codeParts.join(" ") });
       }
       return {
         year: Number(m[1]),
@@ -94,6 +993,10 @@
       return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
     }
 
+    function dateDmyDow(year, month, day) {
+      return `${dateDmy(year, month, day)} ${weekdayLabel(year, month, day)}`;
+    }
+
     function weekdayLabel(year, month, day) {
       const d = new Date(year, month - 1, day);
       return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] || "";
@@ -131,8 +1034,8 @@
     }
 
     function rosterCodeMatches(pattern, code) {
-      const p = String(pattern || "").trim();
-      const c = String(code || "").trim();
+      const p = String(pattern || "").trim().toLowerCase();
+      const c = String(code || "").trim().toLowerCase();
       if (!p || !c) return false;
       if (p.endsWith("*")) return c.startsWith(p.slice(0, -1));
       return p === c;
@@ -342,605 +1245,3 @@
       };
       pane.querySelector(".maint-pane-title")?.addEventListener("mousedown", startDrag);
     }
-    function savedRosterMonthIndex(rows) {
-      const n = Number(formColumnWidths.maint_roster_month_index);
-      return Number.isInteger(n) && n >= 0 ? Math.min(n, Math.max(0, (rows || []).length - 1)) : 0;
-    }
-
-    function setActiveRosterMonthIndex(idx) {
-      const rows = collectMaintRows();
-      const next = Number.isInteger(idx) && idx >= 0 ? Math.min(idx, Math.max(0, rows.length - 1)) : 0;
-      activeRosterMonthIndex = next;
-      formColumnWidths.maint_roster_month_index = next;
-      document.querySelectorAll(".maint-roster-table tr[data-maint-row-index]").forEach((tr) => {
-        tr.classList.toggle("active-roster-row", Number(tr.getAttribute("data-maint-row-index")) === activeRosterMonthIndex);
-      });
-      refreshRosterMaintReport();
-      persistColumnWidths();
-    }
-
-    function attachRosterSplitResizer(editor) {
-      const grip = editor.querySelector("#maint-roster-report-resizer");
-      const split = editor.querySelector(".maint-roster-split");
-      if (!grip || !split || grip.dataset.bound === "1") return;
-      grip.dataset.bound = "1";
-      grip.addEventListener("mousedown", (ev) => {
-        ev.preventDefault();
-        const rect = split.getBoundingClientRect();
-        const onMove = (mv) => {
-          const topHeight = Math.max(0, Math.min(rect.height - 6, mv.clientY - rect.top));
-          formColumnWidths.maint_roster_top_height = topHeight;
-          split.style.gridTemplateRows = `${topHeight}px 6px 1fr`;
-        };
-        const onUp = () => {
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("mouseup", onUp);
-          persistColumnWidths();
-        };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
-      });
-    }
-
-    function renderRosterMaintEditor() {
-      const editor = document.getElementById("maint-editor");
-      if (!editor) return;
-      const rows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows : [];
-      activeRosterMonthIndex = savedRosterMonthIndex(rows);
-      const monthRows = rows.map((row, rIdx) => {
-        const text = Array.isArray(row) ? row[0] : "";
-        const parsed = parseRosterMaintLine(text);
-        const label = parsed ? parsed.label : `Row ${rIdx + 1}`;
-        return `<tr data-maint-row-index="${rIdx}" class="${rIdx === activeRosterMonthIndex ? "active-roster-row" : ""}">
-          <td data-form-col-key="maint_roster_text"><textarea data-auto-row-height data-maint-roster-row="${rIdx}" aria-label="${esc(label)}" spellcheck="false">${esc(text ?? "")}</textarea></td>
-        </tr>`;
-      }).join("");
-      const topHeight = Number(formColumnWidths.maint_roster_top_height);
-      const splitStyle = Number.isFinite(topHeight) ? ` style="grid-template-rows:${Math.max(0, topHeight)}px 6px 1fr"` : "";
-      editor.innerHTML = `<div class="maint-sheet-title">${esc(menuLabel("roster"))}</div>
-        <div class="maint-roster-split"${splitStyle}>
-          <section class="maint-roster-pane">
-            <div class="maint-pane-title">${esc(menuLabel("roster"))}</div>
-            <table class="maint-roster-table" data-form-table>
-              <colgroup>
-                <col data-form-col-key="maint_roster_text" data-form-col-default="760" />
-              </colgroup>
-              <tbody>${monthRows || '<tr><td class="maint-empty">No roster months</td></tr>'}</tbody>
-            </table>
-          </section>
-          <div id="maint-roster-report-resizer" class="maint-roster-report-resizer" title="Drag to resize report height"></div>
-          <section class="maint-roster-pane" id="maint-roster-report-pane">
-            <div class="maint-pane-title" title="Drag left or right to move report">${esc(menuLabel("roster"))}報表</div>
-            <div id="maint-roster-report">${renderRosterMaintReport(rows)}</div>
-          </section>
-        </div>`;
-      editor.querySelectorAll("textarea[data-maint-roster-row]").forEach((input) => {
-        input.addEventListener("focus", () => setActiveRosterMonthIndex(Number(input.getAttribute("data-maint-roster-row"))));
-        input.addEventListener("mousedown", () => setActiveRosterMonthIndex(Number(input.getAttribute("data-maint-roster-row"))));
-        input.addEventListener("input", () => {
-          activeRosterMonthIndex = Number(input.getAttribute("data-maint-roster-row"));
-          setUnsavedChanges("餐單參數");
-          refreshRosterMaintReport();
-        });
-      });
-      editor.querySelectorAll(".maint-roster-table tr[data-maint-row-index]").forEach((row) => {
-        row.addEventListener("mousedown", () => setActiveRosterMonthIndex(Number(row.getAttribute("data-maint-row-index"))));
-      });
-      bindMaintContextMenu(editor);
-      applyFormColumnWidths(editor);
-      attachFormColumnResizers(editor);
-      bindAutoRowHeight(editor);
-      attachRosterSplitResizer(editor);
-      applyTableOffsets(editor);
-      attachTableDragHandles(editor);
-      applyRosterReportOffset();
-      attachRosterReportDrag();
-      const activeInput = editor.querySelector(`textarea[data-maint-roster-row="${activeRosterMonthIndex}"]`);
-      activeInput?.focus({ preventScroll: true });
-      activeInput?.closest("tr")?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
-
-    function formatMaintTimeValue(sheetKey, rowIndex, colIndex, value, isInputEvent = false) {
-      if (rowIndex === 0) return value;
-      const s = String(value ?? "").trim();
-      if (!s) return "";
-
-      if (sheetKey === "overtime") {
-        if (colIndex === 0) {
-          if (isInputEvent) return value;
-          const d = parseYmd(s);
-          if (d) return dateDmy(d.year, d.month, d.day);
-        } else if (colIndex === 1 || colIndex === 2) {
-          if (isInputEvent) return value;
-          const colon = s.match(/^(\d{1,2}):(\d{2})$/);
-          if (colon) {
-            const h = Number(colon[1]);
-            const m = Number(colon[2]);
-            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-              return `${String(h).padStart(2, "0")}${String(m).padStart(2, "0")}`;
-            }
-          }
-          const compact = s.match(/^(\d{1,4})$/);
-          if (compact) {
-            const raw = compact[1].padStart(4, "0");
-            const h = Number(raw.slice(0, 2));
-            const m = Number(raw.slice(2, 4));
-            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-              return `${String(h).padStart(2, "0")}${String(m).padStart(2, "0")}`;
-            }
-          }
-        }
-        return s;
-      }
-
-      if (sheetKey === "medical_appointments" && colIndex === 2) {
-        if (isInputEvent) return value;
-        const colon = s.match(/^(\d{1,2}):(\d{2})$/);
-        if (colon) {
-          const h = Number(colon[1]);
-          const m = Number(colon[2]);
-          if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-            return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-          }
-        }
-        const compact = s.match(/^(\d{1,4})$/);
-        if (compact) {
-          const raw = compact[1].padStart(4, "0");
-          const h = Number(raw.slice(0, 2));
-          const m = Number(raw.slice(2, 4));
-          if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-            return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-          }
-        }
-      }
-
-      return value;
-    }
-
-    function isMaintMoneyColumn(sheetKey, rowIndex, colIndex) {
-      return sheetKey === "medical_appointments" && rowIndex > 0 && (colIndex === 4 || colIndex === 5);
-    }
-
-    function isPlainMoneyValue(value) {
-      return /^\s*\d+(?:,\d{3})*(?:\.\d+)?\s*$/.test(String(value ?? ""));
-    }
-
-    function maintCellClass(sheetKey, rowIndex, colIndex, value) {
-      const classes = [];
-      if (isMaintMoneyColumn(sheetKey, rowIndex, colIndex) && isPlainMoneyValue(value)) {
-        classes.push("maint-money-cell");
-      }
-      return classes.length ? ` class="${classes.join(" ")}"` : "";
-    }
-
-    function updateMaintInputFormatting(input, isInputEvent = false) {
-      if (!input) return;
-      const rowIndex = Number(input.getAttribute("data-maint-row"));
-      const colIndex = Number(input.getAttribute("data-maint-col"));
-      if (!Number.isInteger(rowIndex) || !Number.isInteger(colIndex)) return;
-      input.value = formatMaintTimeValue(activeMaintSheetKey, rowIndex, colIndex, input.value, isInputEvent);
-      const cell = input.closest("td");
-      if (cell) {
-        cell.classList.toggle("maint-money-cell", isMaintMoneyColumn(activeMaintSheetKey, rowIndex, colIndex) && isPlainMoneyValue(input.value));
-      }
-    }
-
-    let currentMaintFilter = "";
-    let currentMaintEffectiveFilter = "";
-    let currentMaintYearFilter = "";
-
-    function renderMaintEditor() {
-      const editor = document.getElementById("maint-editor");
-      if (!editor) return;
-      if (maintSheetPayload.sheet_key === "roster") {
-        currentMaintFilter = "";
-        currentMaintEffectiveFilter = "";
-        currentMaintYearFilter = "";
-        renderRosterMaintEditor();
-        return;
-      }
-      const rows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows : [];
-      const cols = maintColumnCount(rows);
-      const title = menuLabel(maintSheetPayload.sheet_key) || maintSheetPayload.display_name || "Sheet";
-      const formKey = `maint_${maintSheetPayload.sheet_key || "sheet"}`;
-      const colGroup = Array.from(
-        { length: cols },
-        (_, i) => `<col data-form-col-key="${formKey}_col_${i}" data-form-col-default="160" />`
-      ).join("");
-      const isShiftCodeCol = (cIdx) => {
-        return rows.length > 0 && Array.isArray(rows[0]) && String(rows[0][cIdx]).trim() === "更碼";
-      };
-      
-      let shiftCodeColIdx = undefined;
-      let effectiveColIdx = undefined;
-      let dateColIdx = undefined;
-      for (let i = 0; i < cols; i++) {
-        if (isShiftCodeCol(i)) {
-          shiftCodeColIdx = i;
-          break;
-        }
-      }
-      if (Array.isArray(rows[0])) {
-        dateColIdx = rows[0].findIndex((cell) => String(cell || "").trim() === "日期");
-        if (dateColIdx < 0) dateColIdx = undefined;
-      }
-      if (maintSheetPayload.sheet_key === "schedule_grid" && Array.isArray(rows[0])) {
-        effectiveColIdx = rows[0].findIndex((cell) => {
-          const text = String(cell || "").trim();
-          return text === "生效日期" || text === "生效" || text === "Effective From";
-        });
-        if (effectiveColIdx < 0) effectiveColIdx = undefined;
-      }
-
-      let filterHtml = "";
-      if (shiftCodeColIdx !== undefined) {
-        const uniqueCodes = new Set();
-        for (let i = 1; i < rows.length; i++) {
-          if (Array.isArray(rows[i]) && rows[i][shiftCodeColIdx]) {
-            uniqueCodes.add(String(rows[i][shiftCodeColIdx]).trim());
-          }
-        }
-        const codes = Array.from(uniqueCodes).filter(Boolean).sort();
-        filterHtml = `<select id="maint-table-filter" class="maint-filter-select" style="margin-left: 16px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: inherit; cursor: pointer;">
-          <option value="">全部更碼</option>
-          ${codes.map(c => `<option value="${esc(c)}" ${c === currentMaintFilter ? "selected" : ""}>${esc(c)}</option>`).join("")}
-        </select>`;
-        if (effectiveColIdx !== undefined) {
-          const uniqueVersions = new Set();
-          for (let i = 1; i < rows.length; i++) {
-            if (!Array.isArray(rows[i])) continue;
-            const version = String(rows[i][effectiveColIdx] || "").trim();
-            uniqueVersions.add(version || "__blank__");
-          }
-          const versions = Array.from(uniqueVersions).sort((a, b) => {
-            if (a === "__blank__") return -1;
-            if (b === "__blank__") return 1;
-            return a.localeCompare(b);
-          });
-          filterHtml += `<select id="maint-effective-filter" class="maint-filter-select" style="margin-left: 8px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: inherit; cursor: pointer;">
-            <option value="">全部生效日期</option>
-            ${versions.map(v => `<option value="${esc(v)}" ${v === currentMaintEffectiveFilter ? "selected" : ""}>${esc(v === "__blank__" ? "未填生效日期" : v)}</option>`).join("")}
-          </select>`;
-        } else {
-          currentMaintEffectiveFilter = "";
-        }
-      } else {
-        currentMaintFilter = "";
-        currentMaintEffectiveFilter = "";
-      }
-      if (dateColIdx !== undefined) {
-        const years = new Set();
-        for (let i = 1; i < rows.length; i++) {
-          if (!Array.isArray(rows[i])) continue;
-          const d = parseYmd(rows[i][dateColIdx]);
-          if (d && Number.isInteger(d.year)) years.add(String(d.year));
-        }
-        const yearOptions = Array.from(years).sort();
-        if (!yearOptions.includes(currentMaintYearFilter)) currentMaintYearFilter = "";
-        filterHtml += `<select id="maint-year-filter" class="maint-filter-select" style="margin-left: 8px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: inherit; cursor: pointer;">
-          <option value="">全部年份</option>
-          ${yearOptions.map(y => `<option value="${esc(y)}" ${y === currentMaintYearFilter ? "selected" : ""}>${esc(y)}</option>`).join("")}
-        </select>`;
-      } else {
-        currentMaintYearFilter = "";
-      }
-
-      const body = rows.map((row, rIdx) => {
-        const cells = Array.from({ length: cols }, (_, cIdx) => {
-          const value = formatMaintTimeValue(maintSheetPayload.sheet_key, rIdx, cIdx, Array.isArray(row) ? row[cIdx] : "");
-          const resizeKey = rIdx === 0 ? ` data-form-col-key="${formKey}_col_${cIdx}"` : "";
-          if (rIdx > 0 && isShiftCodeCol(cIdx)) {
-            return `<td${resizeKey}${maintCellClass(maintSheetPayload.sheet_key, rIdx, cIdx, value)}><input type="text" data-maint-shift-code="1" data-maint-row="${rIdx}" data-maint-col="${cIdx}" value="${esc(value ?? "")}" spellcheck="false" autocomplete="off" /></td>`;
-          }
-          return `<td${resizeKey}${maintCellClass(maintSheetPayload.sheet_key, rIdx, cIdx, value)}><textarea data-auto-row-height data-maint-row="${rIdx}" data-maint-col="${cIdx}" spellcheck="false">${esc(value ?? "")}</textarea></td>`;
-        }).join("");
-        return `<tr data-maint-row-index="${rIdx}">${cells}</tr>`;
-      }).join("");
-      editor.innerHTML = `<div class="maint-sheet-title" style="display:flex;align-items:center;"><span>${esc(title)}</span>${filterHtml}</div>
-        <table class="maint-table" data-form-table>
-          <colgroup>${colGroup}</colgroup>
-          <tbody>${body}</tbody>
-        </table>`;
-      bindMaintContextMenu(editor);
-      applyFormColumnWidths(editor);
-      attachFormColumnResizers(editor);
-      bindAutoRowHeight(editor);
-      editor.querySelectorAll("textarea[data-maint-row][data-maint-col], input[data-maint-row][data-maint-col]").forEach((input) => {
-        input.addEventListener("input", () => updateMaintInputFormatting(input, true));
-        input.addEventListener("blur", () => {
-          updateMaintInputFormatting(input, false);
-          if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
-        });
-      });
-      
-      const filterSelect = editor.querySelector("#maint-table-filter");
-      const effectiveSelect = editor.querySelector("#maint-effective-filter");
-      const yearSelect = editor.querySelector("#maint-year-filter");
-      if ((filterSelect && shiftCodeColIdx !== undefined) || yearSelect) {
-        const applyFilter = () => {
-          const codeValFilter = filterSelect ? filterSelect.value : "";
-          const effectiveValFilter = effectiveSelect ? effectiveSelect.value : "";
-          const yearValFilter = yearSelect ? yearSelect.value : "";
-          currentMaintFilter = codeValFilter;
-          currentMaintEffectiveFilter = effectiveValFilter;
-          currentMaintYearFilter = yearValFilter;
-          editor.querySelectorAll("tr[data-maint-row-index]").forEach(tr => {
-            const idx = Number(tr.getAttribute("data-maint-row-index"));
-            if (idx === 0) return;
-            const codeInput = shiftCodeColIdx !== undefined
-              ? tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${shiftCodeColIdx}"]`)
-              : null;
-            const codeVal = codeInput ? String(codeInput.value).trim() : "";
-            const versionInput = effectiveColIdx !== undefined
-              ? tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${effectiveColIdx}"]`)
-              : null;
-            const versionVal = versionInput ? String(versionInput.value).trim() : "";
-            const versionKey = versionVal || "__blank__";
-            const dateInput = dateColIdx !== undefined
-              ? tr.querySelector(`[data-maint-row="${idx}"][data-maint-col="${dateColIdx}"]`)
-              : null;
-            const parsedDate = dateInput ? parseYmd(dateInput.value) : null;
-            const rowYear = parsedDate ? String(parsedDate.year) : "";
-            const codeMatches = !codeValFilter || codeVal === codeValFilter || codeVal === "";
-            const versionMatches = !effectiveValFilter || versionKey === effectiveValFilter;
-            const yearMatches = !yearValFilter || rowYear === yearValFilter || rowYear === "";
-            if (codeMatches && versionMatches && yearMatches) {
-              tr.style.display = "";
-              setTimeout(() => {
-                tr.querySelectorAll("textarea[data-auto-row-height]").forEach(autoResizeTextarea);
-              }, 0);
-            } else {
-              tr.style.display = "none";
-            }
-          });
-        };
-        if (filterSelect) filterSelect.addEventListener("change", applyFilter);
-        if (effectiveSelect) effectiveSelect.addEventListener("change", applyFilter);
-        if (yearSelect) yearSelect.addEventListener("change", applyFilter);
-        if (currentMaintFilter || currentMaintEffectiveFilter || currentMaintYearFilter) applyFilter();
-      }
-
-      applyTableOffsets(editor);
-      attachTableDragHandles(editor);
-    }
-
-    function bindMaintContextMenu(editor) {
-      if (!editor || editor.dataset.maintContextBound === "1") return;
-      editor.dataset.maintContextBound = "1";
-      editor.addEventListener("contextmenu", (ev) => {
-        const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-maint-row-index]") : null;
-        const idx = row ? Number(row.getAttribute("data-maint-row-index")) : -1;
-        showMaintRowMenu(ev, Number.isInteger(idx) ? idx : -1);
-      });
-    }
-
-    function collectMaintRows() {
-      const rows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows.map((row) => Array.isArray(row) ? [...row] : []) : [];
-      if (maintSheetPayload.sheet_key === "roster") {
-        const rosterRows = [];
-        document.querySelectorAll("#maint-editor textarea[data-maint-roster-row]").forEach((input) => {
-          const r = Number(input.getAttribute("data-maint-roster-row"));
-          if (!Number.isInteger(r) || r < 0) return;
-          while (rosterRows.length <= r) rosterRows.push([]);
-          rosterRows[r][0] = input.value;
-        });
-        while (rosterRows.length && !rosterRows[rosterRows.length - 1].some((cell) => cell != null && String(cell).trim() !== "")) rosterRows.pop();
-        return rosterRows;
-      }
-      document.querySelectorAll("#maint-editor [data-maint-row][data-maint-col]").forEach((input) => {
-        const r = Number(input.getAttribute("data-maint-row"));
-        const c = Number(input.getAttribute("data-maint-col"));
-        if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || c < 0) return;
-        while (rows.length <= r) rows.push([]);
-        rows[r][c] = formatMaintTimeValue(activeMaintSheetKey, r, c, input.value);
-      });
-      for (const row of rows) {
-        while (row.length && (row[row.length - 1] == null || String(row[row.length - 1]).trim() === "")) row.pop();
-      }
-      while (rows.length && !rows[rows.length - 1].some((cell) => cell != null && String(cell).trim() !== "")) rows.pop();
-      return rows;
-    }
-
-    async function refreshMaintSheets() {
-      try {
-        const data = await loadMaintSheets();
-        maintSheets = Array.isArray(data.sheets) ? data.sheets : [];
-        renderMaintMenu();
-        if (!activeMaintSheetKey && maintSheets.length) activeMaintSheetKey = maintSheets[0].sheet_key;
-      } catch (e) {
-        showMaintError(String(e.message || e));
-      }
-    }
-
-    async function openMaintSheet(sheetKey, openTree = true) {
-      if (!sheetKey) return;
-      if (sheetKey !== activeMaintSheetKey && !(await resolveUnsavedBeforeLeaving())) return;
-      setActivePanel("maint");
-      if (openTree) setMaintMenuTreeOpen(true);
-      activeMaintSheetKey = sheetKey;
-      showMaintError("");
-      setMaintStatus("Loading...");
-      try {
-        maintSheetPayload = await loadMaintSheet(sheetKey);
-        if (!Array.isArray(maintSheetPayload.rows)) maintSheetPayload.rows = [];
-        if (sheetKey === "roster") {
-          const [payroll, overtime, holidays, medical] = await Promise.all([
-            loadMaintSheet("payroll_times").catch(() => ({ rows: [] })),
-            loadMaintSheet("overtime").catch(() => ({ rows: [] })),
-            loadMaintSheet("public_holidays").catch(() => ({ rows: [] })),
-            loadMaintSheet("medical_appointments").catch(() => ({ rows: [] })),
-          ]);
-          rosterReportSources = {
-            payroll_times: Array.isArray(payroll.rows) ? payroll.rows : [],
-            overtime: Array.isArray(overtime.rows) ? overtime.rows : [],
-            public_holidays: Array.isArray(holidays.rows) ? holidays.rows : [],
-            medical_appointments: Array.isArray(medical.rows) ? medical.rows : [],
-          };
-        }
-        renderMaintEditor();
-        clearUnsavedChanges("餐單參數");
-        setMaintStatus(`${maintSheetPayload.rows.length} rows`);
-      } catch (e) {
-        showMaintError(String(e.message || e));
-        setMaintStatus("");
-      }
-      setActivePanel("maint", false);
-    }
-
-    async function saveMaintEditor() {
-      if (!activeMaintSheetKey) return;
-      showMaintError("");
-      setMaintStatus("Saving...");
-      try {
-        const rows = collectMaintRows();
-        const result = await persistMaintSheet(activeMaintSheetKey, rows);
-        maintSheetPayload.rows = rows;
-        clearUnsavedChanges("餐單參數");
-        setMaintStatus(`Save ${menuLabel(activeMaintSheetKey)} ${new Date().toLocaleTimeString("en-GB")}`);
-        await refreshMaintSheets();
-      } catch (e) {
-        showMaintError(String(e.message || e));
-        setMaintStatus("");
-      }
-    }
-
-    async function importActiveMaintSheet() {
-      if (!activeMaintSheetKey) return;
-      showMaintError("");
-      setMaintStatus("Importing...");
-      try {
-        maintSheetPayload = await importMaintSheet(activeMaintSheetKey);
-        if (!Array.isArray(maintSheetPayload.rows)) maintSheetPayload.rows = [];
-        renderMaintEditor();
-        clearUnsavedChanges("餐單參數");
-        setMaintStatus(`Imported ${maintSheetPayload.rows.length} rows`);
-        await refreshMaintSheets();
-      } catch (e) {
-        showMaintError(String(e.message || e));
-        setMaintStatus("");
-      }
-    }
-
-    async function importLiveRuntimeInputs() {
-      const btn = document.getElementById("runtime-import");
-      if (btn) btn.disabled = true;
-      showMaintError("");
-      setMaintStatus("Importing live inputs...");
-      try {
-        const payload = await importRuntimeInputs();
-        await refreshMaintSheets();
-        if (activeMaintSheetKey === "roster" || activeMaintSheetKey === "overtime") {
-          await openMaintSheet(activeMaintSheetKey, false);
-        }
-        clearUnsavedChanges("餐單參數");
-        const counts = (payload.sheets || [])
-          .map((sheet) => `${menuLabel(sheet.sheet_key)} ${sheet.row_count || 0}`)
-          .join(", ");
-        setMaintStatus(`Imported ${counts || "live inputs"}`);
-      } catch (e) {
-        showMaintError(String(e.message || e));
-        setMaintStatus("");
-      } finally {
-        if (btn) btn.disabled = false;
-      }
-    }
-
-    function diagnosticMark(ok) {
-      return ok ? "OK" : "Missing";
-    }
-
-    function diagnosticMarkClass(ok) {
-      return ok ? "diag-ok" : "diag-missing";
-    }
-
-    function diagnosticRequirementCell(row, key, patternKey) {
-      if (row && row.requires_shift_schedule === false) {
-        return '<td class="diag-na">N/A</td>';
-      }
-      const ok = !!(row && row[key]);
-      const pattern = row && row[patternKey] ? row[patternKey] : "";
-      const patterns = Array.isArray(pattern) ? pattern.join(", ") : pattern;
-      return `<td class="${diagnosticMarkClass(ok)}">${diagnosticMark(ok)}${patterns ? ` (${esc(patterns)})` : ""}</td>`;
-    }
-
-    function renderDiagnostics(data) {
-      const box = document.getElementById("diagnostics-out");
-      if (!box) return;
-      const summary = data && data.summary ? data.summary : {};
-      const tables = Array.isArray(data && data.tables) ? data.tables : [];
-      const issues = Array.isArray(data && data.issues) ? data.issues : [];
-      const coverage = Array.isArray(data && data.code_coverage) ? data.code_coverage : [];
-      const months = data && data.roster && Array.isArray(data.roster.months) ? data.roster.months : [];
-      const status = String(summary.status || "unknown");
-      const tableRows = tables.map((row) => `<tr>
-        <td>${esc(row.display_name || row.sheet_key)}</td>
-        <td>${esc(row.sheet_key)}</td>
-        <td>${esc(row.row_count)}</td>
-        <td>${esc(row.updated_at || "")}</td>
-      </tr>`).join("");
-      const monthRows = months.map((row) => `<tr>
-        <td>${esc(row.label)}</td>
-        <td>${esc(row.days_found)}</td>
-        <td>${esc(row.days_expected)}</td>
-        <td>${esc((row.missing_days || []).join(", "))}</td>
-      </tr>`).join("");
-      const issueRows = issues.map((row) => `<tr>
-        <td class="diag-severity-${esc(row.severity)}">${esc(row.severity)}</td>
-        <td>${esc(row.area)}</td>
-        <td>${esc(row.message)}</td>
-      </tr>`).join("");
-      const coverageRows = coverage.map((row) => `<tr>
-        <td>${esc(row.code)}</td>
-        <td>${esc(row.days)}</td>
-        <td class="${diagnosticMarkClass(row.meal_time)}">${diagnosticMark(row.meal_time)}${row.meal_time_pattern ? ` (${esc(row.meal_time_pattern)})` : ""}</td>
-        ${diagnosticRequirementCell(row, "payroll_time", "payroll_time_pattern")}
-        ${diagnosticRequirementCell(row, "schedule_grid", "schedule_grid_patterns")}
-      </tr>`).join("");
-      const colGroup = (prefix, widths) => `<colgroup>${widths.map((width, idx) => `<col data-form-col-key="${prefix}_${idx}" data-form-col-default="${width}" />`).join("")}</colgroup>`;
-      const th = (key, text) => `<th data-form-col-key="${key}">${text}</th>`;
-      box.innerHTML = `<div class="diag-summary diag-status-${esc(status)}">
-          <div><strong>Status</strong><span>${esc(status.toUpperCase())}</span></div>
-          <div><strong>Issues</strong><span>${esc(summary.issues || 0)}</span></div>
-          <div><strong>Errors</strong><span>${esc(summary.errors || 0)}</span></div>
-          <div><strong>Warnings</strong><span>${esc(summary.warnings || 0)}</span></div>
-          <div><strong>Roster codes</strong><span>${esc(summary.roster_codes || 0)}</span></div>
-          <div><strong>Missing shift times</strong><span>${esc(summary.missing_payroll_time_codes || 0)}</span></div>
-          <div><strong>Missing schedules</strong><span>${esc(summary.missing_schedule_grid_codes || 0)}</span></div>
-        </div>
-        <div class="diag-report-body">
-          <h2 class="diag-report-title">Roster Code Coverage</h2>
-          <table class="diag-table" data-form-table>${colGroup("diag_coverage", [150, 90, 230, 260, 360])}<thead><tr>${th("diag_coverage_0", "Code")}${th("diag_coverage_1", "Days")}${th("diag_coverage_2", "Meal Time")}${th("diag_coverage_3", "Shift Time")}${th("diag_coverage_4", "Schedule Grid")}</tr></thead><tbody>${coverageRows || '<tr><td colspan="5" class="maint-empty">No roster codes</td></tr>'}</tbody></table>
-          <h2 class="diag-report-title">Issues</h2>
-          <table class="diag-table" data-form-table>${colGroup("diag_issues", [120, 180, 520])}<thead><tr>${th("diag_issues_0", "Severity")}${th("diag_issues_1", "Area")}${th("diag_issues_2", "Message")}</tr></thead><tbody>${issueRows || '<tr><td colspan="3" class="maint-empty">No issues</td></tr>'}</tbody></table>
-          <h2 class="diag-report-title">Roster Months</h2>
-          <table class="diag-table" data-form-table>${colGroup("diag_months", [140, 120, 130, 360])}<thead><tr>${th("diag_months_0", "Month")}${th("diag_months_1", "Days Found")}${th("diag_months_2", "Days Expected")}${th("diag_months_3", "Missing Days")}</tr></thead><tbody>${monthRows || '<tr><td colspan="4" class="maint-empty">No roster months</td></tr>'}</tbody></table>
-          <h2 class="diag-report-title">SQLite Tables</h2>
-          <table class="diag-table" data-form-table>${colGroup("diag_tables", [170, 180, 90, 210])}<thead><tr>${th("diag_tables_0", "Table")}${th("diag_tables_1", "Key")}${th("diag_tables_2", "Rows")}${th("diag_tables_3", "Updated")}</tr></thead><tbody>${tableRows}</tbody></table>
-        </div>`;
-      applyFormColumnWidths(box);
-      attachFormColumnResizers(box);
-      applyTableOffsets(box);
-      attachTableDragHandles(box);
-    }
-
-    async function refreshDiagnostics() {
-      const status = document.getElementById("diagnostics-status");
-      const err = document.getElementById("diagnostics-err");
-      if (status) status.textContent = "Loading...";
-      if (err) {
-        err.textContent = "";
-        err.style.display = "none";
-      }
-      try {
-        diagnosticsPayload = await loadDiagnostics();
-        renderDiagnostics(diagnosticsPayload);
-        if (status) status.textContent = diagnosticsPayload.generated_at ? `Updated ${diagnosticsPayload.generated_at}` : "";
-      } catch (e) {
-        if (err) {
-          err.textContent = String(e.message || e);
-          err.style.display = "block";
-        }
-        if (status) status.textContent = "";
-      }
-    }
-

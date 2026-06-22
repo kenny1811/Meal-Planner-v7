@@ -69,7 +69,6 @@ class RiceConfig:
 
 @dataclass(frozen=True)
 class DatesConfig:
-    reject_days_before_today: int
     timezone: str
 
 
@@ -125,6 +124,8 @@ class OptimizerConfig:
 @dataclass(frozen=True)
 class AppSettings:
     project_root: Path
+    system_folder: Path
+    data_folder: Path
     workbook_path: Path
     database_path: Path
     sheets: SheetsConfig
@@ -157,10 +158,18 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
 
 
 def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
+    folders = data.get("folders", {}) or {}
+    system_raw = str(folders.get("system_folder", ".") or ".")
+    data_raw = str(folders.get("data_folder", ".") or ".")
+    system_folder = (project_root / system_raw).resolve() if not Path(system_raw).is_absolute() else Path(system_raw).resolve()
+    data_folder = (project_root / data_raw).resolve() if not Path(data_raw).is_absolute() else Path(data_raw).resolve()
+
     wb_fn = str(data.get("workbook", {}).get("filename", "餐單AI版測試.xlsm"))
-    workbook_path = (project_root / wb_fn).resolve()
+    wb_path = Path(wb_fn)
+    workbook_path = wb_path.resolve() if wb_path.is_absolute() else (data_folder / wb_path).resolve()
     db_fn = str(data.get("database", {}).get("filename", "meal_planner.sqlite3"))
-    database_path = (project_root / db_fn).resolve()
+    db_path = Path(db_fn)
+    database_path = db_path.resolve() if db_path.is_absolute() else (data_folder / db_path).resolve()
 
     sh = data.get("sheets", {}) or {}
     sheets = SheetsConfig(
@@ -216,7 +225,6 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
 
     dc = data.get("dates", {}) or {}
     dates = DatesConfig(
-        reject_days_before_today=int(dc.get("reject_days_before_today", 6)),
         timezone=str(dc.get("timezone", "Asia/Hong_Kong")),
     )
 
@@ -270,6 +278,8 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
 
     return AppSettings(
         project_root=project_root,
+        system_folder=system_folder,
+        data_folder=data_folder,
         workbook_path=workbook_path,
         database_path=database_path,
         sheets=sheets,
@@ -301,6 +311,8 @@ def get_settings() -> AppSettings:
         database_path = db_path if db_path.is_absolute() else (project_root / db_path).resolve()
         return AppSettings(
             project_root=settings.project_root,
+            system_folder=settings.system_folder,
+            data_folder=settings.data_folder,
             workbook_path=workbook_path,
             database_path=database_path,
             sheets=settings.sheets,
@@ -338,7 +350,7 @@ def save_rice_detail_settings(
     text = cfg_path.read_text(encoding="utf-8")
 
     def replace_key(src: str, key: str, value: float) -> str:
-        pattern = rf"(^\s*{re.escape(key)}\s*:\s*)([-+]?\d+(?:\.\d+)?)(\s*(?:#.*)?$)"
+        pattern = rf"(^[ \t]*{re.escape(key)}[ \t]*:[ \t]*)([-+]?\d+(?:\.\d+)?)([ \t]*(?:#.*)?$)"
         updated, count = re.subn(
             pattern,
             lambda m: f"{m.group(1)}{value:g}{m.group(3)}",
@@ -352,6 +364,58 @@ def save_rice_detail_settings(
 
     text = replace_key(text, "cooked_to_raw_brown", cooked_to_raw_brown)
     text = replace_key(text, "cooked_to_raw_other", cooked_to_raw_other)
+    cfg_path.write_text(text, encoding="utf-8", newline="\n")
+    clear_settings_cache()
+    return get_settings()
+
+
+def save_folder_settings(
+    *,
+    system_folder: str,
+    data_folder: str,
+) -> AppSettings:
+    """Persist editable folder settings into config.yaml."""
+    settings = get_settings()
+    cfg_path = Path(os.environ.get("MENU_CONFIG", str(settings.project_root / "config.yaml")))
+    if not cfg_path.is_file():
+        raise OSError(f"Cannot find config file: {cfg_path}")
+
+    system_raw = str(system_folder or "").strip()
+    data_raw = str(data_folder or "").strip()
+    if not system_raw or not data_raw:
+        raise ValueError("System folder and data folder are required.")
+
+    def resolve_folder(raw: str) -> Path:
+        p = Path(raw)
+        return p.resolve() if p.is_absolute() else (settings.project_root / p).resolve()
+
+    system_path = resolve_folder(system_raw)
+    data_path = resolve_folder(data_raw)
+    if not system_path.exists() or not system_path.is_dir():
+        raise ValueError(f"System folder does not exist: {system_path}")
+    if not data_path.exists() or not data_path.is_dir():
+        raise ValueError(f"Data folder does not exist: {data_path}")
+
+    text = cfg_path.read_text(encoding="utf-8")
+
+    if not re.search(r"^folders\s*:", text, flags=re.MULTILINE):
+        text += "\nfolders:\n  system_folder: \".\"\n  data_folder: \".\"\n"
+
+    def replace_key(src: str, key: str, value: str) -> str:
+        pattern = rf"(^[ \t]*{re.escape(key)}[ \t]*:[ \t]*)(.*?)([ \t]*(?:#.*)?$)"
+        updated, count = re.subn(
+            pattern,
+            lambda m: f'{m.group(1)}"{value}"{m.group(3)}',
+            src,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if count != 1:
+            raise ValueError(f"Cannot find folder setting {key} in config.yaml.")
+        return updated
+
+    text = replace_key(text, "system_folder", system_raw)
+    text = replace_key(text, "data_folder", data_raw)
     cfg_path.write_text(text, encoding="utf-8", newline="\n")
     clear_settings_cache()
     return get_settings()

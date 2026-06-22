@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import calendar
 import re
-from datetime import date, datetime, timedelta
+import calendar
+from datetime import date, datetime
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
@@ -13,28 +13,6 @@ class DateValidationError(ValueError):
     def __init__(self, message: str, rejected_dates: tuple[date, ...]):
         super().__init__(message)
         self.rejected_dates = rejected_dates
-
-
-def cutoff_date(timezone: str, reject_days_before_today: int) -> date:
-    """界限日 = 今日（指定時區）往前第 N 個日曆日。"""
-    z = ZoneInfo(timezone)
-    today = datetime.now(z).date()
-    return today - timedelta(days=reject_days_before_today)
-
-
-def validate_dates_not_before(
-    dates: Iterable[date],
-    *,
-    timezone: str,
-    reject_days_before_today: int,
-) -> None:
-    boundary = cutoff_date(timezone, reject_days_before_today)
-    bad = tuple(sorted({d for d in dates if d < boundary}))
-    if bad:
-        raise DateValidationError(
-            message=f"以下日期早於界限日 {boundary.isoformat()}（今日往前第 {reject_days_before_today} 日），已拒絕。",
-            rejected_dates=bad,
-        )
 
 
 def validate_dates_within_allowed_months(

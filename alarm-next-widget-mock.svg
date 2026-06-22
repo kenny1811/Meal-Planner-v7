@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="900" viewBox="0 0 1500 900">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#111827" flood-opacity="0.18"/>
+    </filter>
+    <linearGradient id="phoneBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3f4f6"/>
+      <stop offset="1" stop-color="#d1d5db"/>
+    </linearGradient>
+    <linearGradient id="widgetBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#d9dee6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1500" height="900" fill="#eef1f4"/>
+
+  <text x="105" y="78" font-family="Georgia, 'Times New Roman', serif" font-size="34" fill="#111827">Alarm screen</text>
+  <text x="810" y="78" font-family="Georgia, 'Times New Roman', serif" font-size="34" fill="#111827">4 x 2 Next Alarm widget</text>
+
+  <!-- phone -->
+  <rect x="95" y="115" width="520" height="760" rx="52" fill="#111827" filter="url(#shadow)"/>
+  <rect x="112" y="132" width="486" height="726" rx="42" fill="url(#phoneBg)"/>
+  <rect x="290" y="148" width="130" height="18" rx="9" fill="#111827" opacity="0.92"/>
+
+  <g transform="translate(145 218)">
+    <text x="242" y="120" text-anchor="middle" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="60" font-weight="700" fill="#111827">08:35 新鬧鐘</text>
+    <text x="242" y="182" text-anchor="middle" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="26" font-weight="500" fill="#4b5563">next alarm 13:20 去 3 號位</text>
+
+    <rect x="18" y="274" width="448" height="350" rx="28" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" filter="url(#shadow)"/>
+    <text x="242" y="476" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="68" font-style="italic" fill="#111827">Dismiss</text>
+  </g>
+
+  <!-- widget card -->
+  <rect x="790" y="170" width="590" height="300" rx="44" fill="url(#widgetBg)" stroke="#c8d0dc" stroke-width="2" filter="url(#shadow)"/>
+  <g transform="translate(835 212)">
+    <rect x="0" y="0" width="86" height="86" rx="24" fill="#111827"/>
+    <path d="M28 52c0-13 8-23 21-23s21 10 21 23" fill="none" stroke="#f9fafb" stroke-width="7" stroke-linecap="round"/>
+    <path d="M25 62h48" stroke="#f9fafb" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="49" cy="71" r="5" fill="#f9fafb"/>
+
+    <text x="116" y="33" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="24" font-weight="600" fill="#4b5563">NEXT ALARM</text>
+    <text x="116" y="112" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="72" font-weight="800" fill="#111827">13:20</text>
+    <text x="116" y="162" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="36" font-weight="700" fill="#111827">去 3 號位</text>
+    <text x="116" y="214" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="24" fill="#6b7280">Meal &amp; Shift Alarm</text>
+  </g>
+
+  <g transform="translate(790 545)">
+    <text x="0" y="0" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="28" font-weight="700" fill="#111827">我建議嘅資訊層級</text>
+    <text x="0" y="50" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="24" fill="#374151">1. 響鐘畫面只留要即刻睇嘅內容：目前鬧鐘 + 下一個鬧鐘 + 大 Dismiss</text>
+    <text x="0" y="92" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="24" fill="#374151">2. Widget 4x2 用大時間，細標題，下面放行位內容</text>
+    <text x="0" y="134" font-family="'Noto Sans TC', 'Microsoft JhengHei', sans-serif" font-size="24" fill="#374151">3. 淺灰底，黑字，返工瞓醒睇都唔刺眼</text>
+  </g>
+</svg>

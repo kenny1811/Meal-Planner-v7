@@ -55,6 +55,20 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(data["summary"]["missing_payroll_time_codes"], 0)
         self.assertEqual(data["summary"]["missing_schedule_grid_codes"], 0)
 
+    def test_matching_shift_codes_ignores_case(self):
+        settings = get_settings()
+        save_sheet_rows("roster", [["2026年6月 17 Lecole event"]], settings)
+        save_sheet_rows("meal_times", [["更碼", "早餐"], ["Lecole Event", "08:00"], ["其他", "08:00"]], settings)
+        save_sheet_rows("payroll_times", [["更碼", "開始時間", "結束時間"], ["Lecole Event", "10:00", "19:00"]], settings)
+        save_sheet_rows("schedule_grid", [["更碼", "時間", "內容", "時長"], ["Lecole Event", "12:00", "飯", "45"]], settings)
+
+        data = run_integrity_checks(settings)
+        row = {item["code"]: item for item in data["code_coverage"]}["Lecole event"]
+
+        self.assertTrue(row["meal_time"])
+        self.assertTrue(row["payroll_time"])
+        self.assertTrue(row["schedule_grid"])
+
 
 if __name__ == "__main__":
     unittest.main()

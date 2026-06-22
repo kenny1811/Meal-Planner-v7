@@ -4,15 +4,35 @@ __pycache__/
 
 # Local runtime data and generated backups
 *.sqlite3
+*.sqlite3.*
 plans_store.json
 .plans_store_backups/
 .project_backups/
 temp.jsonl
 raw.txt
+data_backup_*/
+logs/
 
 # Local Excel workbooks and lock files
 *.xlsm
 ~$*
+
+# Local debugging captures and generated phone/watch artifacts
+.codex-remote-attachments/
+_tmp_*
+tmp_*
+jump-*.txt
+last-logcat.txt
+phone_batterystats*.txt
+screen*.png
+screen*.xml
+alarm*.xml
+export.xml
+schedule_grid*.xml
+android_alarm_app/screen*.png
+android_alarm_app/app/src/main/assets/fonts/*.ttc
+android_watchface_app/*.png
+android_watchface_app/alarm-*.xml
 
 # OS/editor noise
 Thumbs.db

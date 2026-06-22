@@ -6,12 +6,21 @@ from meal_planner.roster import code_for_date, is_work_day, last_day_of_month, p
 
 class RosterTests(unittest.TestCase):
     def test_parse_roster_line_reads_month_header_and_day_code_pairs(self):
-        rm = parse_roster_line("2026年5月 1 PenC 2 SB 3 WL 4 SHx trailing ignored")
+        rm = parse_roster_line("2026年5月 1 PenC 2 SB 3 WL 4 SHx")
 
         self.assertIsNotNone(rm)
         assert rm is not None
         self.assertEqual((rm.year, rm.month), (2026, 5))
         self.assertEqual(rm.day_to_code, {1: "PenC", 2: "SB", 3: "WL", 4: "SHx"})
+
+    def test_parse_roster_line_allows_multi_word_shift_codes(self):
+        rm = parse_roster_line("2026年6月 16 SH08 17 Lecole event 18 EleC1")
+
+        self.assertIsNotNone(rm)
+        assert rm is not None
+        self.assertEqual(rm.day_to_code[16], "SH08")
+        self.assertEqual(rm.day_to_code[17], "Lecole event")
+        self.assertEqual(rm.day_to_code[18], "EleC1")
 
     def test_parse_roster_line_ignores_empty_or_non_month_cells(self):
         self.assertIsNone(parse_roster_line(None))

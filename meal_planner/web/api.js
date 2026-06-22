@@ -36,9 +36,36 @@
         if (data && typeof data.show_past === "boolean") {
           showPast = data.show_past;
         }
-        if (data && ["planner", "config", "maint", "shopping", "diagnostics"].includes(data.active_panel)) {
+        if (data && ["planner", "config", "maint", "shopping", "alarm_sync"].includes(data.active_panel)) {
           activePanel = data.active_panel;
         }
+        const hasServerConfigView = data && ["targets", "catalog", "details"].includes(data.active_config_view);
+        if (hasServerConfigView) {
+          activeConfigView = data.active_config_view;
+        }
+        if (data && Array.isArray(data.active_menu_path) && data.active_menu_path.length) {
+          activeMenuPath = data.active_menu_path.map((part) => String(part)).filter(Boolean);
+        }
+        try {
+          const savedMenuPath = String(window.localStorage.getItem("mealplanner_active_menu_path") || "").trim();
+          const path = savedMenuPath.split("/").map((part) => part.trim()).filter(Boolean);
+          if (path.length) activeMenuPath = path;
+        } catch (_) {}
+        if (!hasServerConfigView) {
+          let hasLocalConfigView = false;
+          try {
+            const savedConfigView = String(window.localStorage.getItem("mealplanner_active_config_view") || "").trim();
+            if (["targets", "catalog", "details"].includes(savedConfigView)) {
+              activeConfigView = savedConfigView;
+              hasLocalConfigView = true;
+            }
+          } catch (_) {}
+          if (!hasLocalConfigView && activePanel === "config") activeConfigView = "catalog";
+        }
+        try {
+          const savedMaintSheet = String(window.localStorage.getItem("mealplanner_active_maint_sheet") || "").trim();
+          if (savedMaintSheet) activeMaintSheetKey = savedMaintSheet;
+        } catch (_) {}
         if (data && typeof data.menu_order === "object" && data.menu_order) {
           menuOrder = {
             top: Array.isArray(data.menu_order.top) ? data.menu_order.top : menuOrder.top,
@@ -75,7 +102,29 @@
             form_column_widths: formColumnWidths,
             show_past: showPast,
             active_panel: activePanel,
+            active_config_view: activeConfigView,
+            active_menu_path: activeMenuPath,
           }),
+        });
+      } catch (_) {}
+    }
+
+    async function persistActiveConfigViewState() {
+      try {
+        await fetch("/api/ui-state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active_config_view: activeConfigView }),
+        });
+      } catch (_) {}
+    }
+
+    async function persistActiveMenuPathState() {
+      try {
+        await fetch("/api/ui-state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active_menu_path: activeMenuPath }),
         });
       } catch (_) {}
     }
@@ -185,18 +234,6 @@
       return data || {};
     }
 
-    async function loadCutoffInline() {
-      try {
-        const r = await fetch("/api/cutoff");
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) return;
-        const cutoff = data && data.cutoff ? String(data.cutoff) : "";
-        document.getElementById("cutoff").textContent = cutoff
-          ? `Cutoff date: ${cutoff} (Hong Kong)`
-          : "";
-      } catch (_) {}
-    }
-
     async function loadTargets() {
       const r = await fetch("/api/targets");
       const data = await r.json().catch(() => ({}));
@@ -283,20 +320,69 @@
       return data || {};
     }
 
-    async function importRuntimeInputs() {
-      const r = await fetch("/api/runtime-inputs/import", { method: "POST" });
+    async function importScheduleGridXml(file) {
+      const form = new FormData();
+      form.append("file", file);
+      const r = await fetch("/api/maint/sheets/schedule_grid/import-xml", {
+        method: "POST",
+        body: form,
+      });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Import runtime inputs failed.", r.status));
+        throw new Error(apiErrorMessage(data, "Import schedule_grid XML failed.", r.status));
       }
       return data || {};
     }
 
-    async function loadDiagnostics() {
-      const r = await fetch("/api/diagnostics");
+    async function importDefaultScheduleGridXml() {
+      const r = await fetch("/api/maint/sheets/schedule_grid/import-default-xml", {
+        method: "POST",
+      });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Load diagnostics failed.", r.status));
+        throw new Error(apiErrorMessage(data, "Import schedule_grid.xml failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function importScheduleGridFromAdbPhone() {
+      const r = await fetch("/api/maint/sheets/schedule_grid/preview-from-phone-ip", {
+        method: "POST",
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Preview phone schedule_grid by IP failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function confirmScheduleGridFromPhoneIp() {
+      const r = await fetch("/api/maint/sheets/schedule_grid/confirm-phone-ip-import", {
+        method: "POST",
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Confirm phone schedule_grid import failed.", r.status));
+      }
+      return data || {};
+    }
+
+async function exportScheduleGridXml() {
+      const r = await fetch("/api/maint/sheets/schedule_grid/export-xml");
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        throw new Error(apiErrorMessage(data, "Export schedule_grid XML failed.", r.status));
+      }
+      return r;
+    }
+
+    async function exportScheduleGridXmlToDataFolder() {
+      const r = await fetch("/api/maint/sheets/schedule_grid/export-xml-to-file", {
+        method: "POST",
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Export schedule_grid XML to data folder failed.", r.status));
       }
       return data || {};
     }
