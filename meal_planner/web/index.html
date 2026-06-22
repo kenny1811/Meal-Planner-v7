@@ -224,6 +224,34 @@
       <span class="status-inline" id="alarm-sync-status"></span>
     </div>
       <div id="alarm-sync-err" class="err"></div>
+      <table id="alarm-sync-form" class="alarm-sync-settings" data-form-table>
+        <colgroup>
+          <col data-form-col-key="alarm_sync_label" data-form-col-default="120" />
+          <col data-form-col-key="alarm_sync_value" data-form-col-default="260" />
+          <col data-form-col-key="alarm_sync_action" data-form-col-default="150" />
+          <col data-form-col-key="alarm_sync_action_2" data-form-col-default="150" />
+        </colgroup>
+        <tbody>
+          <tr>
+            <th data-form-col-key="alarm_sync_label">Device</th>
+            <td data-form-col-key="alarm_sync_value"><input id="auto-sync-device" value="default" /></td>
+            <td data-form-col-key="alarm_sync_action"><button type="button" class="btn" id="alarm-sync-preview-plan">Preview</button></td>
+            <td data-form-col-key="alarm_sync_action_2"><button type="button" class="btn" id="alarm-sync-send-usb">USB Send</button></td>
+          </tr>
+          <tr>
+            <th data-form-col-key="alarm_sync_label">Server</th>
+            <td data-form-col-key="alarm_sync_value"><input id="auto-sync-server" /></td>
+            <td data-form-col-key="alarm_sync_action"><button type="button" class="btn" id="alarm-sync-publish">Publish</button></td>
+            <td data-form-col-key="alarm_sync_action_2"><button type="button" class="btn" id="alarm-sync-import-xml">Import Phone</button></td>
+          </tr>
+          <tr>
+            <th data-form-col-key="alarm_sync_label">Pending</th>
+            <td data-form-col-key="alarm_sync_value"></td>
+            <td data-form-col-key="alarm_sync_action"><button type="button" class="btn" id="alarm-sync-confirm-import" style="display:none;">Confirm</button></td>
+            <td data-form-col-key="alarm_sync_action_2"></td>
+          </tr>
+        </tbody>
+      </table>
       <div id="alarm-preview-wrap" class="alarm-preview-wrap">
         <div id="alarm-preview-title" class="alarm-preview-title"></div>
         <table id="alarm-preview-table" class="alarm-preview-table" data-form-table>

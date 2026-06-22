@@ -7,8 +7,6 @@ from openpyxl import Workbook
 from meal_planner.excel_io import load_roster_map
 from meal_planner.maintenance_db import (
     bootstrap_roster_code_definitions,
-    import_runtime_inputs_from_workbook,
-    list_runtime_input_status,
     load_roster_code_definitions,
     load_sheet_rows,
     save_roster_code_definitions,
@@ -110,31 +108,6 @@ class MaintenanceDatabaseTests(unittest.TestCase):
         )
 
         self.assertEqual(saved, [{"pattern": "AL*", "label": "Annual leave", "sort_order": 1}])
-
-    def test_import_runtime_inputs_only_requires_roster_and_overtime_sheets(self):
-        settings = get_settings()
-        wb = Workbook()
-        wb.active.title = settings.sheets.roster
-        roster_ws = wb[settings.sheets.roster]
-        roster_ws.cell(1, 1).value = "2026年5月 1 SB"
-        roster_ws.cell(1, 3).value = "更碼"
-        roster_ws.cell(1, 4).value = "定義"
-        roster_ws.cell(2, 3).value = "SB"
-        roster_ws.cell(2, 4).value = "Stand by"
-        overtime_ws = wb.create_sheet(settings.sheets.overtime)
-        overtime_ws.append(["日期", "開工", "收工"])
-        overtime_ws.append(["2026-05-23", "09:00", "18:00"])
-
-        payload = import_runtime_inputs_from_workbook(settings, wb)
-        status = list_runtime_input_status(settings)
-
-        self.assertEqual(payload["runtime_input_keys"], ["roster", "overtime"])
-        self.assertEqual(load_sheet_rows("roster", settings)["rows"], [["2026年5月 1 SB", None, "更碼", "定義"], [None, None, "SB", "Stand by"]])
-        self.assertEqual(load_sheet_rows("overtime", settings)["rows"][1], ["2026-05-23", "09:00", "18:00"])
-        self.assertEqual(payload["roster_code_definitions"], [{"pattern": "SB", "label": "Stand by", "sort_order": 1}])
-        self.assertEqual(status["excel_role"], "import_only")
-        self.assertEqual([sheet["sheet_key"] for sheet in status["sheets"]], ["roster", "overtime"])
-
 
 if __name__ == "__main__":
     unittest.main()

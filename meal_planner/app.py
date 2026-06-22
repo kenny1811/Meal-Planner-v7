@@ -15,7 +15,6 @@ import urllib.parse
 import urllib.request
 import re
 from datetime import date, datetime, timedelta
-from html import escape as html_escape
 from pathlib import Path
 from typing import Any
 import xml.etree.ElementTree as ET
@@ -36,9 +35,7 @@ from meal_planner.maintenance_db import (
     MaintenanceDatabaseError,
     bootstrap_roster_code_definitions,
     bootstrap_sheet_from_workbook,
-    import_runtime_inputs_from_workbook,
     list_maintenance_sheets,
-    list_runtime_input_status,
     load_roster_code_definitions,
     load_sheet_rows,
     save_roster_code_definitions,
@@ -93,7 +90,6 @@ from meal_planner.storage import (
     save_menu_order,
     save_menu_tree_open,
     save_memory_payload,
-    save_plan_versions,
     save_show_past,
     save_sidebar_width,
     save_target_editor_layout,
@@ -254,15 +250,6 @@ class RecalcDayRequest(BaseModel):
 
 class RecalcRequest(BaseModel):
     days: list[RecalcDayRequest] = Field(default_factory=list)
-
-
-class SavePlansRequest(BaseModel):
-    days: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class LoadPlansRequest(BaseModel):
-    dates: list[str] = Field(default_factory=list)
-    versions: dict[str, str] = Field(default_factory=dict)
 
 
 class UiStateRequest(BaseModel):
@@ -1202,95 +1189,6 @@ def _first_adb_device(adb: str) -> str:
     raise HTTPException(status_code=400, detail="No authorized USB debugging phone found.")
 
 
-def _adb_device_serials(adb: str) -> list[str]:
-    try:
-        proc = subprocess.run(
-            [adb, "devices", "-l"],
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=20,
-        )
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Cannot run adb: {e}") from e
-    if proc.returncode != 0:
-        raise HTTPException(status_code=500, detail=(proc.stderr or proc.stdout or "adb devices failed").strip())
-    serials: list[str] = []
-    for line in proc.stdout.splitlines()[1:]:
-        parts = line.split()
-        if len(parts) >= 2 and parts[1] == "device":
-            serials.append(parts[0])
-    if not serials:
-        raise HTTPException(status_code=400, detail="No authorized adb device found.")
-    return serials
-
-
-def _phone_shared_pref_string(root: ET.Element, key: str) -> str:
-    for child in root:
-        if child.tag == "string" and child.attrib.get("name") == key:
-            return child.text or ""
-    return ""
-
-
-def _clock_from_phone_alarm(alarm: dict[str, Any]) -> str:
-    trigger_at = str(alarm.get("trigger_at") or "").strip()
-    match = re.search(r"T(\d{2}:\d{2})", trigger_at)
-    if match:
-        return match.group(1)
-    try:
-        epoch_ms = int(alarm.get("trigger_at_epoch_ms") or 0)
-    except (TypeError, ValueError):
-        epoch_ms = 0
-    if epoch_ms > 0:
-        return datetime.fromtimestamp(epoch_ms / 1000, ZoneInfo("Asia/Hong_Kong")).strftime("%H:%M")
-    return ""
-
-
-def _build_schedule_grid_xml_from_phone_prefs(pref_xml: str) -> bytes:
-    try:
-        root = ET.fromstring(pref_xml)
-    except ET.ParseError as e:
-        raise HTTPException(status_code=400, detail=f"Phone alarm store XML is invalid: {e}") from e
-
-    plan_date = _normalize_schedule_grid_effective_date(_phone_shared_pref_string(root, "plan_date"))
-    roster_code = _phone_shared_pref_string(root, "roster_code").strip()
-    alarms_raw = _phone_shared_pref_string(root, "alarms_json").strip()
-    if not alarms_raw:
-        raise HTTPException(status_code=400, detail="Phone alarm store has no alarms_json.")
-    try:
-        alarms = json.loads(alarms_raw)
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Phone alarms_json is invalid: {e}") from e
-    if not isinstance(alarms, list):
-        raise HTTPException(status_code=400, detail="Phone alarms_json is not a list.")
-    if not plan_date:
-        plan_date = date.today().isoformat()
-
-    lines = [
-        "<?xml version='1.0' encoding='UTF-8' standalone='yes'?>",
-        f'<schedule_grid effective_date="{plan_date}" roster_code="{html_escape(roster_code)}">',
-    ]
-    header = f"{plan_date} {roster_code}".strip()
-    if header:
-        lines.append(f"  <section>{html_escape(header)}</section>")
-    for alarm in alarms:
-        if not isinstance(alarm, dict):
-            continue
-        clock = _clock_from_phone_alarm(alarm)
-        label = str(alarm.get("label") or "").strip()
-        if not clock or not label:
-            continue
-        lines.append("  <alarm>")
-        lines.append(f"    <time>{html_escape(clock)}</time>")
-        lines.append(f"    <content>{html_escape(label)}</content>")
-        lines.append("  </alarm>")
-    lines.append("</schedule_grid>")
-    lines.append("")
-    return "\n".join(lines).encode("utf-8")
-
-
 def _fetch_schedule_grid_xml_from_phone_ip() -> bytes:
     try:
         with urllib.request.urlopen(_PHONE_SCHEDULE_GRID_EXPORT_URL, timeout=12) as response:
@@ -1300,42 +1198,6 @@ def _fetch_schedule_grid_xml_from_phone_ip() -> bytes:
             status_code=502,
             detail=f"Cannot fetch phone schedule_grid from {_PHONE_SCHEDULE_GRID_EXPORT_URL}: {e}",
         ) from e
-
-
-def _read_schedule_grid_xml_from_adb_phone() -> tuple[str, bytes]:
-    adb = _adb_path()
-    last_error = ""
-    for serial in _adb_device_serials(adb):
-        proc = subprocess.run(
-            [
-                adb,
-                "-s",
-                serial,
-                "shell",
-                "run-as",
-                "com.example.oneshotalarm",
-                "cat",
-                "shared_prefs/alarm_store.xml",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=30,
-        )
-        raw = (proc.stdout or "").strip()
-        if proc.returncode != 0:
-            last_error = (proc.stderr or proc.stdout or f"adb run-as failed on {serial}").strip()
-            continue
-        if "alarms_json" not in raw:
-            last_error = f"Device {serial} has no phone alarm_store alarms_json."
-            continue
-        return serial, _build_schedule_grid_xml_from_phone_prefs(raw)
-    detail = "Cannot read phone alarm_store.xml by adb."
-    if last_error:
-        detail += f" Last error: {last_error}"
-    raise HTTPException(status_code=400, detail=detail)
 
 
 @app.post("/api/alarm-plan/send-usb")
@@ -1733,22 +1595,6 @@ def api_recalc(body: RecalcRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Recalculation failed: {e}") from e
 
 
-@app.post("/api/save-plans")
-def api_save_plans(body: SavePlansRequest) -> dict[str, Any]:
-    try:
-        return save_plan_versions(body.days)
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Save failed: {e}") from e
-
-
-@app.post("/api/load-plans")
-def api_load_plans(body: LoadPlansRequest) -> dict[str, Any]:
-    try:
-        return load_latest_versions(body.dates, body.versions)
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Load failed: {e}") from e
-
-
 @app.get("/api/memory-list")
 def api_memory_list_get() -> dict[str, Any]:
     try:
@@ -1851,36 +1697,6 @@ def api_maint_sheets() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e)) from e
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Load maintenance sheets failed: {e}") from e
-
-
-@app.get("/api/runtime-inputs")
-def api_runtime_inputs() -> dict[str, Any]:
-    try:
-        return list_runtime_input_status(get_settings())
-    except WorkbookValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except MaintenanceDatabaseError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Load runtime inputs failed: {e}") from e
-
-
-@app.post("/api/runtime-inputs/import")
-def api_import_runtime_inputs() -> dict[str, Any]:
-    try:
-        settings = get_settings()
-        wb = load_workbook_data(settings.workbook_path, validate=False)
-        try:
-            payload = import_runtime_inputs_from_workbook(settings, wb, replace_existing=True)
-        finally:
-            wb.close()
-        return {"ok": True, **payload}
-    except WorkbookValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except MaintenanceDatabaseError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Import runtime inputs failed: {e}") from e
 
 
 @app.get("/api/maint/sheets/{sheet_key}")
@@ -2107,16 +1923,6 @@ def _fill_missing_schedule_grid_version(
     return rows, {normalized}
 
 
-async def _import_schedule_grid_from_phone_payload(file: UploadFile) -> dict[str, Any]:
-    try:
-        data = await file.read()
-    finally:
-        await file.close()
-    if not data:
-        raise HTTPException(status_code=400, detail="No XML content uploaded.")
-    return _import_schedule_grid_from_phone_bytes(data)
-
-
 def _import_schedule_grid_from_phone_bytes(data: bytes) -> dict[str, Any]:
     if not data:
         raise HTTPException(status_code=400, detail="No XML content uploaded.")
@@ -2158,21 +1964,6 @@ def _import_schedule_grid_from_phone_bytes(data: bytes) -> dict[str, Any]:
     }
 
 
-@app.post("/api/maint/sheets/schedule_grid/import-xml-from-phone")
-async def api_import_schedule_grid_from_phone(file: UploadFile = File(...)) -> dict[str, Any]:
-    return await _import_schedule_grid_from_phone_payload(file)
-
-
-@app.post("/api/maint/sheets/schedule_grid/import-from-phone")
-async def api_import_schedule_grid_from_phone_compat(file: UploadFile = File(...)) -> dict[str, Any]:
-    return await _import_schedule_grid_from_phone_payload(file)
-
-
-@app.post("/api/maint/sheets/schedule_grid/import-phone")
-async def api_import_schedule_grid_from_phone_compat_v2(file: UploadFile = File(...)) -> dict[str, Any]:
-    return await _import_schedule_grid_from_phone_payload(file)
-
-
 @app.post("/api/maint/sheets/schedule_grid/import-phone-push")
 async def api_import_schedule_grid_from_phone_push(request: Request) -> dict[str, Any]:
     data = await request.body()
@@ -2181,18 +1972,6 @@ async def api_import_schedule_grid_from_phone_push(request: Request) -> dict[str
         **result,
         "ok": True,
         "source": "phone_push",
-    }
-
-
-@app.post("/api/maint/sheets/schedule_grid/import-from-adb-phone")
-def api_import_schedule_grid_from_adb_phone() -> dict[str, Any]:
-    serial, xml_data = _read_schedule_grid_xml_from_adb_phone()
-    result = _import_schedule_grid_from_xml_bytes(xml_data)
-    return {
-        **result,
-        "ok": True,
-        "adb_serial": serial,
-        "source": "adb_phone",
     }
 
 
@@ -2244,18 +2023,6 @@ def api_confirm_schedule_grid_from_phone_ip() -> dict[str, Any]:
         _PHONE_SCHEDULE_GRID_PENDING_XML = None
     if not xml_data:
         raise HTTPException(status_code=400, detail="No pending phone schedule_grid import. Press import first.")
-    result = _import_schedule_grid_from_xml_bytes(xml_data)
-    return {
-        **result,
-        "ok": True,
-        "phone_url": _PHONE_SCHEDULE_GRID_EXPORT_URL,
-        "source": "phone_ip",
-    }
-
-
-@app.post("/api/maint/sheets/schedule_grid/import-from-phone-ip")
-def api_import_schedule_grid_from_phone_ip() -> dict[str, Any]:
-    xml_data = _fetch_schedule_grid_xml_from_phone_ip()
     result = _import_schedule_grid_from_xml_bytes(xml_data)
     return {
         **result,

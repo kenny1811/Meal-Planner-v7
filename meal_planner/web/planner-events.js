@@ -399,6 +399,16 @@
       return DESKTOP_LAN_SERVER;
     }
 
+    function alarmSyncTargetDate() {
+      if (typeof currentDateFromFocusOrViewport === "function") {
+        const focused = currentDateFromFocusOrViewport();
+        if (focused) return focused;
+      }
+      const firstDay = (memoryPayload && Array.isArray(memoryPayload.days) && memoryPayload.days[0]) || null;
+      if (firstDay && firstDay.date) return firstDay.date;
+      return isoFromYmd(ymdNow());
+    }
+
     async function syncAutoServerSuggestionFromBackend() {
       const input = document.getElementById("auto-sync-server");
       if (!input) return;
@@ -441,6 +451,93 @@
       } catch (_) {
         display.textContent = "無法取得";
       }
+    }
+
+    const previewPlanBtn = document.getElementById("alarm-sync-preview-plan");
+    if (previewPlanBtn) {
+      previewPlanBtn.addEventListener("click", async () => {
+        const status = document.getElementById("alarm-sync-status");
+        const err = document.getElementById("alarm-sync-err");
+        const dateIso = alarmSyncTargetDate();
+        if (status) status.textContent = "載入鬧鐘預覽中...";
+        if (err) {
+          err.style.display = "none";
+          err.textContent = "";
+        }
+        previewPlanBtn.disabled = true;
+        try {
+          const data = await loadAlarmPlan(dateIso);
+          renderAlarmPreview(data);
+          renderAlarmMealPlanTextPreview(data);
+          if (status) status.textContent = `已載入 ${alarmSyncDateLabel(data.date || dateIso)} 鬧鐘預覽`;
+        } catch (x) {
+          if (err) {
+            err.textContent = String(x && x.message ? x.message : x);
+            err.style.display = "block";
+          }
+          if (status) status.textContent = "";
+        } finally {
+          previewPlanBtn.disabled = false;
+        }
+      });
+    }
+
+    const publishPlanBtn = document.getElementById("alarm-sync-publish");
+    if (publishPlanBtn) {
+      publishPlanBtn.addEventListener("click", async () => {
+        const status = document.getElementById("alarm-sync-status");
+        const err = document.getElementById("alarm-sync-err");
+        const dateIso = alarmSyncTargetDate();
+        if (status) status.textContent = "發布同步資料中...";
+        if (err) {
+          err.style.display = "none";
+          err.textContent = "";
+        }
+        publishPlanBtn.disabled = true;
+        try {
+          const data = await publishAlarmPlan(dateIso, autoSyncDeviceId(), autoSyncServerUrl());
+          renderAlarmPreview(data);
+          renderAlarmMealPlanTextPreview(data);
+          if (status) status.textContent = `已發布：${data.sync_pull_hint || data.auto_device || "default"}`;
+        } catch (x) {
+          if (err) {
+            err.textContent = String(x && x.message ? x.message : x);
+            err.style.display = "block";
+          }
+          if (status) status.textContent = "";
+        } finally {
+          publishPlanBtn.disabled = false;
+        }
+      });
+    }
+
+    const usbSendBtn = document.getElementById("alarm-sync-send-usb");
+    if (usbSendBtn) {
+      usbSendBtn.addEventListener("click", async () => {
+        const status = document.getElementById("alarm-sync-status");
+        const err = document.getElementById("alarm-sync-err");
+        const dateIso = alarmSyncTargetDate();
+        if (status) status.textContent = "USB 發送中...";
+        if (err) {
+          err.style.display = "none";
+          err.textContent = "";
+        }
+        usbSendBtn.disabled = true;
+        try {
+          const data = await sendAlarmPlanUsb(dateIso);
+          renderAlarmPreview(data);
+          renderAlarmMealPlanTextPreview(data);
+          if (status) status.textContent = `已發送到 USB 裝置 ${data.adb_serial || ""}`.trim();
+        } catch (x) {
+          if (err) {
+            err.textContent = String(x && x.message ? x.message : x);
+            err.style.display = "block";
+          }
+          if (status) status.textContent = "";
+        } finally {
+          usbSendBtn.disabled = false;
+        }
+      });
     }
 
     const xmlImportBtn = document.getElementById("alarm-sync-import-xml");

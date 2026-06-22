@@ -367,7 +367,46 @@
       return data || {};
     }
 
-async function exportScheduleGridXml() {
+    async function loadAlarmPlan(dateIso) {
+      const params = new URLSearchParams();
+      if (dateIso) params.set("date_iso", dateIso);
+      const r = await fetch(`/api/alarm-plan${params.toString() ? `?${params}` : ""}`);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Load alarm plan failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function publishAlarmPlan(dateIso, device, autoServer) {
+      const params = new URLSearchParams();
+      if (dateIso) params.set("date_iso", dateIso);
+      if (device) params.set("device", device);
+      if (autoServer) params.set("auto_server", autoServer);
+      const r = await fetch(`/api/alarm-plan/publish${params.toString() ? `?${params}` : ""}`, {
+        method: "POST",
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Publish alarm plan failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function sendAlarmPlanUsb(dateIso) {
+      const params = new URLSearchParams();
+      if (dateIso) params.set("date_iso", dateIso);
+      const r = await fetch(`/api/alarm-plan/send-usb${params.toString() ? `?${params}` : ""}`, {
+        method: "POST",
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Send alarm plan by USB failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function exportScheduleGridXml() {
       const r = await fetch("/api/maint/sheets/schedule_grid/export-xml");
       if (!r.ok) {
         const data = await r.json().catch(() => ({}));

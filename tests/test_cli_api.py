@@ -249,35 +249,6 @@ class CliApiTests(unittest.TestCase):
             os.environ["MENU_PROJECT_ROOT"] = old_root
         clear_settings_cache()
 
-    def test_api_runtime_inputs_import_does_not_require_full_workbook_structure(self):
-        old_root = os.environ.get("MENU_PROJECT_ROOT")
-        with tempfile.TemporaryDirectory() as tmp:
-            os.environ["MENU_PROJECT_ROOT"] = tmp
-            clear_settings_cache()
-            settings = get_settings()
-            wb = Workbook()
-            wb.active.title = settings.sheets.roster
-            wb[settings.sheets.roster].cell(1, 1).value = "2026年5月 1 SB"
-            ot = wb.create_sheet(settings.sheets.overtime)
-            ot.append(["日期", "開工", "收工"])
-            ot.append(["2026-05-23", "09:00", "18:00"])
-            wb.save(settings.workbook_path)
-
-            client = TestClient(app)
-            response = client.post("/api/runtime-inputs/import")
-            payload = response.json()
-
-            self.assertEqual(response.status_code, 200)
-            self.assertTrue(payload["ok"])
-            self.assertEqual(payload["runtime_input_keys"], ["roster", "overtime"])
-            self.assertEqual([sheet["row_count"] for sheet in payload["sheets"]], [1, 2])
-
-        if old_root is None:
-            os.environ.pop("MENU_PROJECT_ROOT", None)
-        else:
-            os.environ["MENU_PROJECT_ROOT"] = old_root
-        clear_settings_cache()
-
     def test_api_single_maintenance_import_only_requires_target_sheet(self):
         old_root = os.environ.get("MENU_PROJECT_ROOT")
         with tempfile.TemporaryDirectory() as tmp:

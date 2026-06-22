@@ -12,7 +12,7 @@
 | `行位表` | Schedule events used to resolve meal clock times | SQLite `reference_schedule_rows` |
 | `更表` | Monthly day-to-roster-code input | Workbook runtime input |
 | `加班表` | Date-specific start/end override input | Workbook runtime input |
-| `更時表` | SQLite maintenance/reporting input for diagnostics and roster report views | SQLite `maintenance_sheet_rows` (`payroll_times`) |
+| `更時表` | SQLite maintenance/reporting input for roster report views | SQLite `maintenance_sheet_rows` (`payroll_times`) |
 | `公眾假期` | SQLite maintenance/reporting input for roster report context | SQLite `maintenance_sheet_rows` (`public_holidays`) |
 
 ## First slice
@@ -21,13 +21,7 @@ The first slice treats `飯時`, `餐廳選擇`, and `行位表` as planning ref
 
 This does not remove the workbook from preview generation yet. The preview still opens and validates the workbook because `更表` and `加班表` remain live operational inputs and the legacy workbook structure check still covers all configured sheets.
 
-## Runtime input import
-
-`更表` and `加班表` are now treated as live operational inputs backed by SQLite:
-
-- `GET /api/runtime-inputs` reports their SQLite import status.
-- `POST /api/runtime-inputs/import` imports only `更表` and `加班表` from the workbook, without requiring the full workbook structure used by legacy/bootstrap paths.
-- Preview reads the SQLite copies through `load_roster_map()` and `build_meal_planning_cache()` rather than opening the workbook per request.
+## Maintenance input import
 
 The generic maintenance editor endpoints remain available for manual updates:
 
@@ -35,7 +29,7 @@ The generic maintenance editor endpoints remain available for manual updates:
 - `POST /api/maint/sheets/{sheet_key}`
 - `POST /api/maint/sheets/{sheet_key}/import`
 
-For runtime inputs, use `sheet_key` values `roster` and `overtime`.
+For roster and overtime inputs, use `sheet_key` values `roster` and `overtime`.
 
 ## Workbook validation scope
 
@@ -51,5 +45,4 @@ Full workbook validation now covers the core planning/import sheets only:
 
 ## Next extraction points
 
-1. Add a UI shortcut for `POST /api/runtime-inputs/import` if the maintenance page should expose a one-click "refresh live inputs" action.
-2. Decide whether `醫療行程` should remain reporting-only or feed meal-time visibility in a future rule.
+1. Decide whether `醫療行程` should remain reporting-only or feed meal-time visibility in a future rule.

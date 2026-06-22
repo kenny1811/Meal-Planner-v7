@@ -101,8 +101,6 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
                         group = candidate
                         break
             ui["active_menu_path"] = [group, leaf]
-        if ui["active_menu_path"] and ui["active_menu_path"][-1] in {"diagnostics", "runtime_import"}:
-            ui["active_menu_path"] = ["top", "planner"]
         try:
             target_width = raw.get("target_editor_width")
             ui["target_editor_width"] = float(target_width) if target_width is not None else None

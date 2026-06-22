@@ -26,9 +26,6 @@ MAINTENANCE_SHEETS: tuple[tuple[str, str], ...] = (
     ("schedule_grid", "行位表"),
 )
 
-RUNTIME_INPUT_SHEET_KEYS: tuple[str, ...] = ("roster", "overtime")
-
-
 class MaintenanceDatabaseError(RuntimeError):
     """Maintenance data is unavailable and cannot be bootstrapped."""
 
@@ -203,48 +200,6 @@ def bootstrap_all_from_workbook(
     for sheet_key, _ in MAINTENANCE_SHEETS:
         bootstrap_sheet_from_workbook(settings, wb, sheet_key, replace_existing=replace_existing)
     bootstrap_roster_code_definitions(settings, wb)
-
-
-def import_runtime_inputs_from_workbook(
-    settings: AppSettings,
-    wb: Workbook,
-    *,
-    replace_existing: bool = True,
-) -> dict[str, Any]:
-    """Import live operational inputs used by preview generation."""
-    imported: list[dict[str, Any]] = []
-    for sheet_key in RUNTIME_INPUT_SHEET_KEYS:
-        bootstrap_sheet_from_workbook(settings, wb, sheet_key, replace_existing=replace_existing)
-        imported.append(load_sheet_rows(sheet_key, settings))
-    bootstrap_roster_code_definitions(settings, wb, replace_existing=replace_existing)
-    return {
-        "runtime_input_keys": list(RUNTIME_INPUT_SHEET_KEYS),
-        "sheets": [
-            {
-                "sheet_key": item["sheet_key"],
-                "display_name": item["display_name"],
-                "source_sheet": item["source_sheet"],
-                "updated_at": item["updated_at"],
-                "row_count": len(item.get("rows", [])),
-            }
-            for item in imported
-        ],
-        "roster_code_definitions": load_roster_code_definitions(settings),
-    }
-
-
-def list_runtime_input_status(settings: AppSettings | None = None) -> dict[str, Any]:
-    """Return import status for the SQLite-backed live input sheets."""
-    settings = settings or get_settings()
-    all_sheets = {
-        str(sheet["sheet_key"]): sheet
-        for sheet in list_maintenance_sheets(settings)
-    }
-    return {
-        "excel_role": "import_only",
-        "runtime_input_keys": list(RUNTIME_INPUT_SHEET_KEYS),
-        "sheets": [all_sheets[key] for key in RUNTIME_INPUT_SHEET_KEYS],
-    }
 
 
 def _read_roster_code_definitions_from_workbook(settings: AppSettings, wb: Workbook) -> list[dict[str, Any]]:
