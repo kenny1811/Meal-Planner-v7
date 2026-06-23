@@ -155,9 +155,19 @@ public class ScheduleGridTileActivity extends Activity {
             paint.setTypeface(Typeface.DEFAULT);
             paint.setTextSize(sp(10));
             paint.setColor(Color.rgb(203, 213, 225));
-            String line = subtitle.isEmpty() ? clock : subtitle + "  " + clock;
-            canvas.drawText(line, width / 2f, dp(38), paint);
             paint.setTextAlign(Paint.Align.LEFT);
+            float baseline = dp(38);
+            if (subtitle.isEmpty()) {
+                float clockWidth = paint.measureText(clock);
+                canvas.drawText(clock, (width - clockWidth) / 2f, baseline, paint);
+            } else {
+                float gap = dp(6);
+                float subtitleWidth = paint.measureText(subtitle);
+                float clockWidth = paint.measureText(clock);
+                float start = (width - subtitleWidth - gap - clockWidth) / 2f;
+                canvas.drawText(subtitle, start, baseline, paint);
+                canvas.drawText(clock, start + subtitleWidth + gap, baseline, paint);
+            }
         }
     }
 
@@ -177,7 +187,7 @@ public class ScheduleGridTileActivity extends Activity {
         row.setEllipsize(TextUtils.TruncateAt.END);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setLineSpacing(0f, 1f);
-        row.setPadding(dp(48), 0, 0, 0);
+        row.setPadding(dp(40), 0, 0, 0);
         root.addView(row, fixedRowParams());
     }
 
