@@ -23,6 +23,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ScheduleGridTileActivity"
+            android:exported="true"
+            android:label="今日行位" />
+
         <service
             android:name=".WearAlarmListenerService"
             android:exported="true">
@@ -59,16 +64,6 @@
                 <action android:name="com.example.oneshotalarm.watch.DEBUG_REFRESH_COMPLICATIONS" />
             </intent-filter>
         </receiver>
-
-        <service
-            android:name=".PrevNextAlarmTileService"
-            android:exported="true"
-            android:label="門前直樹"
-            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
-            <intent-filter>
-                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
-            </intent-filter>
-        </service>
 
         <service
             android:name=".PrevAlarmComplicationDataSourceService"

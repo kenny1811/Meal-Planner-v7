@@ -6,7 +6,6 @@ import android.content.SharedPreferences;
 import android.content.ComponentName;
 import android.util.Log;
 
-import androidx.wear.tiles.TileService;
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester;
 
 import com.google.android.gms.wearable.DataMap;
@@ -17,6 +16,7 @@ import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.WearableListenerService;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.nio.charset.StandardCharsets;
 
@@ -125,19 +125,22 @@ public class WearAlarmListenerService extends WearableListenerService {
         if (map == null) {
             return;
         }
-        getSharedPreferences(PrevNextAlarmTileService.PREFS, Context.MODE_PRIVATE).edit()
-                .putString(PrevNextAlarmTileService.KEY_PREV_TIME, map.getString("prev_time", "--:--"))
-                .putString(PrevNextAlarmTileService.KEY_PREV_DATE, map.getString("prev_date", ""))
-                .putString(PrevNextAlarmTileService.KEY_PREV_LABEL, map.getString("prev_label", "沒有資料"))
-                .putLong(PrevNextAlarmTileService.KEY_PREV_AT, map.getLong("prev_at", 0L))
-                .putString(PrevNextAlarmTileService.KEY_NEXT_TIME, map.getString("next_time", "--:--"))
-                .putString(PrevNextAlarmTileService.KEY_NEXT_DATE, map.getString("next_date", ""))
-                .putString(PrevNextAlarmTileService.KEY_NEXT_LABEL, map.getString("next_label", "沒有資料"))
-                .putLong(PrevNextAlarmTileService.KEY_NEXT_AT, map.getLong("next_at", 0L))
-                .putLong(PrevNextAlarmTileService.KEY_UPDATED_AT, map.getLong("updated_at", System.currentTimeMillis()))
+        getSharedPreferences(AlarmScheduleState.PREFS, Context.MODE_PRIVATE).edit()
+                .putString(AlarmScheduleState.KEY_PLAN_DATE, map.getString("plan_date", ""))
+                .putString(AlarmScheduleState.KEY_ROSTER_CODE, map.getString("roster_code", ""))
+                .putString(AlarmScheduleState.KEY_SCHEDULE_ITEMS_JSON, map.getString("schedule_items_json", "[]"))
+                .remove("schedule_count")
+                .putString(AlarmScheduleState.KEY_PREV_TIME, map.getString("prev_time", "--:--"))
+                .putString(AlarmScheduleState.KEY_PREV_DATE, map.getString("prev_date", ""))
+                .putString(AlarmScheduleState.KEY_PREV_LABEL, map.getString("prev_label", "沒有資料"))
+                .putLong(AlarmScheduleState.KEY_PREV_AT, map.getLong("prev_at", 0L))
+                .putString(AlarmScheduleState.KEY_NEXT_TIME, map.getString("next_time", "--:--"))
+                .putString(AlarmScheduleState.KEY_NEXT_DATE, map.getString("next_date", ""))
+                .putString(AlarmScheduleState.KEY_NEXT_LABEL, map.getString("next_label", "沒有資料"))
+                .putLong(AlarmScheduleState.KEY_NEXT_AT, map.getLong("next_at", 0L))
+                .putLong(AlarmScheduleState.KEY_UPDATED_AT, map.getLong("updated_at", System.currentTimeMillis()))
                 .apply();
         try {
-            TileService.getUpdater(this).requestUpdate(PrevNextAlarmTileService.class);
             requestAlarmComplicationUpdates();
         } catch (Exception e) {
             Log.e(TAG, "Request tile update failed", e);
@@ -147,18 +150,22 @@ public class WearAlarmListenerService extends WearableListenerService {
     private void saveTileState(String rawJson) {
         try {
             JSONObject json = new JSONObject(rawJson == null ? "{}" : rawJson);
-            getSharedPreferences(PrevNextAlarmTileService.PREFS, Context.MODE_PRIVATE).edit()
-                    .putString(PrevNextAlarmTileService.KEY_PREV_TIME, json.optString("prev_time", "--:--"))
-                    .putString(PrevNextAlarmTileService.KEY_PREV_DATE, json.optString("prev_date", ""))
-                    .putString(PrevNextAlarmTileService.KEY_PREV_LABEL, json.optString("prev_label", "沒有資料"))
-                    .putLong(PrevNextAlarmTileService.KEY_PREV_AT, json.optLong("prev_at", 0L))
-                    .putString(PrevNextAlarmTileService.KEY_NEXT_TIME, json.optString("next_time", "--:--"))
-                    .putString(PrevNextAlarmTileService.KEY_NEXT_DATE, json.optString("next_date", ""))
-                    .putString(PrevNextAlarmTileService.KEY_NEXT_LABEL, json.optString("next_label", "沒有資料"))
-                    .putLong(PrevNextAlarmTileService.KEY_NEXT_AT, json.optLong("next_at", 0L))
-                    .putLong(PrevNextAlarmTileService.KEY_UPDATED_AT, json.optLong("updated_at", System.currentTimeMillis()))
+            JSONArray items = json.optJSONArray("schedule_items");
+            getSharedPreferences(AlarmScheduleState.PREFS, Context.MODE_PRIVATE).edit()
+                    .putString(AlarmScheduleState.KEY_PLAN_DATE, json.optString("plan_date", ""))
+                    .putString(AlarmScheduleState.KEY_ROSTER_CODE, json.optString("roster_code", ""))
+                    .putString(AlarmScheduleState.KEY_SCHEDULE_ITEMS_JSON, items == null ? "[]" : items.toString())
+                    .remove("schedule_count")
+                    .putString(AlarmScheduleState.KEY_PREV_TIME, json.optString("prev_time", "--:--"))
+                    .putString(AlarmScheduleState.KEY_PREV_DATE, json.optString("prev_date", ""))
+                    .putString(AlarmScheduleState.KEY_PREV_LABEL, json.optString("prev_label", "沒有資料"))
+                    .putLong(AlarmScheduleState.KEY_PREV_AT, json.optLong("prev_at", 0L))
+                    .putString(AlarmScheduleState.KEY_NEXT_TIME, json.optString("next_time", "--:--"))
+                    .putString(AlarmScheduleState.KEY_NEXT_DATE, json.optString("next_date", ""))
+                    .putString(AlarmScheduleState.KEY_NEXT_LABEL, json.optString("next_label", "沒有資料"))
+                    .putLong(AlarmScheduleState.KEY_NEXT_AT, json.optLong("next_at", 0L))
+                    .putLong(AlarmScheduleState.KEY_UPDATED_AT, json.optLong("updated_at", System.currentTimeMillis()))
                     .apply();
-            TileService.getUpdater(this).requestUpdate(PrevNextAlarmTileService.class);
             requestAlarmComplicationUpdates();
         } catch (Exception e) {
             Log.e(TAG, "Save tile state message failed", e);

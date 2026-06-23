@@ -1,7 +1,10 @@
 package com.example.oneshotalarm.watch;
 
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 
 import androidx.wear.watchface.complications.data.ComplicationData;
 import androidx.wear.watchface.complications.data.ComplicationText;
@@ -13,21 +16,23 @@ final class AlarmComplicationData {
     }
 
     static ComplicationData build(Context context, boolean next) {
-        SharedPreferences prefs = context.getSharedPreferences(PrevNextAlarmTileService.PREFS, Context.MODE_PRIVATE);
-        String time = prefs.getString(next ? PrevNextAlarmTileService.KEY_NEXT_TIME : PrevNextAlarmTileService.KEY_PREV_TIME, "--:--");
-        String label = prefs.getString(next ? PrevNextAlarmTileService.KEY_NEXT_LABEL : PrevNextAlarmTileService.KEY_PREV_LABEL, "等待電話資料");
+        SharedPreferences prefs = context.getSharedPreferences(AlarmScheduleState.PREFS, Context.MODE_PRIVATE);
+        String time = prefs.getString(next ? AlarmScheduleState.KEY_NEXT_TIME : AlarmScheduleState.KEY_PREV_TIME, "--:--");
+        String label = prefs.getString(next ? AlarmScheduleState.KEY_NEXT_LABEL : AlarmScheduleState.KEY_PREV_LABEL, "等待電話資料");
         String title = safe(time, "--:--");
         String text = labelLine(safe(label, "沒有資料"), 0);
         return new ShortTextComplicationData.Builder(text(text), text(title))
                 .setTitle(text(title))
+                .setTapAction(openScheduleIntent(context, next ? 10 : 20))
                 .build();
     }
 
     static ComplicationData buildLabelLine(Context context, boolean next, int lineIndex) {
-        SharedPreferences prefs = context.getSharedPreferences(PrevNextAlarmTileService.PREFS, Context.MODE_PRIVATE);
-        String label = prefs.getString(next ? PrevNextAlarmTileService.KEY_NEXT_LABEL : PrevNextAlarmTileService.KEY_PREV_LABEL, "等待電話資料");
+        SharedPreferences prefs = context.getSharedPreferences(AlarmScheduleState.PREFS, Context.MODE_PRIVATE);
+        String label = prefs.getString(next ? AlarmScheduleState.KEY_NEXT_LABEL : AlarmScheduleState.KEY_PREV_LABEL, "等待電話資料");
         String text = labelLine(safe(label, "沒有資料"), lineIndex);
         return new ShortTextComplicationData.Builder(text(text), text(text))
+                .setTapAction(openScheduleIntent(context, (next ? 100 : 200) + lineIndex))
                 .build();
     }
 
@@ -49,6 +54,16 @@ final class AlarmComplicationData {
 
     private static ComplicationText text(String value) {
         return new PlainComplicationText.Builder(value).build();
+    }
+
+    private static PendingIntent openScheduleIntent(Context context, int requestCode) {
+        Intent intent = new Intent(context, ScheduleGridTileActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        return PendingIntent.getActivity(context, requestCode, intent, flags);
     }
 
     private static String safe(String value, String fallback) {
@@ -94,25 +109,5 @@ final class AlarmComplicationData {
             offset += Character.charCount(codePoint);
         }
         return out.toString();
-    }
-
-    private static String firstCodePoints(String value, int limit) {
-        return codePointSlice(value, 0, Math.min(value.codePointCount(0, value.length()), limit));
-    }
-
-    private static String codePointSlice(String value, int startCodePoint, int endCodePoint) {
-        if (startCodePoint >= endCodePoint) {
-            return "";
-        }
-        int start = value.offsetByCodePoints(0, startCodePoint);
-        int end = value.offsetByCodePoints(0, endCodePoint);
-        return value.substring(start, end);
-    }
-
-    private static String shorten(String value, int limit) {
-        if (value.length() <= limit) {
-            return value;
-        }
-        return value.substring(0, Math.max(0, limit - 1)) + "...";
     }
 }

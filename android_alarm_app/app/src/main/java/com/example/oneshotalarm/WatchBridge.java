@@ -12,6 +12,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -69,8 +71,12 @@ final class WatchBridge {
         PutDataMapRequest request = PutDataMapRequest.create(TILE_STATE_PATH);
         DataMap map = request.getDataMap();
         map.putLong("updated_at", now);
+        map.putString("plan_date", AlarmStore.getPlanDate(context));
+        map.putString("roster_code", AlarmStore.getRosterCode(context));
         putAlarm(map, "prev", pair.prev, pair.prevAt);
         putAlarm(map, "next", pair.next, pair.nextAt);
+        JSONArray scheduleItems = buildScheduleItems(context);
+        map.putString("schedule_items_json", scheduleItems.toString());
         Wearable.getDataClient(context)
                 .putDataItem(request.asPutDataRequest().setUrgent())
                 .addOnSuccessListener(item -> Log.d(TAG, "Sent tile state to watch"))
@@ -78,8 +84,11 @@ final class WatchBridge {
         JSONObject payload = new JSONObject();
         try {
             payload.put("updated_at", now);
+            payload.put("plan_date", AlarmStore.getPlanDate(context));
+            payload.put("roster_code", AlarmStore.getRosterCode(context));
             putAlarm(payload, "prev", pair.prev, pair.prevAt);
             putAlarm(payload, "next", pair.next, pair.nextAt);
+            payload.put("schedule_items", scheduleItems);
         } catch (Exception e) {
             Log.e(TAG, "Build tile state message failed", e);
             return;
@@ -115,6 +124,43 @@ final class WatchBridge {
             }
         }
         return new AlarmPair(prev, prevAt, next, nextAt == Long.MAX_VALUE ? 0L : nextAt);
+    }
+
+    private static JSONArray buildScheduleItems(Context context) {
+        JSONArray alarms = AlarmStore.getAlarms(context);
+        ArrayList<JSONObject> ordered = new ArrayList<>();
+        for (int i = 0; i < alarms.length(); i++) {
+            JSONObject alarm = alarms.optJSONObject(i);
+            if (alarm == null || alarm.optLong("trigger_at_epoch_ms", 0L) <= 0L) {
+                continue;
+            }
+            ordered.add(alarm);
+        }
+        Collections.sort(ordered, (left, right) -> Long.compare(
+                left.optLong("trigger_at_epoch_ms", 0L),
+                right.optLong("trigger_at_epoch_ms", 0L)
+        ));
+
+        JSONArray rows = new JSONArray();
+        SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        for (int i = 0; i < ordered.size(); i++) {
+            JSONObject alarm = ordered.get(i);
+            long triggerAt = alarm.optLong("trigger_at_epoch_ms", 0L);
+            String label = alarm.optString("label", "").trim();
+            if (label.isEmpty()) {
+                label = "鬧鐘";
+            }
+            JSONObject row = new JSONObject();
+            try {
+                row.put("time", timeFormat.format(triggerAt));
+                row.put("content", label);
+                row.put("at", triggerAt);
+                rows.put(row);
+            } catch (Exception e) {
+                Log.e(TAG, "Build schedule tile row failed", e);
+            }
+        }
+        return rows;
     }
 
     private static void putAlarm(DataMap map, String prefix, JSONObject alarm, long triggerAt) {
