@@ -6,3 +6,6 @@ local.properties
 
 *.iml
 .idea/
+
+# Auto-build watcher trigger (local, changes often)
+.autobuild_trigger
