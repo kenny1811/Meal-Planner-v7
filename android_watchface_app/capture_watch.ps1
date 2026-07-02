@@ -19,6 +19,9 @@ if ($ready.Count -eq 0) { Write-Host "No adb devices."; exit 1 }
 $watch = $null
 foreach ($s in $ready) { $ch=(& $adb -s $s shell getprop ro.build.characteristics) 2>$null; if ("$ch" -match 'watch'){ $watch=$s; break } }
 if (-not $watch) { if ($ready.Count -eq 1){ $watch=$ready[0] } else { Write-Host "Cannot pick watch among: $($ready -join ', ')"; exit 1 } }
+Write-Host "Waking watch: $watch"
+& $adb -s $watch shell input keyevent KEYCODE_WAKEUP 2>$null | Out-Null
+Start-Sleep -Milliseconds 900
 Write-Host "Capturing from watch: $watch"
 $devPath = "/sdcard/watchface_capture.png"
 # screencap to a file ON the device, then pull it (pull writes binary correctly; avoids PS '>' corruption)
