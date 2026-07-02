@@ -46,7 +46,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        const data = await r.json().catch(() => ({}));
+        const data = await parseJsonSafe(r);
         if (!r.ok) {
           err.textContent = apiErrorMessage(data, "Generate failed.", r.status);
           err.style.display = "block";
@@ -154,7 +154,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ days: payloadDays }),
         });
-        const data = await r.json().catch(() => ({}));
+        const data = await parseJsonSafe(r);
         if (!r.ok) {
           err.textContent = apiErrorMessage(data, "Recalculation failed.", r.status);
           err.style.display = "block";
@@ -440,7 +440,7 @@
       if (current === DESKTOP_LAN_SERVER) return;
       try {
         const r = await fetch("/api/network-info");
-        const data = await r.json().catch(() => ({}));
+        const data = await parseJsonSafe(r);
         const suggested = String(data.suggested_auto_server || "").trim();
         if (!r.ok || !suggested) return;
         input.value = suggested;
@@ -456,7 +456,7 @@
       display.textContent = "偵測中...";
       try {
         const r = await fetch("/api/network-info");
-        const data = await r.json().catch(() => ({}));
+        const data = await parseJsonSafe(r);
         if (!r.ok) {
           const msg = String(data.detail || data.message || "").trim();
           display.textContent = msg ? `無法取得 (${msg})` : "無法取得";

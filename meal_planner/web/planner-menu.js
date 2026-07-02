@@ -742,7 +742,7 @@
           display.textContent = "偵測中...";
           try {
             const r = await fetch("/api/network-info");
-            const data = await r.json().catch(() => ({}));
+            const data = await parseJsonSafe(r);
             if (!r.ok) {
               const msg = String(data.detail || data.message || "").trim();
               display.textContent = msg ? `無法取得 (${msg})` : "無法取得";

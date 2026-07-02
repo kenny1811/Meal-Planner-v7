@@ -1,4 +1,13 @@
 /* API and persistence helpers for the meal planner UI. */
+    // 共用：安全解析 JSON response（失敗回退空物件），取代重覆嘅 r.json().catch(() => ({}))。
+    async function parseJsonSafe(r) {
+      try {
+        return await r.json();
+      } catch (_) {
+        return {};
+      }
+    }
+
     function apiErrorMessage(data, fallback, status = null) {
       const envelopeMessage = data && data.error && data.error.message;
       if (envelopeMessage) return String(envelopeMessage);
@@ -12,7 +21,7 @@
     async function loadUiState() {
       try {
         const r = await fetch("/api/ui-state");
-        const data = await r.json().catch(() => ({}));
+        const data = await parseJsonSafe(r);
         if (data && typeof data.column_widths === "object" && data.column_widths) {
           columnWidths = data.column_widths;
         }
@@ -179,7 +188,7 @@
 
     async function connectGoogleCalendar() {
       const r = await fetch("/api/google-calendar/auth", { method: "POST" });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Google Calendar login failed.", r.status));
       }
@@ -188,7 +197,7 @@
 
     async function loadGoogleCalendarAuthStatus() {
       const r = await fetch("/api/google-calendar/auth-status");
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Google Calendar auth status failed.", r.status));
       }
@@ -197,7 +206,7 @@
 
     async function syncGoogleCalendarRoster() {
       const r = await fetch("/api/google-calendar/roster-sync", { method: "POST" });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Google Calendar roster sync failed.", r.status));
       }
@@ -210,7 +219,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roster_text: String(rosterText || "") }),
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Google Calendar non-work consistency check failed.", r.status));
       }
@@ -220,7 +229,7 @@
     async function loadMemoryPayload() {
       try {
         const r = await fetch("/api/memory-list");
-        const data = await r.json().catch(() => ({}));
+        const data = await parseJsonSafe(r);
         if (!r.ok) return;
         const p = (data && data.payload) || {};
         memoryPayload = {
@@ -245,7 +254,7 @@
     async function loadShoppingCatalog() {
       try {
         const r = await fetch("/api/shopping-catalog");
-        const data = await r.json().catch(() => ({}));
+        const data = await parseJsonSafe(r);
         if (!r.ok) return;
         const raw = (data && data.by_name) || {};
         shoppingCatalogByName = typeof raw === "object" && raw ? raw : {};
@@ -255,7 +264,7 @@
 
     async function loadDetailSettings() {
       const r = await fetch("/api/detail-settings");
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Load detail settings failed.", r.status));
       }
@@ -268,7 +277,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload || {}),
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Save detail settings failed.", r.status));
       }
@@ -277,7 +286,7 @@
 
     async function loadTargets() {
       const r = await fetch("/api/targets");
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Load targets failed.", r.status));
       }
@@ -290,7 +299,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload || {}),
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Save targets failed.", r.status));
       }
@@ -299,7 +308,7 @@
 
     async function loadNutritionCatalog() {
       const r = await fetch("/api/nutrition-catalog");
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Load nutrition catalog failed.", r.status));
       }
@@ -312,7 +321,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload || {}),
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Save nutrition catalog failed.", r.status));
       }
@@ -321,7 +330,7 @@
 
     async function loadMaintSheets() {
       const r = await fetch("/api/maint/sheets");
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Load maintenance sheets failed.", r.status));
       }
@@ -330,7 +339,7 @@
 
     async function loadMaintSheet(sheetKey) {
       const r = await fetch(`/api/maint/sheets/${encodeURIComponent(sheetKey)}`);
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Load maintenance sheet failed.", r.status));
       }
@@ -343,7 +352,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows: rows || [] }),
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Save maintenance sheet failed.", r.status));
       }
@@ -354,7 +363,7 @@
       const r = await fetch(`/api/maint/sheets/${encodeURIComponent(sheetKey)}/import`, {
         method: "POST",
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Import maintenance sheet failed.", r.status));
       }
@@ -368,7 +377,7 @@
         method: "POST",
         body: form,
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Import schedule_grid XML failed.", r.status));
       }
@@ -379,7 +388,7 @@
       const r = await fetch("/api/maint/sheets/schedule_grid/import-default-xml", {
         method: "POST",
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Import schedule_grid.xml failed.", r.status));
       }
@@ -390,7 +399,7 @@
       const r = await fetch("/api/maint/sheets/schedule_grid/preview-from-phone-ip", {
         method: "POST",
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Preview phone schedule_grid by IP failed.", r.status));
       }
@@ -401,7 +410,7 @@
       const r = await fetch("/api/maint/sheets/schedule_grid/confirm-phone-ip-import", {
         method: "POST",
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Confirm phone schedule_grid import failed.", r.status));
       }
@@ -412,7 +421,7 @@
       const params = new URLSearchParams();
       if (dateIso) params.set("date_iso", dateIso);
       const r = await fetch(`/api/alarm-plan${params.toString() ? `?${params}` : ""}`);
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Load alarm plan failed.", r.status));
       }
@@ -427,7 +436,7 @@
       const r = await fetch(`/api/alarm-plan/publish${params.toString() ? `?${params}` : ""}`, {
         method: "POST",
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Publish alarm plan failed.", r.status));
       }
@@ -440,7 +449,7 @@
       const r = await fetch(`/api/alarm-plan/send-usb${params.toString() ? `?${params}` : ""}`, {
         method: "POST",
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Send alarm plan by USB failed.", r.status));
       }
@@ -450,7 +459,7 @@
     async function exportScheduleGridXml() {
       const r = await fetch("/api/maint/sheets/schedule_grid/export-xml");
       if (!r.ok) {
-        const data = await r.json().catch(() => ({}));
+        const data = await parseJsonSafe(r);
         throw new Error(apiErrorMessage(data, "Export schedule_grid XML failed.", r.status));
       }
       return r;
@@ -460,7 +469,7 @@
       const r = await fetch("/api/maint/sheets/schedule_grid/export-xml-to-file", {
         method: "POST",
       });
-      const data = await r.json().catch(() => ({}));
+      const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Export schedule_grid XML to data folder failed.", r.status));
       }
