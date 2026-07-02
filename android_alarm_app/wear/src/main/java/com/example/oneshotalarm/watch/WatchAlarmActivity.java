@@ -5,12 +5,14 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.Process;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.Window;
@@ -52,6 +54,32 @@ public class WatchAlarmActivity extends Activity {
         turnScreenOn();
         acquireWakeLock();
         buildUi();
+        maybeRequestBatteryExemption();
+    }
+
+    /** On a normal app-open (not an alarm alert), ask once to ignore battery optimization. */
+    private void maybeRequestBatteryExemption() {
+        String alarmId = getIntent() == null ? null : getIntent().getStringExtra(EXTRA_ALARM_ID);
+        if (alarmId != null && !alarmId.trim().isEmpty()) {
+            return; // alarm alert in progress; never cover it
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return;
+        }
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        String pkg = getPackageName();
+        if (pm == null || pm.isIgnoringBatteryOptimizations(pkg)) {
+            return;
+        }
+        try {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + pkg));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            Log.d(TAG, "Requested battery optimization exemption");
+        } catch (Exception e) {
+            Log.w(TAG, "Battery optimization request failed", e);
+        }
     }
 
     @Override
