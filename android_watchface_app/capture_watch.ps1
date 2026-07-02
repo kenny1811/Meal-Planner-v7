@@ -1,4 +1,4 @@
-# Auto-detect the watch and screencap the current screen to a PNG in this folder.
+# Auto-detect the watch and capture its screen to a clean PNG (no PowerShell binary corruption).
 $ErrorActionPreference = "Continue"
 $outDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $outPng = Join-Path $outDir "watchface_capture.png"
@@ -20,8 +20,12 @@ $watch = $null
 foreach ($s in $ready) { $ch=(& $adb -s $s shell getprop ro.build.characteristics) 2>$null; if ("$ch" -match 'watch'){ $watch=$s; break } }
 if (-not $watch) { if ($ready.Count -eq 1){ $watch=$ready[0] } else { Write-Host "Cannot pick watch among: $($ready -join ', ')"; exit 1 } }
 Write-Host "Capturing from watch: $watch"
-# exec-out keeps binary intact (plain shell screencap corrupts PNG on Windows)
-& $adb -s $watch exec-out screencap -p > "$outPng"
+$devPath = "/sdcard/watchface_capture.png"
+# screencap to a file ON the device, then pull it (pull writes binary correctly; avoids PS '>' corruption)
+& $adb -s $watch shell screencap -p $devPath
+if (Test-Path $outPng) { Remove-Item $outPng -Force -ErrorAction SilentlyContinue }
+& $adb -s $watch pull $devPath "$outPng" | Out-Null
+& $adb -s $watch shell rm -f $devPath 2>$null | Out-Null
 if ((Test-Path $outPng) -and ((Get-Item $outPng).Length -gt 0)) {
     Write-Host "Saved: $outPng ($((Get-Item $outPng).Length) bytes)"
 } else {
