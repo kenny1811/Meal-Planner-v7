@@ -116,102 +116,65 @@
       } catch (_) {}
     }
 
-    async function persistColumnWidths() {
+    // 共用：POST 一個 patch 去 /api/ui-state（吞錯誤，與原行為一致）。
+    async function persistUiState(patch) {
       try {
         await fetch("/api/ui-state", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            column_widths: columnWidths,
-            sidebar_width: sidebarWidth,
-            target_editor_width: targetEditorWidth,
-            target_column_widths: targetColumnWidths,
-            catalog_column_widths: catalogColumnWidths,
-            form_column_widths: formColumnWidths,
-            show_past: showPast,
-            active_panel: activePanel,
-            active_config_view: activeConfigView,
-            active_menu_path: activeMenuPath,
-          }),
+          body: JSON.stringify(patch),
         });
       } catch (_) {}
+    }
+
+    async function persistColumnWidths() {
+      await persistUiState({
+        column_widths: columnWidths,
+        sidebar_width: sidebarWidth,
+        target_editor_width: targetEditorWidth,
+        target_column_widths: targetColumnWidths,
+        catalog_column_widths: catalogColumnWidths,
+        form_column_widths: formColumnWidths,
+        show_past: showPast,
+        active_panel: activePanel,
+        active_config_view: activeConfigView,
+        active_menu_path: activeMenuPath,
+      });
     }
 
     async function persistActiveConfigViewState() {
-      try {
-        await fetch("/api/ui-state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ active_config_view: activeConfigView }),
-        });
-      } catch (_) {}
+      await persistUiState({ active_config_view: activeConfigView });
     }
 
     async function persistActiveMenuPathState() {
-      try {
-        await fetch("/api/ui-state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ active_menu_path: activeMenuPath }),
-        });
-      } catch (_) {}
+      await persistUiState({ active_menu_path: activeMenuPath });
     }
 
     async function persistMenuOrder() {
-      try {
-        if (typeof cleanMenuOrder === "function") cleanMenuOrder();
-        await fetch("/api/ui-state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ menu_order: menuOrder, menu_hidden_keys: menuHiddenKeys }),
-        });
-      } catch (_) {}
+      if (typeof cleanMenuOrder === "function") cleanMenuOrder();
+      await persistUiState({ menu_order: menuOrder, menu_hidden_keys: menuHiddenKeys });
     }
 
     async function persistMenuLabels() {
-      try {
-        await fetch("/api/ui-state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ menu_labels: menuLabels }),
-        });
-      } catch (_) {}
+      await persistUiState({ menu_labels: menuLabels });
     }
 
     async function persistMenuTreeOpen() {
-      try {
-        await fetch("/api/ui-state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ menu_tree_open: menuTreeOpen }),
-        });
-      } catch (_) {}
+      await persistUiState({ menu_tree_open: menuTreeOpen });
     }
 
     async function persistMenuLayout() {
-      try {
-        if (typeof cleanMenuOrder === "function") cleanMenuOrder();
-        await fetch("/api/ui-state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            menu_order: menuOrder,
-            menu_labels: menuLabels,
-            menu_hidden_keys: menuHiddenKeys,
-            menu_tree_open: menuTreeOpen,
-          }),
-        });
-      } catch (_) {}
+      if (typeof cleanMenuOrder === "function") cleanMenuOrder();
+      await persistUiState({
+        menu_order: menuOrder,
+        menu_labels: menuLabels,
+        menu_hidden_keys: menuHiddenKeys,
+        menu_tree_open: menuTreeOpen,
+      });
     }
 
     async function persistGoogleCalendarSync() {
-      try {
-        await fetch("/api/ui-state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ google_calendar_sync: googleCalendarSync }),
-        });
-      } catch (_) {}
+      await persistUiState({ google_calendar_sync: googleCalendarSync });
     }
 
     async function connectGoogleCalendar() {

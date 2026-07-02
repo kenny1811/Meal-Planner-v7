@@ -17,7 +17,8 @@ public class AlarmReceiver extends BroadcastReceiver {
         AlarmScheduler.cancelAlarm(context, id, label);
         NextAlarmWidgetProvider.updateAll(context);
         AlarmAlertService.start(context, id, label, triggerAtMillis);
-        WatchBridge.sendAlarm(context, id, label, triggerAtMillis);
+        // 手錶已由 tile-state 自行本地排程同一個鬧鐘，唔再喺 fire-time push（避免雙重觸發同慳電）。
+        // 只推送最新 tile-state，令手錶 prev/next 顯示同本地排程保持同步（亦作為排程漂移時嘅安全網）。
         WatchBridge.sendTileState(context);
     }
 }

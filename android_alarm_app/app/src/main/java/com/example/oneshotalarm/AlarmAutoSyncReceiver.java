@@ -84,6 +84,38 @@ public final class AlarmAutoSyncReceiver extends BroadcastReceiver {
         scheduleDailyImports(context);
     }
 
+    /**
+     * 補跑今日錯過咗嘅每日匯入。
+     * 例如手機喺 05:00 / 05:30 兩棍都關咗機，開機後今日就唔會再自動匯入，要等聽日。
+     * 呢個方法喺開機後檢查：如果已過今日 05:00 但今日 05:00 之後仲未成功匯入過，就即刻補跑一次，
+     * 令手機同手錶唔使等到聽日、亦唔使人手插手。
+     */
+    static void catchUpMissedDailyImport(Context context) {
+        Calendar todayFive = Calendar.getInstance();
+        todayFive.set(Calendar.HOUR_OF_DAY, 5);
+        todayFive.set(Calendar.MINUTE, 0);
+        todayFive.set(Calendar.SECOND, 0);
+        todayFive.set(Calendar.MILLISECOND, 0);
+        long fiveAmToday = todayFive.getTimeInMillis();
+        if (System.currentTimeMillis() < fiveAmToday) {
+            return; // 未到今日 05:00，等正常排程跑
+        }
+        if (AlarmStore.getLastImportAt(context) >= fiveAmToday) {
+            return; // 今日 05:00 之後已經匯入過，唔使補
+        }
+        final Context appContext = context.getApplicationContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    ScheduleGridAutoImporter.importFromPc(appContext);
+                } catch (Exception e) {
+                    Log.w(TAG, "Boot catch-up daily import failed", e);
+                }
+            }
+        }).start();
+    }
+
     private static void cancelLegacyPolling(Context context) {
         AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (alarmManager == null) {

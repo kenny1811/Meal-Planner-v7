@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from dataclasses import replace
 from datetime import date
@@ -33,6 +34,45 @@ from meal_planner.settings import AppSettings, get_settings
 
 
 _FAT_PCT_KEYS = {"fat_total_g", "fat_sat_g", "fat_trans_g"}
+_MEAL_NAMES = ("早餐", "午餐", "小食", "晚餐")
+
+
+def _visible_meals_from_resolved(meal_plan: dict[str, Any]) -> set[str]:
+    """由 meal_times_resolved 決定邊幾餐可見（非空時間字串）。"""
+    resolved = meal_plan.get("meal_times_resolved", {}) if isinstance(meal_plan, dict) else {}
+    if not isinstance(resolved, dict):
+        return set()
+    return {
+        meal
+        for meal in _MEAL_NAMES
+        if resolved.get(meal) is not None and str(resolved.get(meal)).strip() != ""
+    }
+
+
+def _clear_restaurant_lunch_items(meal_plan: dict[str, Any]) -> None:
+    """餐廳午餐模式：清空午餐配餐 item / 食材，令米類提示不當佢係米飯來源。"""
+    if not isinstance(meal_plan, dict) or not isinstance(meal_plan.get("restaurant_lunch"), dict):
+        return
+    for key in ("meal_items", "meal_ingredients"):
+        d = meal_plan.get(key)
+        if isinstance(d, dict):
+            d["午餐"] = []
+
+
+def _apply_rice_note_and_summary(
+    meal_plan: dict[str, Any],
+    indicators: DayIndicatorProfile,
+    settings: AppSettings,
+    *,
+    visible_meals: set[str] | None = None,
+    summary: dict[str, Any] | None = None,
+) -> None:
+    """統一重算米類備註同全日 summary（清餐廳午餐後）。"""
+    if visible_meals is None:
+        visible_meals = _visible_meals_from_resolved(meal_plan)
+    meal_items = meal_plan.get("meal_items", {}) if isinstance(meal_plan, dict) else {}
+    meal_plan["rice_note"] = build_rice_note(meal_items, settings, visible_meals=visible_meals)
+    meal_plan["summary"] = summary if summary is not None else _calc_day_summary(meal_plan, indicators, settings)
 
 
 class IndicatorDataError(ValueError):
@@ -75,36 +115,6 @@ def _serialize_profile(prof: DayIndicatorProfile) -> list[Any]:
     return out
 
 
-def _reload_all_sources(settings: AppSettings) -> dict[str, dict[str, int]]:
-    """
-    每次 request 核對 SQLite 維護資料：
-    更表、更時表、行位表、公眾假期、加班表、飯時、餐廳選擇。
-    回傳簡要統計，方便前端核對資料來源。
-    """
-    source_map = {
-        "更表": "roster",
-        "更時表": "payroll_times",
-        "行位表": "schedule_grid",
-        "公眾假期": "public_holidays",
-        "加班表": "overtime",
-        "飯時": "meal_times",
-        "餐廳選擇": "restaurant",
-    }
-    out: dict[str, dict[str, int]] = {}
-    from meal_planner.maintenance_db import load_sheet_rows
-
-    for key, sheet_key in source_map.items():
-        try:
-            rows = load_sheet_rows(sheet_key, settings).get("rows", [])
-        except Exception:
-            rows = []
-        out[key] = {
-            "rows": len(rows),
-            "cols": max((len(row) for row in rows if isinstance(row, list)), default=0),
-        }
-    return out
-
-
 def _round1(x: float) -> float:
     return round(float(x), 1)
 
@@ -122,8 +132,6 @@ def _is_meal_visible(meal: str, meal_plan: dict[str, Any]) -> bool:
     if not s:
         return False
     # 與前端一致：只有固定 HH:MM 視為可顯示時間
-    import re
-
     return bool(re.fullmatch(r"\d{1,2}:\d{2}", s))
 
 
@@ -271,7 +279,6 @@ def preview_days(
             timezone=settings.dates.timezone,
         )
 
-    source_reload = _reload_all_sources(settings)
     planning_cache = build_meal_planning_cache(settings)
     headers, work_vals, nonwork_vals = load_target_rows(settings)
     _validate_indicator_rows_or_raise(work_vals, nonwork_vals)
@@ -321,7 +328,6 @@ def preview_days(
         },
         "nutrient_keys": list(NUTRIENT_KEYS),
         "days": days_out,
-        "source_reload": source_reload,
         "fast_mode": bool(fast_mode),
     }
 
@@ -339,8 +345,6 @@ def _parse_edited_line(line: str | None) -> list[tuple[str, float | str | None]]
         return []
     out: list[tuple[str, float | str | None]] = []
     for tok in [x.strip() for x in text.split("+") if x.strip()]:
-        import re
-
         m = re.match(r"^(.*)\(\s*(\?|[-+]?\d*\.?\d+)\s*g?\s*\)$", tok, flags=re.IGNORECASE)
         if m:
             raw_g = m.group(2).strip()
@@ -441,10 +445,7 @@ def recalc_days_from_edits(days_payload: list[dict[str, Any]]) -> dict[str, Any]
             meal_ingredients[meal] = names
             meal_nutrients[meal] = nutrients
 
-        resolved = meal_plan.get("meal_times_resolved", {}) if isinstance(meal_plan, dict) else {}
-        visible_meals = {
-            meal for meal in ("早餐", "午餐", "小食", "晚餐") if resolved.get(meal) is not None and str(resolved.get(meal)).strip() != ""
-        }
+        visible_meals = _visible_meals_from_resolved(meal_plan)
         meal_plan["meal_items"] = meal_items
         meal_plan["meal_ingredients"] = meal_ingredients
         meal_plan["meal_nutrients"] = meal_nutrients
@@ -500,11 +501,14 @@ def recalc_days_from_edits(days_payload: list[dict[str, Any]]) -> dict[str, Any]
                 "extra_unknown_count": max(0, len(unknown_candidates) - 1),
             }
         # 餐廳午餐模式下，米類提示不應計入午餐配餐 item。
-        if isinstance(meal_plan.get("restaurant_lunch"), dict):
-            meal_plan["meal_items"]["午餐"] = []
-            meal_plan["meal_ingredients"]["午餐"] = []
-        meal_plan["rice_note"] = build_rice_note(meal_items, settings, visible_meals=visible_meals)
-        meal_plan["summary"] = best_summary if unknown_candidates and best_summary is not None else _calc_day_summary(meal_plan, indicators, settings)
+        _clear_restaurant_lunch_items(meal_plan)
+        _apply_rice_note_and_summary(
+            meal_plan,
+            indicators,
+            settings,
+            visible_meals=visible_meals,
+            summary=best_summary if unknown_candidates and best_summary is not None else None,
+        )
         # 一次性手動重算模式：只回報重算結果，不再要求改營養清單參數。
         meal_plan["optimization"] = {
             "mode": "manual_recalc",
@@ -537,22 +541,8 @@ def refresh_payload_summaries(days_payload: list[dict[str, Any]]) -> list[dict[s
         meal_plan = d.get("meal_plan") if isinstance(d.get("meal_plan"), dict) else {}
         indicators_json = d.get("nutrient_indicators") if isinstance(d.get("nutrient_indicators"), dict) else {}
         indicators = profile_from_json_map(indicators_json)
-        if isinstance(meal_plan.get("restaurant_lunch"), dict):
-            mi = meal_plan.get("meal_items")
-            mg = meal_plan.get("meal_ingredients")
-            if isinstance(mi, dict):
-                mi["午餐"] = []
-            if isinstance(mg, dict):
-                mg["午餐"] = []
-        resolved = meal_plan.get("meal_times_resolved", {}) if isinstance(meal_plan, dict) else {}
-        visible_meals = {
-            meal
-            for meal in ("早餐", "午餐", "小食", "晚餐")
-            if isinstance(resolved, dict) and resolved.get(meal) is not None and str(resolved.get(meal)).strip() != ""
-        }
-        meal_items = meal_plan.get("meal_items", {}) if isinstance(meal_plan, dict) else {}
-        meal_plan["rice_note"] = build_rice_note(meal_items, settings, visible_meals=visible_meals)
-        meal_plan["summary"] = _calc_day_summary(meal_plan, indicators, settings)
+        _clear_restaurant_lunch_items(meal_plan)
+        _apply_rice_note_and_summary(meal_plan, indicators, settings)
         nd = dict(d)
         nd["meal_plan"] = meal_plan
         out.append(nd)
@@ -605,22 +595,8 @@ def refresh_payload_with_latest_indicators(payload: dict[str, Any]) -> dict[str,
         nd["nutrient_indicators"] = {NUTRIENT_KEYS[i]: nutrients_json[i] for i in range(len(NUTRIENT_KEYS))}
         meal_plan = nd.get("meal_plan") if isinstance(nd.get("meal_plan"), dict) else {}
         if isinstance(meal_plan, dict):
-            if isinstance(meal_plan.get("restaurant_lunch"), dict):
-                mi = meal_plan.get("meal_items")
-                mg = meal_plan.get("meal_ingredients")
-                if isinstance(mi, dict):
-                    mi["午餐"] = []
-                if isinstance(mg, dict):
-                    mg["午餐"] = []
-            resolved = meal_plan.get("meal_times_resolved", {})
-            visible_meals = {
-                meal
-                for meal in ("早餐", "午餐", "小食", "晚餐")
-                if isinstance(resolved, dict) and resolved.get(meal) is not None and str(resolved.get(meal)).strip() != ""
-            }
-            meal_items = meal_plan.get("meal_items", {})
-            meal_plan["rice_note"] = build_rice_note(meal_items, settings, visible_meals=visible_meals)
-            meal_plan["summary"] = _calc_day_summary(meal_plan, indicators, settings)
+            _clear_restaurant_lunch_items(meal_plan)
+            _apply_rice_note_and_summary(meal_plan, indicators, settings)
             nd["meal_plan"] = meal_plan
         days_out.append(nd)
 
