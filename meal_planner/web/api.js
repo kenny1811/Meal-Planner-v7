@@ -36,7 +36,7 @@
         if (data && typeof data.show_past === "boolean") {
           showPast = data.show_past;
         }
-        if (data && ["planner", "config", "maint", "shopping", "alarm_sync"].includes(data.active_panel)) {
+        if (data && ["planner", "config", "maint", "shopping", "alarm_sync", "reports"].includes(data.active_panel)) {
           activePanel = data.active_panel;
         }
         const hasServerConfigView = data && ["targets", "catalog", "details"].includes(data.active_config_view);
@@ -45,11 +45,16 @@
         }
         if (data && Array.isArray(data.active_menu_path) && data.active_menu_path.length) {
           activeMenuPath = data.active_menu_path.map((part) => String(part)).filter(Boolean);
+          if (activeMenuPath.some((part) => typeof isRemovedMenuKey === "function" && isRemovedMenuKey(part))) {
+            activeMenuPath = ["top", "planner"];
+          }
         }
         try {
           const savedMenuPath = String(window.localStorage.getItem("mealplanner_active_menu_path") || "").trim();
           const path = savedMenuPath.split("/").map((part) => part.trim()).filter(Boolean);
-          if (path.length) activeMenuPath = path;
+          if (path.length && !path.some((part) => typeof isRemovedMenuKey === "function" && isRemovedMenuKey(part))) {
+            activeMenuPath = path;
+          }
         } catch (_) {}
         if (!hasServerConfigView) {
           let hasLocalConfigView = false;
@@ -67,22 +72,45 @@
           if (savedMaintSheet) activeMaintSheetKey = savedMaintSheet;
         } catch (_) {}
         if (data && typeof data.menu_order === "object" && data.menu_order) {
+          const cleanOrder = (items) => (Array.isArray(items) ? items.filter((key) => !(typeof isRemovedMenuKey === "function" && isRemovedMenuKey(key))) : null);
           menuOrder = {
-            top: Array.isArray(data.menu_order.top) ? data.menu_order.top : menuOrder.top,
-            config: Array.isArray(data.menu_order.config) ? data.menu_order.config : menuOrder.config,
-            maint: Array.isArray(data.menu_order.maint) ? data.menu_order.maint : menuOrder.maint,
+            top: cleanOrder(data.menu_order.top) || menuOrder.top,
+            config: cleanOrder(data.menu_order.config) || menuOrder.config,
+            maint: cleanOrder(data.menu_order.maint) || menuOrder.maint,
+            reports: cleanOrder(data.menu_order.reports) || menuOrder.reports,
           };
+          Object.entries(data.menu_order).forEach(([group, items]) => {
+            if (group && !(group in menuOrder)) {
+              menuOrder[group] = cleanOrder(items) || [];
+            }
+          });
         }
         if (data && typeof data.menu_labels === "object" && data.menu_labels) {
-          menuLabels = data.menu_labels;
+          menuLabels = Object.fromEntries(
+            Object.entries(data.menu_labels).filter(([key]) => !(typeof isRemovedMenuKey === "function" && isRemovedMenuKey(key)))
+          );
         }
         if (data && Array.isArray(data.menu_hidden_keys)) {
-          menuHiddenKeys = data.menu_hidden_keys;
+          menuHiddenKeys = data.menu_hidden_keys.filter((key) => !(typeof isRemovedMenuKey === "function" && isRemovedMenuKey(key)));
         }
         if (data && typeof data.menu_tree_open === "object" && data.menu_tree_open) {
           menuTreeOpen = {
             config: data.menu_tree_open.config !== false,
             maint: !!data.menu_tree_open.maint,
+            reports: !!data.menu_tree_open.reports,
+          };
+          Object.entries(data.menu_tree_open).forEach(([key, value]) => {
+            if (key && !(key in menuTreeOpen)) menuTreeOpen[key] = !!value;
+          });
+        }
+        if (data && typeof data.google_calendar_sync === "object" && data.google_calendar_sync) {
+          googleCalendarSync = {
+            enabled: !!data.google_calendar_sync.enabled,
+            write: !!data.google_calendar_sync.write,
+            client_secret_file: String(data.google_calendar_sync.client_secret_file || ""),
+            token_file: String(data.google_calendar_sync.token_file || ""),
+            service_account_file: String(data.google_calendar_sync.service_account_file || ""),
+            nonwork_calendar_id: String(data.google_calendar_sync.nonwork_calendar_id || ""),
           };
         }
       } catch (_) {}
@@ -174,6 +202,56 @@
           }),
         });
       } catch (_) {}
+    }
+
+    async function persistGoogleCalendarSync() {
+      try {
+        await fetch("/api/ui-state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ google_calendar_sync: googleCalendarSync }),
+        });
+      } catch (_) {}
+    }
+
+    async function connectGoogleCalendar() {
+      const r = await fetch("/api/google-calendar/auth", { method: "POST" });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Google Calendar login failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function loadGoogleCalendarAuthStatus() {
+      const r = await fetch("/api/google-calendar/auth-status");
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Google Calendar auth status failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function syncGoogleCalendarRoster() {
+      const r = await fetch("/api/google-calendar/roster-sync", { method: "POST" });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Google Calendar roster sync failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function checkGoogleCalendarNonworkConsistency(rosterText) {
+      const r = await fetch("/api/google-calendar/nonwork-consistency", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roster_text: String(rosterText || "") }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Google Calendar non-work consistency check failed.", r.status));
+      }
+      return data || {};
     }
 
     async function loadMemoryPayload() {

@@ -43,13 +43,13 @@ final class SunTimesSync {
     private static final String WORK_NAME = "hko_sun_times_sync";
     private static final String TAG = "SunTimesSync";
     private static final ZoneId HK_ZONE = ZoneId.of("Asia/Hong_Kong");
-    private static final LocalTime DAILY_SYNC_TIME = LocalTime.of(5, 30);
+    private static final LocalTime DAILY_SYNC_TIME = LocalTime.of(4, 0);
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
 
     private SunTimesSync() {
     }
 
-    static void scheduleDailyAt0530(Context context) {
+    static void scheduleDailyAt0400(Context context) {
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
@@ -59,7 +59,7 @@ final class SunTimesSync {
                 TimeUnit.DAYS
         )
                 .setConstraints(constraints)
-                .setInitialDelay(delayUntilNext0530().toMillis(), TimeUnit.MILLISECONDS)
+                .setInitialDelay(delayUntilNext0400().toMillis(), TimeUnit.MILLISECONDS)
                 .build();
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
@@ -99,7 +99,7 @@ final class SunTimesSync {
         return true;
     }
 
-    private static Duration delayUntilNext0530() {
+    private static Duration delayUntilNext0400() {
         ZonedDateTime now = ZonedDateTime.now(HK_ZONE);
         ZonedDateTime next = now.toLocalDate().atTime(DAILY_SYNC_TIME).atZone(HK_ZONE);
         if (!next.isAfter(now)) {

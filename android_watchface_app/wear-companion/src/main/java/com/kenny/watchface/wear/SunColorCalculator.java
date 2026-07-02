@@ -113,16 +113,16 @@ final class SunColorCalculator {
     }
 
     enum Bucket {
-        NIGHT("#ff241a6b"),
-        PRE_DAWN("#ff30238f"),
-        DAWN("#ff4f3fbd"),
-        MORNING("#ff7668dc"),
-        LATE_MORNING("#ffa19aea"),
-        NOON("#fff4f2ff"),
-        EARLY_AFTERNOON("#ffc6c2f2"),
-        AFTERNOON("#ff9288e5"),
-        DUSK("#ff6654d1"),
-        NIGHTFALL("#ff3a2a9e");
+        NIGHT("#ff063a8f"),
+        PRE_DAWN("#ff0b4fa8"),
+        DAWN("#ff2475cf"),
+        MORNING("#ff76b9f2"),
+        LATE_MORNING("#ffc5e9ff"),
+        NOON("#ffffffff"),
+        EARLY_AFTERNOON("#ffd9f2ff"),
+        AFTERNOON("#ffa8dafa"),
+        DUSK("#ff3a8add"),
+        NIGHTFALL("#ff1262c2");
 
         final String color;
 

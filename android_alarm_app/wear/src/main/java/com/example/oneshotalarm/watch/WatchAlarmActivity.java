@@ -18,32 +18,18 @@ import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.google.android.gms.wearable.Node;
-import com.google.android.gms.wearable.PutDataMapRequest;
-import com.google.android.gms.wearable.Wearable;
-
-import java.util.List;
-
 public class WatchAlarmActivity extends Activity {
     private static final String TAG = "ShiftAlarmWatch";
+    static final String EXTRA_ALARM_ID = "alarm_id";
     static final String EXTRA_TIME = "time";
     static final String EXTRA_LABEL = "label";
     static final String EXTRA_DISMISS = "dismiss";
     static final String ACTION_DISMISS_LOCAL = "com.example.oneshotalarm.watch.ACTION_DISMISS_LOCAL";
-    private static final String DISMISS_PATH = "/oneshotalarm/dismiss";
-    private static final String DISMISS_DATA_PATH = "/oneshotalarm/dismiss-data";
-    private static final long MAX_VISIBLE_ALARM_MS = 60 * 1000L;
 
     private boolean dismissed = false;
     private boolean receiverRegistered = false;
     private PowerManager.WakeLock wakeLock;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Runnable forcedTimeoutRunnable = () -> {
-        Log.d(TAG, "Watch alarm visible timeout");
-        dismissed = true;
-        stopAlert();
-        finishAndExitSoon();
-    };
     private final BroadcastReceiver dismissReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -65,7 +51,6 @@ public class WatchAlarmActivity extends Activity {
         }
         turnScreenOn();
         acquireWakeLock();
-        scheduleForcedTimeout();
         buildUi();
     }
 
@@ -84,7 +69,6 @@ public class WatchAlarmActivity extends Activity {
     @Override
     protected void onDestroy() {
         unregisterDismissReceiver();
-        handler.removeCallbacks(forcedTimeoutRunnable);
         releaseWakeLock();
         if (dismissed) {
             stopAlert();
@@ -163,6 +147,7 @@ public class WatchAlarmActivity extends Activity {
         dismissed = true;
         stopAlert();
         sendDismissToPhone();
+        WatchScheduleDisplayState.refreshFromCacheAndRequest(this);
         finishAndExitSoon();
     }
 
@@ -208,7 +193,7 @@ public class WatchAlarmActivity extends Activity {
                         | PowerManager.ON_AFTER_RELEASE,
                 "oneshotalarm:watch-alarm"
         );
-        wakeLock.acquire(MAX_VISIBLE_ALARM_MS + 5000L);
+        wakeLock.acquire();
     }
 
     private void releaseWakeLock() {
@@ -218,49 +203,13 @@ public class WatchAlarmActivity extends Activity {
         wakeLock = null;
     }
 
-    private void scheduleForcedTimeout() {
-        handler.removeCallbacks(forcedTimeoutRunnable);
-        handler.postDelayed(forcedTimeoutRunnable, MAX_VISIBLE_ALARM_MS);
-    }
-
     private void sendDismissToPhone() {
-        long dismissId = System.currentTimeMillis();
-        sendDismissData(dismissId);
-        sendDismissMessage(dismissId);
-        handler.postDelayed(() -> sendDismissMessage(dismissId), 300);
-        handler.postDelayed(() -> sendDismissData(dismissId), 600);
-        handler.postDelayed(() -> sendDismissMessage(dismissId), 900);
-        handler.postDelayed(() -> sendDismissMessage(dismissId), 1500);
+        WatchDismissBridge.sendDismiss(this, alarmId());
     }
 
-    private void sendDismissData(long dismissId) {
-        PutDataMapRequest request = PutDataMapRequest.create(DISMISS_DATA_PATH);
-        request.getDataMap().putLong("dismiss_id", dismissId);
-        request.getDataMap().putLong("ts", System.currentTimeMillis());
-        Wearable.getDataClient(this)
-                .putDataItem(request.asPutDataRequest())
-                .addOnSuccessListener(item -> Log.d(TAG, "Sent dismiss data to phone"))
-                .addOnFailureListener(e -> Log.e(TAG, "Send dismiss data to phone failed", e));
-    }
-
-    private void sendDismissMessage(long dismissId) {
-        byte[] payload = Long.toString(dismissId).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        Wearable.getNodeClient(this).getConnectedNodes()
-                .addOnSuccessListener(nodes -> sendDismissToNodes(nodes, payload))
-                .addOnFailureListener(e -> Log.e(TAG, "Get phone nodes for dismiss failed", e));
-    }
-
-    private void sendDismissToNodes(List<Node> nodes, byte[] payload) {
-        if (nodes == null || nodes.isEmpty()) {
-            Log.d(TAG, "No phone nodes for dismiss");
-            return;
-        }
-        for (Node node : nodes) {
-            Wearable.getMessageClient(this)
-                    .sendMessage(node.getId(), DISMISS_PATH, payload)
-                    .addOnSuccessListener(id -> Log.d(TAG, "Sent dismiss message to phone"))
-                    .addOnFailureListener(e -> Log.e(TAG, "Send dismiss message to phone failed", e));
-        }
+    private String alarmId() {
+        String alarmId = getIntent().getStringExtra(EXTRA_ALARM_ID);
+        return alarmId == null ? "" : alarmId;
     }
 
     private void finishAndExitSoon() {

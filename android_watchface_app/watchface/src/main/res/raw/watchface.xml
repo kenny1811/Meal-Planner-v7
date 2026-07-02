@@ -12,7 +12,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff4330b4">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff063a8f">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -31,7 +31,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff4f42c8">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff0b4fa8">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -50,7 +50,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff5e52d4">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff2475cf">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -69,7 +69,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff6c64df">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff56a2e8">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -88,7 +88,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff7d76e9">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff92cdf8">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -107,7 +107,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff6a63d3">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff3a8add">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -126,7 +126,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff8984e7">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffa8dafa">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -145,7 +145,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffa9a6f4">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffc5e9ff">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -164,7 +164,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffc9c7fb">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffe6f7ff">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -183,7 +183,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffe4e2ff">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#fff2fbff">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -202,7 +202,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#fff7f5ff">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffffffff">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -221,7 +221,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffe4e2ff">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#fff2fbff">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -240,7 +240,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffc9c7fb">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffe6f7ff">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -259,7 +259,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffa9a6f4">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffc5e9ff">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -278,7 +278,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff8984e7">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffa8dafa">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -297,7 +297,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff6a63d3">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff3a8add">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -316,7 +316,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff7d76e9">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff92cdf8">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -335,7 +335,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff6c64df">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff56a2e8">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -354,7 +354,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff5e52d4">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff2475cf">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -368,7 +368,7 @@
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff4330b4">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff063a8f">
                             <Template>date_line
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
@@ -406,7 +406,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff4330b4">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff063a8f">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -423,7 +423,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff4f42c8">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff0b4fa8">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -440,7 +440,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff5e52d4">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff2475cf">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -457,7 +457,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff6c64df">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff56a2e8">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -474,7 +474,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff7d76e9">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff92cdf8">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -491,7 +491,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff6a63d3">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff3a8add">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -508,7 +508,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff8984e7">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffa8dafa">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -525,7 +525,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffa9a6f4">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffc5e9ff">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -542,7 +542,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffc9c7fb">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffe6f7ff">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -559,7 +559,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffe4e2ff">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#fff2fbff">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -576,7 +576,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#fff7f5ff">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffffffff">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -593,7 +593,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffe4e2ff">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#fff2fbff">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -610,7 +610,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffc9c7fb">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffe6f7ff">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -627,7 +627,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffa9a6f4">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffc5e9ff">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -644,7 +644,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff8984e7">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffa8dafa">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -661,7 +661,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff6a63d3">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff3a8add">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -678,7 +678,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff7d76e9">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff92cdf8">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -695,7 +695,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff6c64df">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff56a2e8">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -712,7 +712,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff5e52d4">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff2475cf">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -724,7 +724,7 @@
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff4330b4">
+                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff063a8f">
                             <Template><![CDATA[%s:%s]]>
                                 <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                                 <Parameter expression="[MINUTE_Z]" />
@@ -760,7 +760,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff4330b4" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff063a8f" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -772,7 +772,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff4f42c8" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff0b4fa8" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -784,7 +784,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff5e52d4" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff2475cf" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -796,7 +796,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff6c64df" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff56a2e8" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -808,7 +808,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff7d76e9" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff92cdf8" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -820,7 +820,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff6a63d3" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff3a8add" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -832,7 +832,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff8984e7" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffa8dafa" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -844,7 +844,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffa9a6f4" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffc5e9ff" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -856,7 +856,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffc9c7fb" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffe6f7ff" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -868,7 +868,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffe4e2ff" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#fff2fbff" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -880,7 +880,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#fff7f5ff" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffffffff" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -892,7 +892,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffe4e2ff" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#fff2fbff" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -904,7 +904,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffc9c7fb" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffe6f7ff" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -916,7 +916,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffa9a6f4" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffc5e9ff" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -928,7 +928,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff8984e7" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffa8dafa" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -940,7 +940,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff6a63d3" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff3a8add" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -952,7 +952,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff7d76e9" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff92cdf8" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -964,7 +964,7 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff6c64df" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff56a2e8" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
@@ -976,14 +976,14 @@
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff5e52d4" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff2475cf" />
                     </TimeText>
                 </DigitalClock>            </Compare>
             <Default>
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
-                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff4330b4" />
+                        <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff063a8f" />
                     </TimeText>
                 </DigitalClock>            </Default>
         </Condition>            </Default>
@@ -1018,12 +1018,12 @@
             scaleY="1.12">
             <Variant mode="AMBIENT" target="alpha" value="255" />
             <Text align="CENTER" verticalAlign="CENTER">
-                <Font family="SYNC_TO_DEVICE" size="132" weight="THIN" slant="NORMAL" color="#ff5642d8">
+                <Font family="SYNC_TO_DEVICE" size="132" weight="THIN" slant="NORMAL" color="#ff1262c2">
                     <Template><![CDATA[%s:%s]]>
                         <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
                         <Parameter expression="[MINUTE_Z]" />
                     </Template>
-                    <Transform target="color" value="([HOUR_0_23] * 60 + [MINUTE]) &lt; 340 ? &quot;#ff4330b4&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 480 ? &quot;#ff7668dc&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 660 ? &quot;#ffc6c2f2&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 840 ? &quot;#fff4f2ff&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 1020 ? &quot;#ffc6c2f2&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 1150 ? &quot;#ff7668dc&quot; : &quot;#ff4330b4&quot;" />
+                    <Transform target="color" value="([HOUR_0_23] * 60 + [MINUTE]) &lt; 340 ? &quot;#ff063a8f&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 480 ? &quot;#ff76b9f2&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 660 ? &quot;#ffd9f2ff&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 840 ? &quot;#ffffffff&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 1020 ? &quot;#ffd9f2ff&quot; : ([HOUR_0_23] * 60 + [MINUTE]) &lt; 1150 ? &quot;#ff76b9f2&quot; : &quot;#ff063a8f&quot;" />
                 </Font>
             </Text>
         </PartText>
@@ -1418,7 +1418,7 @@
                     <Compare expression="prevAlarmTimeColor0">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff4330b4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1433,7 +1433,7 @@
                     <Compare expression="prevAlarmTimeColor1">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff4f42c8">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff0b4fa8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1448,7 +1448,7 @@
                     <Compare expression="prevAlarmTimeColor2">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff5e52d4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff2475cf">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1463,7 +1463,7 @@
                     <Compare expression="prevAlarmTimeColor3">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff6c64df">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff56a2e8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1478,7 +1478,7 @@
                     <Compare expression="prevAlarmTimeColor4">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff7d76e9">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff92cdf8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1493,7 +1493,7 @@
                     <Compare expression="prevAlarmTimeColor5">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff6a63d3">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff3a8add">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1508,7 +1508,7 @@
                     <Compare expression="prevAlarmTimeColor6">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff8984e7">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa8dafa">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1523,7 +1523,7 @@
                     <Compare expression="prevAlarmTimeColor7">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa9a6f4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc5e9ff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1538,7 +1538,7 @@
                     <Compare expression="prevAlarmTimeColor8">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc9c7fb">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe6f7ff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1553,7 +1553,7 @@
                     <Compare expression="prevAlarmTimeColor9">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe4e2ff">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff2fbff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1568,7 +1568,7 @@
                     <Compare expression="prevAlarmTimeColor10">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff7f5ff">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffffffff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1583,7 +1583,7 @@
                     <Compare expression="prevAlarmTimeColor11">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe4e2ff">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff2fbff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1598,7 +1598,7 @@
                     <Compare expression="prevAlarmTimeColor12">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc9c7fb">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe6f7ff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1613,7 +1613,7 @@
                     <Compare expression="prevAlarmTimeColor13">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa9a6f4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc5e9ff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1628,7 +1628,7 @@
                     <Compare expression="prevAlarmTimeColor14">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff8984e7">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa8dafa">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1643,7 +1643,7 @@
                     <Compare expression="prevAlarmTimeColor15">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff6a63d3">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff3a8add">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1658,7 +1658,7 @@
                     <Compare expression="prevAlarmTimeColor16">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff7d76e9">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff92cdf8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1673,7 +1673,7 @@
                     <Compare expression="prevAlarmTimeColor17">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff6c64df">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff56a2e8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1688,7 +1688,7 @@
                     <Compare expression="prevAlarmTimeColor18">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff5e52d4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff2475cf">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1698,7 +1698,7 @@
                     <Default>
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff4330b4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1750,7 +1750,7 @@
                     <Compare expression="nextAlarmTimeColor0">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff4330b4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1765,7 +1765,7 @@
                     <Compare expression="nextAlarmTimeColor1">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff4f42c8">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff0b4fa8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1780,7 +1780,7 @@
                     <Compare expression="nextAlarmTimeColor2">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff5e52d4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff2475cf">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1795,7 +1795,7 @@
                     <Compare expression="nextAlarmTimeColor3">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff6c64df">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff56a2e8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1810,7 +1810,7 @@
                     <Compare expression="nextAlarmTimeColor4">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff7d76e9">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff92cdf8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1825,7 +1825,7 @@
                     <Compare expression="nextAlarmTimeColor5">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff6a63d3">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff3a8add">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1840,7 +1840,7 @@
                     <Compare expression="nextAlarmTimeColor6">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff8984e7">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa8dafa">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1855,7 +1855,7 @@
                     <Compare expression="nextAlarmTimeColor7">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa9a6f4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc5e9ff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1870,7 +1870,7 @@
                     <Compare expression="nextAlarmTimeColor8">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc9c7fb">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe6f7ff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1885,7 +1885,7 @@
                     <Compare expression="nextAlarmTimeColor9">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe4e2ff">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff2fbff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1900,7 +1900,7 @@
                     <Compare expression="nextAlarmTimeColor10">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff7f5ff">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffffffff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1915,7 +1915,7 @@
                     <Compare expression="nextAlarmTimeColor11">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe4e2ff">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff2fbff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1930,7 +1930,7 @@
                     <Compare expression="nextAlarmTimeColor12">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc9c7fb">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe6f7ff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1945,7 +1945,7 @@
                     <Compare expression="nextAlarmTimeColor13">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa9a6f4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc5e9ff">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1960,7 +1960,7 @@
                     <Compare expression="nextAlarmTimeColor14">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff8984e7">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa8dafa">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1975,7 +1975,7 @@
                     <Compare expression="nextAlarmTimeColor15">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff6a63d3">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff3a8add">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -1990,7 +1990,7 @@
                     <Compare expression="nextAlarmTimeColor16">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff7d76e9">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff92cdf8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -2005,7 +2005,7 @@
                     <Compare expression="nextAlarmTimeColor17">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff6c64df">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff56a2e8">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -2020,7 +2020,7 @@
                     <Compare expression="nextAlarmTimeColor18">
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff5e52d4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff2475cf">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -2030,7 +2030,7 @@
                     <Default>
                         <PartText x="0" y="0" width="207" height="40">
                             <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff4330b4">
+                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
                                     <Template><![CDATA[%s]]>
                                         <Parameter expression="[COMPLICATION.TITLE]" />
                                     </Template>
@@ -2077,7 +2077,7 @@
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <PartText x="0" y="0" width="207" height="32">
                     <Text align="CENTER" verticalAlign="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="30" weight="NORMAL" color="#ffa9a3df">
+                        <Font family="SYNC_TO_DEVICE" size="30" weight="NORMAL" color="#ffa9cfee">
                             <Template><![CDATA[%s]]>
                                 <Parameter expression="[COMPLICATION.TEXT]" />
                             </Template>
@@ -2106,7 +2106,7 @@
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <PartText x="0" y="0" width="207" height="32">
                     <Text align="CENTER" verticalAlign="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="30" weight="NORMAL" color="#ffa9a3df">
+                        <Font family="SYNC_TO_DEVICE" size="30" weight="NORMAL" color="#ffa9cfee">
                             <Template><![CDATA[%s]]>
                                 <Parameter expression="[COMPLICATION.TEXT]" />
                             </Template>
@@ -2135,7 +2135,7 @@
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <PartText x="0" y="0" width="207" height="32">
                     <Text align="CENTER" verticalAlign="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="30" weight="NORMAL" color="#ffa9a3df">
+                        <Font family="SYNC_TO_DEVICE" size="30" weight="NORMAL" color="#ffa9cfee">
                             <Template><![CDATA[%s]]>
                                 <Parameter expression="[COMPLICATION.TEXT]" />
                             </Template>
@@ -2164,7 +2164,7 @@
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <PartText x="0" y="0" width="207" height="32">
                     <Text align="CENTER" verticalAlign="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="30" weight="NORMAL" color="#ffa9a3df">
+                        <Font family="SYNC_TO_DEVICE" size="30" weight="NORMAL" color="#ffa9cfee">
                             <Template><![CDATA[%s]]>
                                 <Parameter expression="[COMPLICATION.TEXT]" />
                             </Template>

@@ -3,10 +3,7 @@ package com.example.oneshotalarm.watch;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.ComponentName;
 import android.util.Log;
-
-import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester;
 
 import com.google.android.gms.wearable.DataMap;
 import com.google.android.gms.wearable.DataMapItem;
@@ -38,7 +35,9 @@ public class WearAlarmListenerService extends WearableListenerService {
                     && event.getDataItem() != null
                     && event.getDataItem().getUri() != null
                     && WATCH_DISMISS_DATA_PATH.equals(event.getDataItem().getUri().getPath())) {
-                dismissWatchAlarm();
+                DataMap map = DataMapItem.fromDataItem(event.getDataItem()).getDataMap();
+                Log.d(TAG, "Received phone dismiss data: " + map.getString("alarm_id", ""));
+                dismissWatchAlarm(map.getString("alarm_id", ""));
                 return;
             }
             if (event != null
@@ -56,7 +55,9 @@ public class WearAlarmListenerService extends WearableListenerService {
             return;
         }
         if (WATCH_DISMISS_PATH.equals(messageEvent.getPath())) {
-            dismissWatchAlarm();
+            String alarmId = alarmIdFromPayload(messageEvent.getData());
+            Log.d(TAG, "Received phone dismiss message: " + alarmId);
+            dismissWatchAlarm(alarmId);
             return;
         }
         if (TILE_STATE_PATH.equals(messageEvent.getPath())) {
@@ -68,31 +69,33 @@ public class WearAlarmListenerService extends WearableListenerService {
         }
         String time = "--:--";
         String label = "鬧鐘";
+        String alarmId = "";
         try {
             JSONObject json = new JSONObject(new String(messageEvent.getData(), StandardCharsets.UTF_8));
             time = json.optString("time", time);
             label = json.optString("label", label);
+            alarmId = json.optString("id", "");
         } catch (Exception e) {
             Log.e(TAG, "Parse alarm message failed", e);
         }
-        String alarmKey = time + "\n" + label;
+        String alarmKey = alarmId + "\n" + time + "\n" + label;
         if (isDuplicateAlarm(alarmKey)) {
             Log.d(TAG, "Duplicate watch alarm ignored");
             return;
         }
-        WatchAlarmService.start(this, alarmKey);
-        Intent intent = new Intent(this, WatchAlarmActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        intent.putExtra(WatchAlarmActivity.EXTRA_TIME, time);
-        intent.putExtra(WatchAlarmActivity.EXTRA_LABEL, label);
-        startActivity(intent);
+        WatchLocalAlarmScheduler.scheduleImmediate(this, alarmId, time, label);
     }
 
-    private void dismissWatchAlarm() {
+    private void dismissWatchAlarm(String alarmId) {
+        Log.d(TAG, "Dismiss watch alarm from phone: " + (alarmId == null ? "" : alarmId));
+        if (alarmId != null && !alarmId.trim().isEmpty()) {
+            WatchLocalAlarmScheduler.cancelAlarm(this, alarmId.trim());
+        }
         WatchAlarmService.stop(this);
         Intent intent = new Intent(WatchAlarmActivity.ACTION_DISMISS_LOCAL);
         intent.setPackage(getPackageName());
         sendBroadcast(intent);
+        WatchScheduleDisplayState.refreshFromCacheAndRequest(this);
     }
 
     private boolean isDuplicateAlarm(String alarmKey) {
@@ -140,11 +143,8 @@ public class WearAlarmListenerService extends WearableListenerService {
                 .putLong(AlarmScheduleState.KEY_NEXT_AT, map.getLong("next_at", 0L))
                 .putLong(AlarmScheduleState.KEY_UPDATED_AT, map.getLong("updated_at", System.currentTimeMillis()))
                 .apply();
-        try {
-            requestAlarmComplicationUpdates();
-        } catch (Exception e) {
-            Log.e(TAG, "Request tile update failed", e);
-        }
+        WatchLocalAlarmScheduler.scheduleFromCachedState(this);
+        WatchScheduleDisplayState.refreshFromCacheAndRequest(this);
     }
 
     private void saveTileState(String rawJson) {
@@ -166,29 +166,20 @@ public class WearAlarmListenerService extends WearableListenerService {
                     .putLong(AlarmScheduleState.KEY_NEXT_AT, json.optLong("next_at", 0L))
                     .putLong(AlarmScheduleState.KEY_UPDATED_AT, json.optLong("updated_at", System.currentTimeMillis()))
                     .apply();
-            requestAlarmComplicationUpdates();
+            WatchLocalAlarmScheduler.scheduleFromCachedState(this);
+            WatchScheduleDisplayState.refreshFromCacheAndRequest(this);
         } catch (Exception e) {
             Log.e(TAG, "Save tile state message failed", e);
         }
     }
 
-    private void requestAlarmComplicationUpdates() {
-        requestAlarmComplicationUpdate(PrevAlarmComplicationDataSourceService.class);
-        requestAlarmComplicationUpdate(NextAlarmComplicationDataSourceService.class);
-        requestAlarmComplicationUpdate(PrevAlarmLabelLine1ComplicationDataSourceService.class);
-        requestAlarmComplicationUpdate(PrevAlarmLabelLine2ComplicationDataSourceService.class);
-        requestAlarmComplicationUpdate(NextAlarmLabelLine1ComplicationDataSourceService.class);
-        requestAlarmComplicationUpdate(NextAlarmLabelLine2ComplicationDataSourceService.class);
-    }
-
-    private void requestAlarmComplicationUpdate(Class<?> serviceClass) {
+    private String alarmIdFromPayload(byte[] data) {
+        String raw = new String(data == null ? new byte[0] : data, StandardCharsets.UTF_8);
         try {
-            ComplicationDataSourceUpdateRequester.create(
-                    this,
-                    new ComponentName(this, serviceClass)
-            ).requestUpdateAll();
-        } catch (Exception e) {
-            Log.e(TAG, "Request alarm complication update failed", e);
+            return new JSONObject(raw).optString("alarm_id", "");
+        } catch (Exception ignored) {
+            return "";
         }
     }
+
 }

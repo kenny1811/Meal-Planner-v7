@@ -16,6 +16,7 @@ from meal_planner.settings import AppSettings, get_settings
 
 MAINTENANCE_SHEETS: tuple[tuple[str, str], ...] = (
     ("roster", "更表"),
+    ("wake_alarms", "起身表"),
     ("overtime", "加班表"),
     ("payroll_times", "更時表"),
     ("public_holidays", "公眾假期"),
@@ -70,6 +71,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
 def _sheet_name_for_key(settings: AppSettings, sheet_key: str) -> str:
     mapping = {
         "roster": settings.sheets.roster,
+        "wake_alarms": "起身表",
         "overtime": settings.sheets.overtime,
         "payroll_times": settings.sheets.payroll_times,
         "public_holidays": settings.sheets.public_holidays,
@@ -104,6 +106,11 @@ def _cell_to_json_value(value: Any) -> Any:
 
 
 def _read_workbook_sheet_rows(settings: AppSettings, wb: Workbook, sheet_key: str) -> list[list[Any]]:
+    if sheet_key == "wake_alarms":
+        try:
+            get_sheet(wb, _sheet_name_for_key(settings, sheet_key))
+        except Exception:
+            return [["日期", "起身時間", "備註"]]
     sheet_name = _sheet_name_for_key(settings, sheet_key)
     ws = get_sheet(wb, sheet_name)
     max_row = int(ws.max_row or 0)
@@ -334,11 +341,15 @@ def load_sheet_rows(
         _ensure_schema(conn)
         has_rows = _has_sheet_rows(conn, sheet_key)
     if not has_rows:
-        if wb is None:
+        if sheet_key == "wake_alarms" and wb is None:
+            save_sheet_rows(sheet_key, [["日期", "起身時間", "備註"]], settings)
+            has_rows = True
+        if not has_rows and wb is None:
             raise MaintenanceDatabaseError(
                 f"Maintenance sheet {_display_name_for_key(sheet_key)} is empty and no workbook was provided."
             )
-        bootstrap_sheet_from_workbook(settings, wb, sheet_key)
+        if not has_rows and wb is not None:
+            bootstrap_sheet_from_workbook(settings, wb, sheet_key)
 
     with closing(_connect(settings)) as conn:
         _ensure_schema(conn)

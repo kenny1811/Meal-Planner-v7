@@ -178,6 +178,7 @@ class NutritionDatabaseTests(unittest.TestCase):
                 "dob": dob_42,
                 "gender": "female",
                 "height_cm": 165.5,
+                "monthly_weight_change_kg": -0.5,
                 "weight_history": [{"weight_kg": 58.2, "recorded_at": "2026-06-20 10:00:00"}],
             },
             settings,
@@ -187,6 +188,7 @@ class NutritionDatabaseTests(unittest.TestCase):
                 "dob": dob_42,
                 "gender": "female",
                 "height_cm": 165.5,
+                "monthly_weight_change_kg": -0.5,
                 "weight_history": [{"weight_kg": 58.2, "recorded_at": "2026-06-20 10:00:00"}],
             },
             settings,
@@ -196,6 +198,7 @@ class NutritionDatabaseTests(unittest.TestCase):
                 "dob": dob_43,
                 "gender": "female",
                 "height_cm": 165.5,
+                "monthly_weight_change_kg": -0.25,
                 "weight_history": [{"weight_kg": 58.2, "recorded_at": "2026-06-20 10:00:00"}],
             },
             settings,
@@ -205,6 +208,7 @@ class NutritionDatabaseTests(unittest.TestCase):
                 "dob": dob_43,
                 "gender": "female",
                 "height_cm": 165.5,
+                "monthly_weight_change_kg": -0.25,
                 "weight_history": [
                     {"weight_kg": 58.2, "recorded_at": "2026-06-20 10:00:00"},
                     {"weight_kg": 59.1, "recorded_at": "2026-06-21 10:00:00"},
@@ -216,18 +220,20 @@ class NutritionDatabaseTests(unittest.TestCase):
 
         self.assertEqual(
             before,
-            {"age": None, "dob": "", "gender": "", "height_cm": None, "weight_kg": None, "last_updated": "", "weight_history": []},
+            {"age": None, "dob": "", "gender": "", "height_cm": None, "weight_kg": None, "monthly_weight_change_kg": 0.0, "last_updated": "", "weight_history": []},
         )
         self.assertEqual(saved["dob"], dob_42)
         self.assertEqual(saved["age"], 42)
         self.assertEqual(saved["gender"], "female")
         self.assertEqual(saved["height_cm"], 165.5)
         self.assertEqual(saved["weight_kg"], 58.2)
+        self.assertEqual(saved["monthly_weight_change_kg"], -0.5)
         self.assertEqual(saved["last_updated"], "2026-06-20 10:00:00")
         self.assertEqual([item["weight_kg"] for item in saved["weight_history"]], [58.2])
         self.assertEqual([item["weight_kg"] for item in same_weight["weight_history"]], [58.2])
         self.assertEqual(age_changed["dob"], dob_43)
         self.assertEqual(age_changed["age"], 43)
+        self.assertEqual(age_changed["monthly_weight_change_kg"], -0.25)
         self.assertEqual([item["weight_kg"] for item in age_changed["weight_history"]], [58.2])
         self.assertEqual(changed_weight["weight_kg"], 59.1)
         self.assertEqual(changed_weight["last_updated"], "2026-06-21 10:00:00")

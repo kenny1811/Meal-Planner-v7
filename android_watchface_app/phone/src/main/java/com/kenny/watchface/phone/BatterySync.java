@@ -11,14 +11,34 @@ import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 
+import java.util.concurrent.TimeUnit;
+
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+
 final class BatterySync {
     static final String PATH = "/phone_battery";
     static final String KEY_PERCENT = "percent";
     static final String KEY_TIMESTAMP = "timestamp";
     private static final String KEY_NONCE = "nonce";
+    private static final String WORK_NAME = "phone_battery_sync";
     private static final String TAG = "BatterySync";
 
     private BatterySync() {
+    }
+
+    static void schedulePeriodic(Context context) {
+        PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(
+                PhoneBatteryWorker.class,
+                15,
+                TimeUnit.MINUTES
+        ).build();
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                WORK_NAME,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request
+        );
     }
 
     static int readBatteryPercent(Context context) {

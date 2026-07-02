@@ -47,9 +47,6 @@ class MenuV5LayoutConfig:
 class NutritionFormatConfig:
     tolerance: float
     kcal_per_fat_g: float
-    fat_pct_total: float
-    fat_pct_saturated: float
-    fat_pct_trans: float
 
 
 @dataclass(frozen=True)
@@ -197,9 +194,6 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
     nutrition_format = NutritionFormatConfig(
         tolerance=float(nf.get("tolerance", 5)),
         kcal_per_fat_g=float(nf.get("kcal_per_fat_g", 9)),
-        fat_pct_total=float(nf.get("fat_pct_total", 0.275)),
-        fat_pct_saturated=float(nf.get("fat_pct_saturated", 0.07)),
-        fat_pct_trans=float(nf.get("fat_pct_trans", 0.01)),
     )
     np = data.get("nutrition_portion", {}) or {}
     nutrition_portion = NutritionPortionConfig(

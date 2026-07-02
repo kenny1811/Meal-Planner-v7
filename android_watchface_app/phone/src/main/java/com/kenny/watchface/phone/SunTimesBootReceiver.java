@@ -8,7 +8,8 @@ public class SunTimesBootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-            SunTimesSync.scheduleDailyAt0530(context);
+            SunTimesSync.scheduleDailyAt0400(context);
+            BatterySync.schedulePeriodic(context);
         }
     }
 }

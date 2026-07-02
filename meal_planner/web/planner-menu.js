@@ -1,10 +1,12 @@
     function menuButtonForKey(key) {
+      if (isRemovedMenuKey(key)) return null;
       if (key === "planner") return document.getElementById("menu-planner");
       if (key === "shopping") return document.getElementById("menu-shopping");
       if (key === "alarm_sync") return document.getElementById("menu-alarm-sync");
       if (key === "target") return document.getElementById("menu-config-target");
       if (key === "catalog") return document.getElementById("menu-config-catalog");
       if (key === "details") return document.getElementById("menu-config-details");
+      if (key === "shift_code_analysis") return document.getElementById("menu-report-shift-code-analysis");
       if (maintSheetKeys().includes(key)) {
         const sheetBtn = document.querySelector(`.menu-item[data-maint-sheet-key="${CSS.escape(key)}"]`);
         if (sheetBtn) return sheetBtn;
@@ -14,7 +16,32 @@
     function existingMenuNodeForKey(key) {
       if (key === "config") return document.getElementById("config-menu-tree");
       if (key === "maint") return document.getElementById("maint-menu-tree");
+      if (key === "reports") return document.getElementById("reports-menu-tree");
+      if (isMenuTreeKey(key)) return document.querySelector(`.menu-tree[data-menu-tree-key="${CSS.escape(key)}"]`);
       return menuButtonForKey(key);
+    }
+
+    function menuAttr(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[ch]));
+    }
+
+    function createCustomMenuTree(key) {
+      const oldButton = menuButtonForKey(key);
+      if (oldButton) oldButton.remove();
+      const tree = document.createElement("div");
+      tree.className = "menu-tree menu-custom-tree is-open";
+      tree.setAttribute("data-menu-tree-key", key);
+      tree.innerHTML = `<button type="button" class="menu-item menu-tree-toggle" data-menu-group="top" data-menu-key="${menuAttr(key)}" aria-expanded="true">
+        <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label"></span><span class="menu-tree-mark" aria-hidden="true"></span>
+      </button>
+      <div class="menu-tree-children" data-menu-drop-group="${menuAttr(key)}"></div>`;
+      return tree;
     }
     function createCustomMenuButton(key) {
       const btn = document.createElement("button");
@@ -38,6 +65,7 @@
     function defaultMenuLabel(key) {
       if (key === "config") return "Config";
       if (key === "maint") return "Maint";
+      if (key === "reports") return "報表";
       if (key === "planner") return "Menu Planner";
       if (key === "shopping") return "Shopping List";
       if (key === "alarm_sync") {
@@ -45,9 +73,10 @@
         if (staticLabel) return staticLabel;
         return "alarm_sync";
       }
-      if (key === "target") return "Target";
+      if (key === "target") return "營養指標 / Targets";
       if (key === "catalog") return "Catalog";
       if (key === "details") return "Detail Settings";
+      if (key === "shift_code_analysis") return "更碼分析";
       const sheet = (maintSheets || []).find((item) => item && item.sheet_key === key);
       if (sheet) return MAINT_SHEET_LABELS[key] || sheet.display_name || key;
       return String(menuLabels[key] || key);
@@ -61,6 +90,7 @@
 
     function menuLabel(key) {
       const custom = menuLabels && typeof menuLabels === "object" ? String(menuLabels[key] || "").trim() : "";
+      if (key === "target" && ["Target", "Targets"].includes(custom)) return defaultMenuLabel(key);
       return custom || defaultMenuLabel(key);
     }
 
@@ -79,12 +109,16 @@
     function menuNodeForKey(key) {
       if (key === "config") return document.getElementById("config-menu-tree");
       if (key === "maint") return document.getElementById("maint-menu-tree");
+      if (key === "reports") return document.getElementById("reports-menu-tree");
+      if (isMenuTreeKey(key)) return existingMenuNodeForKey(key) || createCustomMenuTree(key);
       return menuButtonForKey(key) || createCustomMenuButton(key);
     }
 
     function menuContainerForGroup(group) {
       if (group === "config") return document.querySelector("#config-menu-tree .menu-tree-children");
       if (group === "maint") return document.getElementById("maint-menu-children");
+      if (group === "reports") return document.querySelector("#reports-menu-tree .menu-tree-children");
+      if (group && group !== "top") return document.querySelector(`[data-menu-drop-group="${CSS.escape(group)}"]`);
       return document.querySelector(".sidebar .menu-list");
     }
 
@@ -106,21 +140,45 @@
       });
     }
 
+    function menuGroups() {
+      const groups = ["top", "config", "maint", "reports"];
+      Object.keys(menuOrder || {}).forEach((key) => {
+        if (key && !groups.includes(key)) groups.push(key);
+      });
+      return groups;
+    }
+
+    function customMenuTreeKeys() {
+      return Object.keys(menuOrder || {}).filter((key) => key && key !== "top" && !MENU_TREE_KEYS.includes(key) && !menuNodeHasContent(key));
+    }
+
+    function menuContainsKey(group, key, seen = new Set()) {
+      if (!group || !key || seen.has(group)) return false;
+      seen.add(group);
+      const children = Array.isArray(menuOrder[group]) ? menuOrder[group] : [];
+      for (const child of children) {
+        if (child === key) return true;
+        if (isMenuTreeKey(child) && menuContainsKey(child, key, seen)) return true;
+      }
+      return false;
+    }
+
     function cleanMenuOrder() {
       const validLeafKeys = allMenuLeafKeys();
-      const validKeys = MENU_TREE_KEYS.concat(validLeafKeys);
+      const validKeys = MENU_TREE_KEYS.concat(customMenuTreeKeys(), validLeafKeys);
       const used = new Set();
-      const next = { top: [], config: [], maint: [] };
+      const next = Object.fromEntries(menuGroups().map((group) => [group, []]));
       const hidden = new Set(Array.isArray(menuHiddenKeys) ? menuHiddenKeys.map(String) : []);
 
       const add = (group, key) => {
+        if (isRemovedMenuKey(key)) return;
         if (used.has(key) || hidden.has(key)) return;
-        if (isMenuTreeKey(key) && group !== "top") group = "top";
+        if (!next[group]) next[group] = [];
         next[group].push(key);
         used.add(key);
       };
 
-      for (const group of ["top", "config", "maint"]) {
+      for (const group of menuGroups()) {
         const saved = Array.isArray(menuOrder[group]) ? menuOrder[group] : [];
         saved.forEach((key) => add(group, String(key)));
       }
@@ -130,14 +188,14 @@
     }
 
     function removeKeyFromMenuOrder(key) {
-      for (const group of ["top", "config", "maint"]) {
+      for (const group of menuGroups()) {
         menuOrder[group] = (Array.isArray(menuOrder[group]) ? menuOrder[group] : []).filter((item) => item !== key);
       }
     }
 
     function menuGroupForKey(key) {
       const order = cleanMenuOrder();
-      for (const group of ["top", "config", "maint"]) {
+      for (const group of menuGroups()) {
         if (order[group].includes(key)) return group;
       }
       return defaultMenuGroup(key);
@@ -157,7 +215,7 @@
     function applyMenuOrder() {
       const order = cleanMenuOrder();
       removeDuplicateMenuNodes();
-      const visible = new Set(["top", "config", "maint"].flatMap((group) => order[group] || []));
+      const visible = new Set(menuGroups().flatMap((group) => order[group] || []));
       const hidden = new Set(Array.isArray(menuHiddenKeys) ? menuHiddenKeys.map(String) : []);
       hidden.forEach((key) => {
         const node = existingMenuNodeForKey(key);
@@ -167,14 +225,23 @@
         const key = item.getAttribute("data-menu-key");
         if (!key || !visible.has(key)) item.remove();
       });
-      for (const group of ["top", "config", "maint"]) {
+      document.querySelectorAll(".menu-custom-tree[data-menu-tree-key]").forEach((item) => {
+        const key = item.getAttribute("data-menu-tree-key");
+        if (!key || !visible.has(key)) item.remove();
+      });
+      for (const group of menuGroups()) {
         const container = menuContainerForGroup(group);
         if (!container) continue;
         order[group].forEach((key) => {
           const node = menuNodeForKey(key);
           if (!node) return;
           node.style.display = "";
-          if (!isMenuTreeKey(key)) setMenuItemGroupClass(node, group);
+          if (isMenuTreeKey(key)) {
+            const toggle = node.querySelector(".menu-item[data-menu-key]");
+            if (toggle) setMenuItemGroupClass(toggle, group);
+          } else {
+            setMenuItemGroupClass(node, group);
+          }
           container.appendChild(node);
         });
       }
@@ -182,25 +249,56 @@
       attachMenuDragHandles();
     }
 
-    function menuDropPosition(item, clientY) {
-      if (!item || !Number.isFinite(clientY)) return "before";
+    function menuDropPosition(item, clientY, fromKey = "") {
+      if (!item || !Number.isFinite(clientY)) return "none";
       const rect = item.getBoundingClientRect();
+      const toKey = item.getAttribute("data-menu-key") || "";
+      const y = clientY - rect.top;
+      if (!toKey || toKey === fromKey) return "none";
+      if (toKey && toKey !== fromKey && !menuNodeHasContent(toKey) && !menuContainsKey(fromKey, toKey)) {
+        if (y >= rect.height * 0.25 && y <= rect.height * 0.75) return "inside";
+      }
+      if (y < rect.height * 0.25) return "before";
+      if (y > rect.height * 0.75) return "after";
+      if (menuNodeHasContent(toKey)) return "none";
       return clientY > rect.top + rect.height / 2 ? "after" : "before";
     }
 
     function markMenuDropTarget(item, position) {
-      document.querySelectorAll(".menu-item.is-menu-drag-over,.menu-item.is-menu-drop-after").forEach((el) => {
-        el.classList.remove("is-menu-drag-over", "is-menu-drop-after");
+      document.querySelectorAll(".menu-item.is-menu-drag-over,.menu-item.is-menu-drop-after,.menu-item.is-menu-drop-inside").forEach((el) => {
+        el.classList.remove("is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside");
+      });
+      document.querySelectorAll(".is-menu-drop-zone-active").forEach((el) => {
+        el.classList.remove("is-menu-drop-zone-active");
       });
       if (!item) return;
+      if (position === "none") return;
+      if (position === "inside") {
+        item.classList.add("is-menu-drop-inside");
+        return;
+      }
       item.classList.add(position === "after" ? "is-menu-drop-after" : "is-menu-drag-over");
     }
 
+    function markMenuDropContainer(container) {
+      markMenuDropTarget(null, "before");
+      if (container) container.classList.add("is-menu-drop-zone-active");
+    }
+
     function moveMenuItem(fromKey, toGroup, toKey = null, position = "before") {
-      if (!fromKey || !toGroup || !["top", "config", "maint"].includes(toGroup)) return;
-      if (isMenuTreeKey(fromKey)) toGroup = "top";
+      if (!fromKey || !toGroup) return;
+      if (position === "none") return;
+      if (menuContainsKey(fromKey, toGroup)) return;
+      if (position === "inside" && toKey && toKey !== fromKey && !menuNodeHasContent(toKey) && !menuContainsKey(fromKey, toKey)) {
+        toGroup = toKey;
+        toKey = null;
+      } else if (position === "inside") {
+        position = "before";
+      }
+      if (!menuOrder[toGroup]) menuOrder[toGroup] = [];
       const order = cleanMenuOrder();
-      for (const group of ["top", "config", "maint"]) {
+      if (!order[toGroup]) order[toGroup] = [];
+      for (const group of menuGroups()) {
         order[group] = order[group].filter((key) => key !== fromKey);
       }
       const targetOrder = order[toGroup];
@@ -250,47 +348,6 @@
       persistMenuLayout();
     }
 
-    function hiddenMenuChoicesText() {
-      const hidden = Array.isArray(menuHiddenKeys) ? menuHiddenKeys.filter(Boolean) : [];
-      if (!hidden.length) return "";
-      return `\nHidden: ${hidden.map((key) => `${menuLabel(key)} (${key})`).join(", ")}`;
-    }
-
-    function resolveInsertedMenuKey(input) {
-      const clean = String(input || "").trim();
-      if (!clean) return "";
-      const hidden = Array.isArray(menuHiddenKeys) ? menuHiddenKeys.map(String) : [];
-      const lower = clean.toLowerCase();
-      const match = hidden.find((key) => key.toLowerCase() === lower || menuLabel(key).toLowerCase() === lower);
-      if (match) {
-        menuHiddenKeys = hidden.filter((key) => key !== match);
-        return match;
-      }
-      const key = `custom_${Date.now()}`;
-      menuLabels[key] = clean;
-      return key;
-    }
-
-    function insertMenuItemNear(anchorKey, anchorGroup, position) {
-      const input = window.prompt(`Item name or hidden item key${hiddenMenuChoicesText()}`, "");
-      const key = resolveInsertedMenuKey(input);
-      if (!key) return;
-      moveMenuItem(key, anchorGroup || "top", anchorKey, position);
-      persistMenuLayout();
-    }
-
-    function deleteMenuItem(key) {
-      if (!key) return;
-      removeKeyFromMenuOrder(key);
-      if (key.startsWith("custom_")) {
-        delete menuLabels[key];
-      } else if (!menuHiddenKeys.includes(key)) {
-        menuHiddenKeys.push(key);
-      }
-      applyMenuOrder();
-      persistMenuLayout();
-    }
-
     function attachMenuContextMenuActions() {
       const menu = document.getElementById("menu-context-menu");
       if (!menu || menu.dataset.bound === "1") return;
@@ -302,10 +359,7 @@
         const key = menu.getAttribute("data-menu-key");
         const group = menu.getAttribute("data-menu-group") || menuGroupForKey(key);
         hideMenuContextMenu();
-        if (action === "insert-before") insertMenuItemNear(key, group, "before");
-        if (action === "insert-after") insertMenuItemNear(key, group, "after");
         if (action === "rename") renameMenuItem(key);
-        if (action === "delete") deleteMenuItem(key);
       });
       document.addEventListener("mousedown", (ev) => {
         if (!ev.target || !ev.target.closest || !ev.target.closest("#menu-context-menu")) hideMenuContextMenu();
@@ -330,6 +384,51 @@
       ghost.style.transform = `translate(${ev.clientX + 14}px, ${ev.clientY + 12}px)`;
     }
 
+    function setCustomMenuTreeOpen(key, open, persist = true) {
+      const tree = document.querySelector(`.menu-tree[data-menu-tree-key="${CSS.escape(key)}"]`);
+      const toggle = tree ? tree.querySelector(".menu-tree-toggle") : null;
+      const isOpen = !!open;
+      menuTreeOpen[key] = isOpen;
+      if (!tree || !toggle) return;
+      tree.classList.toggle("is-open", isOpen);
+      toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      if (persist) persistMenuTreeOpen();
+    }
+
+    function setAnyMenuTreeOpen(key, open, persist = true) {
+      if (key === "config") return setConfigMenuTreeOpen(open, persist);
+      if (key === "maint") return setMaintMenuTreeOpen(open, persist);
+      if (key === "reports") return setReportsMenuTreeOpen(open, persist);
+      return setCustomMenuTreeOpen(key, open, persist);
+    }
+
+    function createMenuItem() {
+      const next = window.prompt("Menu item name", "");
+      if (next == null) return;
+      const clean = String(next).trim();
+      if (!clean) return;
+      const key = `custom_menu_${Date.now()}`;
+      menuLabels[key] = clean;
+      if (!Array.isArray(menuOrder.top)) menuOrder.top = [];
+      if (!menuOrder.top.includes(key)) menuOrder.top.push(key);
+      menuOrder[key] = [];
+      menuTreeOpen[key] = true;
+      applyMenuOrder();
+      setAnyMenuTreeOpen(key, true, false);
+      persistMenuLayout();
+    }
+
+    function attachMenuAddButton() {
+      const btn = document.getElementById("menu-add");
+      if (!btn || btn.dataset.menuAddBound === "1") return;
+      btn.dataset.menuAddBound = "1";
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        createMenuItem();
+      });
+    }
+
     function startPointerMenuDrag(handle, ev) {
       const item = handle.closest(".menu-item[data-menu-group][data-menu-key]");
       if (!item || (ev.button != null && ev.button !== 0)) return;
@@ -343,6 +442,7 @@
       let targetPosition = "before";
       menuDragState = { group, key: fromKey };
       item.classList.add("is-menu-dragging");
+      document.body.classList.add("is-dnd-dragging");
       const ghost = createMenuDragGhost(item, ev);
       const onMove = (mv) => {
         mv.preventDefault();
@@ -354,33 +454,72 @@
           targetItem = next;
           targetGroup = next.getAttribute("data-menu-group");
           targetKey = next.getAttribute("data-menu-key");
-          targetPosition = menuDropPosition(next, mv.clientY);
+          targetPosition = menuDropPosition(next, mv.clientY, fromKey);
+          if (targetPosition === "inside") openMenuTreeForGroup(targetKey, false);
+          if (targetPosition === "none") {
+            targetGroup = group;
+            targetKey = fromKey;
+          }
           markMenuDropTarget(next, targetPosition);
         } else if (container) {
           targetItem = null;
           targetGroup = container.getAttribute("data-menu-drop-group") || "top";
           targetKey = null;
           targetPosition = "before";
-          markMenuDropTarget(null, targetPosition);
+          markMenuDropContainer(container);
         }
       };
       const onUp = (up) => {
         up.preventDefault();
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
-        document.querySelectorAll(".menu-item.is-menu-dragging,.menu-item.is-menu-drag-over,.menu-item.is-menu-drop-after").forEach((el) => {
-          el.classList.remove("is-menu-dragging", "is-menu-drag-over", "is-menu-drop-after");
+        document.querySelectorAll(".menu-item.is-menu-dragging,.menu-item.is-menu-drag-over,.menu-item.is-menu-drop-after,.menu-item.is-menu-drop-inside").forEach((el) => {
+          el.classList.remove("is-menu-dragging", "is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside");
         });
+        document.querySelectorAll(".is-menu-drop-zone-active").forEach((el) => el.classList.remove("is-menu-drop-zone-active"));
         ghost.remove();
         menuDragState = null;
+        document.body.classList.remove("is-dnd-dragging");
         moveMenuItem(fromKey, targetGroup, targetKey, targetPosition);
       };
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     }
 
+    function attachMenuDropContainers(root = document) {
+      root.querySelectorAll("[data-menu-drop-group]").forEach((container) => {
+        if (container.dataset.menuContainerDropBound === "1") return;
+        container.dataset.menuContainerDropBound = "1";
+        container.addEventListener("dragover", (ev) => {
+          const fromKey = menuDragState && menuDragState.key;
+          if (!fromKey) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
+          markMenuDropContainer(container);
+        });
+        container.addEventListener("dragleave", (ev) => {
+          if (container.contains(ev.relatedTarget)) return;
+          container.classList.remove("is-menu-drop-zone-active");
+        });
+        container.addEventListener("drop", (ev) => {
+          const fromKey = (menuDragState && menuDragState.key) || (ev.dataTransfer && ev.dataTransfer.getData("application/x-menu-key"));
+          const toGroup = container.getAttribute("data-menu-drop-group") || "top";
+          if (!fromKey || !toGroup) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          container.classList.remove("is-menu-drop-zone-active");
+          menuDragState = null;
+          document.body.classList.remove("is-dnd-dragging");
+          moveMenuItem(fromKey, toGroup, null, "before");
+        });
+      });
+    }
+
     function attachMenuDragHandles(root = document) {
       attachMenuContextMenuActions();
+      attachMenuAddButton();
+      attachMenuDropContainers(root);
       root.querySelectorAll(".menu-drag-handle").forEach((handle) => {
         if (handle.dataset.menuDragBound === "1") return;
         handle.dataset.menuDragBound = "1";
@@ -395,6 +534,7 @@
           const item = handle.closest(".menu-item[data-menu-group][data-menu-key]");
           if (!item || !ev.dataTransfer) return;
           ev.stopPropagation();
+          document.body.classList.add("is-dnd-dragging");
           menuDragState = {
             group: item.getAttribute("data-menu-group"),
             key: item.getAttribute("data-menu-key"),
@@ -405,31 +545,50 @@
         });
         handle.addEventListener("dragend", () => {
           menuDragState = null;
-          document.querySelectorAll(".menu-item.is-menu-drag-over").forEach((el) => el.classList.remove("is-menu-drag-over"));
+          document.body.classList.remove("is-dnd-dragging");
+          document.querySelectorAll(".menu-item.is-menu-drag-over,.menu-item.is-menu-drop-after,.menu-item.is-menu-drop-inside").forEach((el) => el.classList.remove("is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside"));
+          document.querySelectorAll(".is-menu-drop-zone-active").forEach((el) => el.classList.remove("is-menu-drop-zone-active"));
         });
       });
       root.querySelectorAll(".menu-item[data-menu-group][data-menu-key]").forEach((item) => {
         if (item.dataset.menuDropBound === "1") return;
         item.dataset.menuDropBound = "1";
+        item.addEventListener("click", (ev) => {
+          const key = item.getAttribute("data-menu-key");
+          if (!key || !isMenuTreeKey(key) || MENU_TREE_KEYS.includes(key)) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          const tree = item.closest(".menu-tree");
+          setAnyMenuTreeOpen(key, !(tree && tree.classList.contains("is-open")));
+        });
         item.addEventListener("dragover", (ev) => {
           const fromKey = menuDragState && menuDragState.key;
           if (fromKey) {
             ev.preventDefault();
+            ev.stopPropagation();
+            const position = menuDropPosition(item, ev.clientY, fromKey);
+            if (position === "none") {
+              if (ev.dataTransfer) ev.dataTransfer.dropEffect = "none";
+              markMenuDropTarget(null, position);
+              return;
+            }
             if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
-            markMenuDropTarget(item, menuDropPosition(item, ev.clientY));
+            if (position === "inside") openMenuTreeForGroup(item.getAttribute("data-menu-key"), false);
+            markMenuDropTarget(item, position);
           }
         });
         item.addEventListener("dragleave", () => {
-          item.classList.remove("is-menu-drag-over", "is-menu-drop-after");
+          item.classList.remove("is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside");
         });
         item.addEventListener("drop", (ev) => {
           const fromKey = (menuDragState && menuDragState.key) || (ev.dataTransfer && ev.dataTransfer.getData("application/x-menu-key"));
           const toGroup = item.getAttribute("data-menu-group");
-          const position = menuDropPosition(item, ev.clientY);
-          item.classList.remove("is-menu-drag-over", "is-menu-drop-after");
+          const position = menuDropPosition(item, ev.clientY, fromKey);
+          item.classList.remove("is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside");
           menuDragState = null;
-          if (!fromKey || !toGroup) return;
+          if (!fromKey || !toGroup || position === "none") return;
           ev.preventDefault();
+          ev.stopPropagation();
           moveMenuItem(fromKey, toGroup, item.getAttribute("data-menu-key"), position);
         });
         item.addEventListener("contextmenu", (ev) => {
@@ -465,8 +624,8 @@
     }
 
     function openMenuTreeForGroup(group, persist = true) {
-      if (group === "config") setConfigMenuTreeOpen(true, persist);
-      if (group === "maint") setMaintMenuTreeOpen(true, persist);
+      if (!group || group === "top") return;
+      setAnyMenuTreeOpen(group, true, persist);
     }
 
     function setActiveMenuPathForKey(key) {
@@ -491,8 +650,16 @@
         activePanel = key;
         return;
       }
+      if (key === "shift_code_analysis") {
+        activePanel = "reports";
+        return;
+      }
       if (key === "maint") {
         activePanel = "maint";
+        return;
+      }
+      if (key === "reports") {
+        activePanel = "reports";
         return;
       }
       if (maintSheetKeys().includes(key)) {
@@ -506,7 +673,7 @@
       openMenuTreeForGroup(activeMenuPath[0], false);
     }
 
-    function applyActiveConfigView(refresh = false) {
+    function applyActiveConfigView(refresh = false, options = {}) {
       const viewName = ["targets", "catalog", "details"].includes(activeConfigView) ? activeConfigView : "targets";
       activeConfigView = viewName;
       setConfigView(viewName);
@@ -515,9 +682,9 @@
       document.getElementById("menu-config-catalog").classList.toggle("active", viewName === "catalog");
       document.getElementById("menu-config-details").classList.toggle("active", viewName === "details");
       if (!refresh) return;
-      if (viewName === "targets") refreshTargetEditor();
-      if (viewName === "catalog") refreshNutritionCatalog();
-      if (viewName === "details") refreshDetailSettings();
+      if (viewName === "targets") return refreshTargetEditor(options);
+      if (viewName === "catalog") return refreshNutritionCatalog();
+      if (viewName === "details") return refreshDetailSettings();
     }
 
     async function openConfigChild(viewName) {
@@ -528,7 +695,7 @@
       setActiveMenuPathForKey(leafKey);
       setActivePanel("config");
       openMenuTreeForGroup(menuGroupForKey(leafKey));
-      applyActiveConfigView(true);
+      await applyActiveConfigView(true, { focusDob: activeConfigView === "targets" });
     }
 
     function setMaintStatus(message) {
@@ -658,7 +825,8 @@
         el.style.width = `${Math.max(0, cell.clientWidth - padX)}px`;
       }
       el.style.height = "0px";
-      el.style.height = `${el.scrollHeight}px`;
+      const minHeight = parseFloat(getComputedStyle(el).minHeight || "0");
+      el.style.height = `${Math.max(el.scrollHeight, Number.isFinite(minHeight) ? minHeight : 0)}px`;
     }
 
     function autoResizeTextareas(root = document) {
@@ -693,8 +861,10 @@
         [".detail-editor", "table_offset_detail"],
         ["#detail-code-definitions table.detail-code-table", "table_offset_detail_codes"],
         ["#maint-editor table.maint-table", "table_offset_maint_sheet"],
+        ["#maint-editor .maint-sheet-title:not(.maint-roster-title)", "table_offset_maint_sheet"],
         ["#maint-editor table.maint-roster-table", "table_offset_maint_roster"],
-        ["#shopping-out table.shopping-table", "table_offset_shopping"],
+        ["#maint-editor .maint-roster-pane:first-child .maint-pane-title", "table_offset_maint_roster"],
+        ["#shopping-content", "table_offset_shopping"],
         ["#alarm-sync-form", "table_offset_alarm_sync"],
       ];
       for (const [selector, key] of targets) {
@@ -718,6 +888,7 @@
           : null;
         if (interactive) return;
         ev.preventDefault();
+        document.body.classList.add("is-horizontal-dragging");
         const startX = ev.clientX;
         const startOffset = formOffsetPx(key);
         const onMove = (mv) => {
@@ -727,6 +898,7 @@
         const onUp = () => {
           window.removeEventListener("mousemove", onMove);
           window.removeEventListener("mouseup", onUp);
+          document.body.classList.remove("is-horizontal-dragging");
           persistColumnWidths();
         };
         window.addEventListener("mousemove", onMove);
@@ -743,7 +915,7 @@
       const configs = [
         ['.config-view[data-config-view="catalog"] h2', "table_offset_catalog"],
         ['.config-view[data-config-view="details"] h2', "table_offset_detail"],
-        ["#maint-editor .maint-sheet-title", "table_offset_maint_sheet"],
+        ["#maint-editor .maint-sheet-title:not(.maint-roster-title)", "table_offset_maint_sheet"],
         ["#maint-editor .maint-roster-pane:first-child .maint-pane-title", "table_offset_maint_roster"],
         ["#shopping-panel h1", "table_offset_shopping"],
         ["#alarm-sync-panel h1", "table_offset_alarm_sync"],
@@ -772,6 +944,7 @@
             formColumnWidths[key] = Math.max(0, startW + (mv.clientX - startX));
             applyFormColumnWidths(root);
             if (typeof applyDetailBlockLayout === "function") applyDetailBlockLayout(root);
+            if (typeof applyShiftCodeAnalysisBlockLayout === "function") applyShiftCodeAnalysisBlockLayout(root);
             autoResizeTextareas(root);
           };
           const onUp = () => {

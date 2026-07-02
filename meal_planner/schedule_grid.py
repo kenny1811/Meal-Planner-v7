@@ -28,6 +28,12 @@ def _to_time(v: Any) -> time | None:
         return v.time()
     if isinstance(v, str):
         s = v.strip()
+        compact = re.match(r"^(\d{1,2})(\d{2})$", s)
+        if compact:
+            try:
+                return time(int(compact.group(1)), int(compact.group(2)))
+            except ValueError:
+                return None
         for fmt in ("%H:%M", "%H:%M:%S"):
             try:
                 return datetime.strptime(s, fmt).time()
@@ -46,11 +52,18 @@ def _to_date(v: Any) -> date | None:
         m = re.match(r"^(\d{1,2}/\d{1,2}/\d{2,4})(?:\s+\w+)?$", s)
         if m:
             s = m.group(1)
-        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y", "%Y/%m/%d", "%d%m%Y", "%d%m%y"):
             try:
                 return datetime.strptime(s, fmt).date()
             except ValueError:
                 pass
+        m = re.match(r"^(\d{1,2})/(\d{1,2})$", s)
+        if m:
+            try:
+                today = date.today()
+                return date(today.year, int(m.group(2)), int(m.group(1)))
+            except ValueError:
+                return None
     return None
 
 
@@ -310,6 +323,28 @@ def load_overtime_overrides_from_rows(rows: list[list[Any]]) -> dict[date, tuple
             _to_time(row[c_start]) if c_start is not None and c_start < len(row) else None,
             _to_time(row[c_end]) if c_end is not None and c_end < len(row) else None,
         )
+    return out
+
+
+def load_wake_alarm_overrides_from_rows(rows: list[list[Any]]) -> dict[date, time]:
+    if not rows:
+        return {}
+    headers = {str(v).strip(): idx for idx, v in enumerate(rows[0]) if v is not None and str(v).strip()}
+    c_date = headers.get("日期")
+    c_wake = headers.get("起身時間")
+    if c_wake is None:
+        c_wake = headers.get("起身")
+    if c_date is None or c_wake is None:
+        return {}
+    out: dict[date, time] = {}
+    for row in rows[1:]:
+        if not isinstance(row, list) or c_date >= len(row) or c_wake >= len(row):
+            continue
+        dd = _to_date(row[c_date])
+        wake = _to_time(row[c_wake])
+        if dd is None or wake is None:
+            continue
+        out[dd] = wake
     return out
 
 

@@ -3,8 +3,87 @@
       return Array.from({ length: n }, () => '<td class="nut">—</td>').join("");
     }
 
+    const TOOLTIP_TRADITIONAL_CHAR_MAP = {
+      嘱: "囑",
+      议: "議",
+      现: "現",
+      纤: "纖",
+      维: "維",
+      质: "質",
+      总: "總",
+      胆: "膽",
+      钠: "鈉",
+      钙: "鈣",
+      饱: "飽",
+      转: "轉",
+      体: "體",
+      营: "營",
+      养: "養",
+      标: "標",
+      设: "設",
+      调: "調",
+      剂: "劑",
+      围: "圍",
+      类: "類",
+      龄: "齡",
+      历: "歷",
+      录: "錄",
+      显: "顯",
+      隐: "隱",
+      删: "刪",
+      选: "選",
+      项: "項",
+      输: "輸",
+      览: "覽",
+      预: "預",
+      时: "時",
+      间: "間",
+      应: "應",
+      义: "義",
+      页: "頁",
+      态: "態",
+      错: "錯",
+      认: "認",
+      写: "寫",
+      读: "讀",
+      为: "為",
+      与: "與",
+      后: "後",
+      发: "發",
+      动: "動",
+      运: "運",
+      较: "較",
+      轻: "輕",
+      区: "區",
+      权: "權",
+      开: "開",
+      关: "關",
+      双: "雙",
+      击: "擊",
+      栏: "欄",
+      宽: "寬",
+      线: "線",
+      图: "圖",
+      复: "復",
+      盘: "盤",
+      师: "師",
+      径: "徑",
+      备: "備",
+      导: "導",
+      约: "約",
+      强: "強",
+      数: "數",
+      据: "據",
+      库: "庫",
+    };
+
+    function traditionalTooltipText(text) {
+      return String(text || "").replace(/[嘱议现纤维质总胆钠钙饱转体营养标设调剂围类龄历录显隐删选项输览预时间应义页态错认写读为与后发动运较轻区权开关双击栏宽线图复盘师径备导约强数据库]/g, (ch) => TOOLTIP_TRADITIONAL_CHAR_MAP[ch] || ch);
+    }
+
     let targetSelectedBlocks = new Set();
     let targetBlockSuppressNextClickClear = false;
+    let targetSavedSnapshot = "";
     const TARGET_SETTING_DEFAULTS = {
       workday: {
         activity_factor: 1.35,
@@ -38,13 +117,13 @@
     const TARGET_SETTING_ROWS = [
       { key: "activity_factor", label: "活動量<br>activity factor", text: "活動量 activity factor", guide: "活動量係用嚟由 BMR 推算 TDEE：TDEE = BMR * activity factor。佢唔係由身高體重直接計，而係按每日活動強度揀估算值再手動調整。常見參考：1.2 久坐/少活動；1.35 輕量活動；1.55 中等活動；1.725 高活動。現時預設：返工 1.35；非返工 1.20" },
       { key: "calorie_range_band", label: "卡路里<br>calorie range band", text: "卡路里 range band", guide: "建議：50 kcal" },
-      { key: "protein_g_per_kg", label: "蛋白質<br>protein g/kg", text: "蛋白質 g/kg", guide: "建議：1.2-1.6", nutrient: "protein_g" },
+      { key: "protein_g_per_kg", label: "蛋白質<br>protein g/kg", text: "蛋白質 g/kg", guide: "建議：最低需要約 0.8 g/kg/day；一般保肌/日常活動約 1.2；返工活動多、運動或減脂保肌可用 1.6；認真重訓增肌約 1.6-2.0。現時預設：返工 1.6；非返工 1.2。腎病或醫生要求限制蛋白質時要跟醫囑", nutrient: "protein_g" },
       { key: "protein_range_band", label: "蛋白質範圍<br>protein range band", text: "蛋白質 range band", guide: "建議：10g；蛋白質 = 中位 ± range band", nutrient: "protein_g" },
-      { key: "carb_pct", label: "碳水<br>carb % kcal", text: "碳水 % kcal", guide: "建議：45-65%", nutrient: "carb_g" },
-      { key: "calcium_mg", label: "鈣<br>calcium mg", text: "鈣 mg", guide: "男19-70 >=1000；51+ 可用 >=1200", nutrient: "calcium_mg" },
-      { key: "sodium_mg", label: "鈉<br>sodium mg", text: "鈉 mg", guide: "14歲以上 guideline <2300", nutrient: "sodium_mg" },
+      { key: "carb_pct", label: "碳水<br>carb % kcal", text: "碳水 % kcal", guide: "AMDR 建議範圍係總熱量 45-65%。45%：低端。較少運動、想留多啲熱量俾蛋白質/脂肪、或想控制飽腹感/血糖波動時用。50-55%：中間位。一般日常活動、冇特別訓練目標時較中性。60-65%：高端。高活動量、耐力運動、工作日消耗大，或者你主要靠全穀、豆類、水果蔬菜等高質碳水補能量時先用。WHO 2023 重點係碳水來源質素：全穀、蔬菜、水果、豆類同足夠膳食纖維。現時預設 45%。", nutrient: "carb_g" },
       { key: "sugar_g", label: "天然糖<br>natural sugar g", text: "天然糖 g", guide: "無 guideline；自訂", nutrient: "sugar_g" },
       { key: "cholesterol_mg", label: "膽固醇<br>cholesterol mg", text: "膽固醇 mg", guide: "無固定 guideline；自訂", nutrient: "cholesterol_mg" },
+      { key: "sodium_mg", label: "鈉<br>sodium mg", text: "鈉 mg", guide: "14歲以上 guideline <2300", nutrient: "sodium_mg" },
+      { key: "calcium_mg", label: "鈣<br>calcium mg", text: "鈣 mg", guide: "男19-70 >=1000；51+ 可用 >=1200", nutrient: "calcium_mg" },
       { key: "fat_total_pct", label: "總脂肪<br>total fat % kcal", text: "總脂肪 % kcal", guide: "guideline 20-35%", nutrient: "fat_total_g" },
       { key: "fat_sat_pct", label: "飽和脂肪<br>saturated fat % kcal", text: "飽和脂肪 % kcal", guide: "guideline <10%", nutrient: "fat_sat_g" },
       { key: "fat_trans_pct", label: "反式脂肪<br>trans fat % kcal", text: "反式脂肪 % kcal", guide: "越低越好", nutrient: "fat_trans_g" },
@@ -103,45 +182,333 @@
       return TARGET_NUTRIENT_HEADER_HTML[key] || esc(fallback || key || "");
     }
 
-    function targetEditableInputsInRow(row) {
-      return Array.from(row?.querySelectorAll("input,select,textarea") || [])
-        .filter((input) => !input.disabled && !input.readOnly && input.type !== "hidden");
+    const TARGET_GRID_INPUT_SELECTOR = 'input[data-target-source]:not([data-target-source="preview"]), input[data-target-setting-key]';
+    const targetDirectKeyTimers = new WeakMap();
+
+    function isTargetGridInput(input) {
+      return !!(input && input.matches && input.matches(TARGET_GRID_INPUT_SELECTOR));
     }
 
-    function moveTargetEditableCellRight(input) {
+    function targetGridInputsInRow(row) {
+      return Array.from(row?.querySelectorAll(TARGET_GRID_INPUT_SELECTOR) || [])
+        .filter((input) => !input.disabled && input.type !== "hidden");
+    }
+
+    function targetCellInputFrom(input, rowDelta, colDelta) {
       const row = input?.closest("tr");
       const table = input?.closest("table");
-      if (!row || !table) return false;
-      const sameRow = targetEditableInputsInRow(row);
-      const idx = sameRow.indexOf(input);
-      const nextInRow = idx >= 0 ? sameRow[idx + 1] : null;
-      let next = nextInRow || null;
-      if (!next) {
-        const rows = Array.from(table.querySelectorAll("tbody tr"));
-        const rowIdx = rows.indexOf(row);
-        for (let i = rowIdx + 1; i < rows.length; i += 1) {
-          const first = targetEditableInputsInRow(rows[i])[0];
-          if (first) {
-            next = first;
-            break;
-          }
+      if (!row || !table) return null;
+      const currentRowInputs = targetGridInputsInRow(row);
+      const colIdx = currentRowInputs.indexOf(input);
+      if (colIdx < 0) return null;
+      const rows = Array.from(table.querySelectorAll("tbody tr"));
+      const rowIdx = rows.indexOf(row);
+      const targetColIdx = colIdx + colDelta;
+      if (rowDelta === 0) return currentRowInputs[targetColIdx] || null;
+      const step = rowDelta > 0 ? 1 : -1;
+      let remainingRows = Math.abs(rowDelta);
+      for (let i = rowIdx + step; i >= 0 && i < rows.length; i += step) {
+        const rowInputs = targetGridInputsInRow(rows[i]);
+        if (!rowInputs.length) continue;
+        remainingRows -= 1;
+        if (remainingRows > 0) continue;
+        return rowInputs[targetColIdx] || rowInputs[rowInputs.length - 1] || null;
+      }
+      return null;
+    }
+
+    function focusTargetCell(input) {
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      input.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+
+    function focusTargetEditable(input) {
+      if (!input) return;
+      if (input.tagName === "SELECT") {
+        const button = input.closest(".pickup-select")?.querySelector(".pickup-select-button");
+        if (button) {
+          button.focus({ preventScroll: true });
+          button.scrollIntoView({ block: "nearest", inline: "nearest" });
+          return;
         }
       }
-      if (!next) return false;
-      next.focus({ preventScroll: true });
-      if (typeof next.select === "function") next.select();
+      input.focus({ preventScroll: true });
+      if (typeof input.select === "function") input.select();
+      input.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+
+    function focusTargetDob() {
+      const dob = document.getElementById("target-profile-dob");
+      if (dob) focusTargetEditable(dob);
+    }
+
+    function targetVisibleEditableForTab(el) {
+      if (!el || el.disabled || el.type === "hidden") return null;
+      if (el.readOnly && !el.hasAttribute("data-target-setting-key")) return null;
+      if (el.tagName === "SELECT") {
+        return el.closest(".pickup-select")?.querySelector(".pickup-select-button") || el;
+      }
+      return el;
+    }
+
+    function applyTargetConfigTabIndexes() {
+      const root = document.querySelector(".target-config-blocks");
+      if (!root) return;
+      const order = targetConfigTabOrder();
+      const ordered = new Set(order);
+      root.querySelectorAll("input,select,textarea,button").forEach((el) => {
+        const visible = targetVisibleEditableForTab(el);
+        const target = visible && ordered.has(visible) ? visible : el;
+        target.tabIndex = ordered.has(target) ? 0 : -1;
+      });
+      order.forEach((el) => {
+        el.tabIndex = 0;
+      });
+    }
+
+    function targetConfigTabOrder() {
+      const profile = [
+        document.getElementById("target-profile-dob"),
+        document.getElementById("target-profile-gender"),
+        document.getElementById("target-profile-height"),
+        document.getElementById("target-profile-weight"),
+        document.getElementById("target-profile-weight-change"),
+      ];
+      const settings = Array.from(document.querySelectorAll("#target-calc-settings input[data-target-setting-key]"));
+      const weightHistory = Array.from(document.querySelectorAll("#target-weight-history input[data-weight-history-field]"));
+      const seen = new Set();
+      return [...profile, ...settings, ...weightHistory]
+        .map(targetVisibleEditableForTab)
+        .filter((item) => item && !seen.has(item) && seen.add(item));
+    }
+
+    function targetConfigControlFromEventTarget(target) {
+      if (!target || !target.closest) return null;
+      const pickup = target.closest(".pickup-select");
+      if (pickup) {
+        const select = pickup.querySelector("select");
+        return targetVisibleEditableForTab(select) || target.closest("button,input,select,textarea");
+      }
+      return target.closest("input,select,textarea,button");
+    }
+
+    function bindTargetConfigTabOrder() {
+      const root = document.querySelector(".target-config-blocks");
+      if (!root || root.dataset.targetTabOrderBound === "1") return;
+      root.dataset.targetTabOrderBound = "1";
+      root.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Tab" || ev.ctrlKey || ev.altKey || ev.metaKey || ev.isComposing) return;
+        const current = targetConfigControlFromEventTarget(ev.target);
+        if (!current) return;
+        const order = targetConfigTabOrder();
+        applyTargetConfigTabIndexes();
+        const idx = order.indexOf(current);
+        if (idx < 0) return;
+        const next = ev.shiftKey
+          ? (order[idx - 1] || order[order.length - 1])
+          : (order[idx + 1] || order[0]);
+        if (!next) return;
+        ev.preventDefault();
+        focusTargetEditable(next);
+      });
+    }
+
+    function nextTargetConfigOrderedCell(input, reverse = false) {
+      const current = targetConfigControlFromEventTarget(input);
+      if (!current) return null;
+      const order = targetConfigTabOrder();
+      const idx = order.indexOf(current);
+      if (idx < 0) return null;
+      return reverse ? (order[idx - 1] || order[order.length - 1] || null) : (order[idx + 1] || order[0] || null);
+    }
+
+    function normalizeTargetCellValue(input) {
+      if (!input || !input.hasAttribute("data-target-setting-key")) return;
+      const text = String(input.value || "").trim();
+      input.value = text ? targetSettingInputValue(text) : "";
+    }
+
+    function markTargetCellChanged(input) {
+      if (!input) return;
+      markTargetDirtyIfChanged();
+      if (input.hasAttribute("data-target-setting-key")) {
+        renderTargetPreviewTable();
+      }
+    }
+
+    function beginTargetCellEdit(input, replaceValue = false) {
+      if (!isTargetGridInput(input)) return;
+      input.dataset.targetOriginalValue = input.value;
+      input.readOnly = false;
+      input.dataset.targetEditing = "1";
+      input.dataset.targetReplaceOnComposition = replaceValue ? "1" : "";
+      input.focus({ preventScroll: true });
+      if (replaceValue) input.value = "";
+      const pos = replaceValue ? 0 : String(input.value || "").length;
+      if (typeof input.setSelectionRange === "function") input.setSelectionRange(pos, pos);
+    }
+
+    function clearTargetDirectKeyTimer(input) {
+      const timer = targetDirectKeyTimers.get(input);
+      if (timer) clearTimeout(timer);
+      targetDirectKeyTimers.delete(input);
+    }
+
+    function queueTargetDirectKey(input, key) {
+      if (!input || !key) return;
+      clearTargetDirectKeyTimer(input);
+      input.dataset.targetPendingDirectKey = key;
+      const timer = setTimeout(() => {
+        targetDirectKeyTimers.delete(input);
+        if (input.dataset.targetEditing !== "1" || input.dataset.targetPendingDirectKey !== key) return;
+        input.value = `${key}${input.value || ""}`;
+        delete input.dataset.targetPendingDirectKey;
+        delete input.dataset.targetReplaceOnComposition;
+        const pos = String(input.value || "").length;
+        if (typeof input.setSelectionRange === "function") input.setSelectionRange(pos, pos);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }, 40);
+      targetDirectKeyTimers.set(input, timer);
+    }
+
+    function endTargetCellEdit(input, options = {}) {
+      if (!isTargetGridInput(input)) return;
+      if (input.dataset.targetEditing !== "1") return;
+      const oldValue = input.dataset.targetOriginalValue || "";
+      if (options.cancel) {
+        input.value = oldValue;
+      } else {
+        normalizeTargetCellValue(input);
+      }
+      input.readOnly = true;
+      delete input.dataset.targetEditing;
+      delete input.dataset.targetOriginalValue;
+      delete input.dataset.targetReplaceOnComposition;
+      delete input.dataset.targetPendingDirectKey;
+      clearTargetDirectKeyTimer(input);
+      if (!options.cancel && input.value !== oldValue) markTargetCellChanged(input);
+    }
+
+    function moveTargetActiveCell(input, key) {
+      const delta = {
+        ArrowUp: [-1, 0],
+        ArrowDown: [1, 0],
+        ArrowLeft: [0, -1],
+        ArrowRight: [0, 1],
+        Enter: [0, 1],
+      }[key];
+      if (!delta) return false;
+      const next = targetCellInputFrom(input, delta[0], delta[1]);
+      const fallback = key === "Enter" ? nextTargetConfigOrderedCell(input) : null;
+      const target = next || fallback;
+      if (!target) return false;
+      focusTargetEditable(target);
       return true;
+    }
+
+    function targetInputClipboardValue(input) {
+      return input ? input.value : "";
+    }
+
+    function pasteTargetInputValue(input, value) {
+      if (!isTargetGridInput(input)) return;
+      const oldValue = input.value;
+      input.value = value;
+      normalizeTargetCellValue(input);
+      input.readOnly = true;
+      if (input.value !== oldValue) markTargetCellChanged(input);
+    }
+
+    function targetClipboardMatrix(text) {
+      return String(text || "")
+        .replace(/\r/g, "")
+        .replace(/\n$/, "")
+        .split("\n")
+        .map((line) => line.split("\t"));
+    }
+
+    function pasteTargetClipboard(startInput, text) {
+      const matrix = targetClipboardMatrix(text);
+      if (!matrix.length) return;
+      let lastInput = startInput;
+      matrix.forEach((values, rowIdx) => {
+        values.forEach((value, colIdx) => {
+          const input = targetCellInputFrom(startInput, rowIdx, colIdx);
+          if (!input) return;
+          pasteTargetInputValue(input, value);
+          lastInput = input;
+        });
+      });
+      focusTargetCell(lastInput);
     }
 
     function bindTargetEnterMoveRight(root) {
       root.querySelectorAll("input,select,textarea").forEach((input) => {
         if (input.dataset.targetEnterMoveBound === "1") return;
         input.dataset.targetEnterMoveBound = "1";
+        if (isTargetGridInput(input)) {
+          input.readOnly = true;
+          input.addEventListener("focusout", () => endTargetCellEdit(input));
+          input.addEventListener("keydown", (ev) => {
+            if (input.dataset.targetEditing === "1") {
+              if (ev.key === "Escape" || ev.key === "Enter" || ev.key === "ArrowUp" || ev.key === "ArrowDown") {
+                ev.preventDefault();
+                const next = ev.key === "Enter"
+                  ? targetCellInputFrom(input, 0, 1)
+                  : (ev.key === "ArrowUp" || ev.key === "ArrowDown" ? targetCellInputFrom(input, ev.key === "ArrowUp" ? -1 : 1, 0) : null);
+                const fallback = ev.key === "Enter" ? nextTargetConfigOrderedCell(input) : null;
+                endTargetCellEdit(input, { cancel: ev.key === "Escape" });
+                focusTargetEditable(next || fallback || input);
+              }
+              return;
+            }
+            if (moveTargetActiveCell(input, ev.key)) {
+              ev.preventDefault();
+              return;
+            }
+            if (ev.key === "F2") {
+              ev.preventDefault();
+              beginTargetCellEdit(input);
+              return;
+            }
+            if (ev.key === "Process" && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+              beginTargetCellEdit(input, true);
+              return;
+            }
+            if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+              beginTargetCellEdit(input, true);
+            }
+          });
+          input.addEventListener("dblclick", () => beginTargetCellEdit(input));
+          input.addEventListener("compositionstart", () => {
+            if (input.readOnly) beginTargetCellEdit(input, true);
+            clearTargetDirectKeyTimer(input);
+            delete input.dataset.targetPendingDirectKey;
+            delete input.dataset.targetReplaceOnComposition;
+          });
+          input.addEventListener("copy", (ev) => {
+            if (input.dataset.targetEditing === "1" || !ev.clipboardData) return;
+            ev.preventDefault();
+            ev.clipboardData.setData("text/plain", targetInputClipboardValue(input));
+          });
+          input.addEventListener("paste", (ev) => {
+            if (input.dataset.targetEditing === "1" || !ev.clipboardData) return;
+            ev.preventDefault();
+            pasteTargetClipboard(input, ev.clipboardData.getData("text/plain"));
+          });
+          return;
+        }
         input.addEventListener("keydown", (ev) => {
-          if (ev.key !== "Enter" || ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || ev.isComposing) return;
-          ev.preventDefault();
-          input.dispatchEvent(new Event("change", { bubbles: true }));
-          moveTargetEditableCellRight(input);
+          if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || ev.isComposing) return;
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            const row = input.closest("tr");
+            const inputs = Array.from(row?.querySelectorAll("input,select,textarea") || [])
+              .filter((item) => !item.disabled && !item.readOnly && item.type !== "hidden");
+            const next = inputs[inputs.indexOf(input) + 1];
+            focusTargetEditable(next || nextTargetConfigOrderedCell(input) || input);
+          }
         });
       });
     }
@@ -170,7 +537,7 @@
       const headingCells = Array.from({ length: n }, (_, i) => {
         const key = nutrientKey(i);
         const title = inputSource === "preview" ? previewHeaderTooltip(key) : "Drag to resize column";
-        return `<th data-target-col-key="${esc(nutrientWidthKey)}" title="${esc(title)}">${targetNutrientHeaderHtml(key, headers[i] || keys[i] || `Target ${i + 1}`)}<span class="target-col-resizer" title="Drag to resize column"></span></th>`;
+        return `<th data-target-col-key="${esc(nutrientWidthKey)}" title="${esc(traditionalTooltipText(title))}">${targetNutrientHeaderHtml(key, headers[i] || keys[i] || `Target ${i + 1}`)}<span class="target-col-resizer" title="Drag to resize column"></span></th>`;
       }).join("");
       const colCells = Array.from({ length: n }, (_, i) =>
         `<col data-target-col-key="${esc(nutrientWidthKey)}" />`
@@ -182,8 +549,8 @@
         <colgroup><col class="target-profile-col" data-target-col-key="${esc(profileWidthKey)}" />${colCells}</colgroup>
         <thead><tr><th class="target-profile-head" data-target-col-key="${esc(profileWidthKey)}" title="Drag to resize column">目標<br>Target<span class="target-col-resizer" title="Drag to resize column"></span></th>${headingCells}</tr></thead>
         <tbody>
-          <tr><th scope="row" class="target-profile-head">Workday</th>${rowCells("workday", workday)}</tr>
-          <tr><th scope="row" class="target-profile-head">Non-workday</th>${rowCells("nonworkday", nonworkday)}</tr>
+          <tr><th scope="row" class="target-profile-head">返工日<br>Workday</th>${rowCells("workday", workday)}</tr>
+          <tr><th scope="row" class="target-profile-head">非返工日<br>Non-workday</th>${rowCells("nonworkday", nonworkday)}</tr>
         </tbody>
       </table>`;
       applyTargetEditorLayout();
@@ -194,16 +561,33 @@
     }
 
     function renderTargetEditors(data) {
+      const headers = Array.isArray(data && data.headers) ? data.headers : [];
+      const keys = Array.isArray(data && data.nutrient_keys) ? data.nutrient_keys : [];
+      const rows = data && typeof data.indicator_rows === "object" && data.indicator_rows ? data.indicator_rows : {};
+      targetPayload = {
+        headers,
+        nutrient_keys: keys,
+        indicator_rows: {
+          workday: Array.isArray(rows.workday) ? rows.workday : [],
+          nonworkday: Array.isArray(rows.nonworkday) ? rows.nonworkday : [],
+        },
+        profile: targetPayload.profile || {},
+        target_settings: targetPayload.target_settings || cloneTargetSettingDefaults(),
+      };
       fillTargetProfile(data && data.profile);
       renderTargetCalculationSettings(data && data.target_settings);
       renderTargetEditorTable("target-editor", data, "config");
       renderTargetPreviewTable();
+      bindTargetApplyButton();
+      bindTargetConfigTabOrder();
+      applyTargetConfigTabIndexes();
       const targetBlocks = document.querySelector(".target-config-blocks");
       if (targetBlocks) attachFormColumnResizers(targetBlocks);
       applyTargetBlockLayout();
       attachTargetBlockDragHandles();
       setTimeout(applyTargetBlockLayout, 0);
       setTimeout(applyTargetBlockLayout, 100);
+      resetTargetDirtySnapshot();
     }
 
     function cloneTargetSettingDefaults() {
@@ -243,11 +627,44 @@
       return String(values[idx] ?? "").trim();
     }
 
+    function numericRangeFromTargetText(text) {
+      const values = String(text || "").match(/\d+(?:\.\d+)?/g);
+      if (!values || !values.length) return null;
+      const lo = Number(values[0]);
+      const hi = Number(values.length > 1 ? values[1] : values[0]);
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+      return { lo, hi };
+    }
+
+    function macroPctFromTargetIndicators(macroText, kcalText, kcalPerUnit) {
+      const macro = numericRangeFromTargetText(macroText);
+      const kcal = numericRangeFromTargetText(kcalText);
+      const factor = Number(kcalPerUnit);
+      if (!macro || !kcal || !Number.isFinite(factor) || factor <= 0 || kcal.lo <= 0 || kcal.hi <= 0) {
+        return "";
+      }
+      const lo = Math.round((macro.lo * factor / kcal.lo) * 100);
+      const hi = Math.round((macro.hi * factor / kcal.hi) * 100);
+      return lo === hi ? `${lo}%` : `${lo}-${hi}%`;
+    }
+
+    function currentTargetSettingValueFor(row, profile) {
+      if (!row || !row.nutrient) return "";
+      if (row.key === "carb_pct") {
+        return macroPctFromTargetIndicators(
+          currentTargetIndicatorFor("carb_g", profile),
+          currentTargetIndicatorFor("kcal", profile),
+          4
+        );
+      }
+      return currentTargetIndicatorFor(row.nutrient, profile);
+    }
+
     function targetSettingTooltip(row) {
       const base = String(row && row.guide ? row.guide : "").trim();
       if (!row || !row.nutrient) return base;
-      const workday = currentTargetIndicatorFor(row.nutrient, "workday");
-      const nonworkday = currentTargetIndicatorFor(row.nutrient, "nonworkday");
+      const workday = currentTargetSettingValueFor(row, "workday");
+      const nonworkday = currentTargetSettingValueFor(row, "nonworkday");
       const current = `現用：返工 ${workday || "-"}；非返工 ${nonworkday || "-"}`;
       return base ? `${base}；${current}` : current;
     }
@@ -276,6 +693,9 @@
         const activity = Number(values.activity_factor);
         return Number.isFinite(activity) ? targetReadonlyKcal(bmr * activity) : "";
       }
+      if (metric === "calorie_offset") {
+        return targetReadonlyKcal(targetDailyCalorieOffset(profile));
+      }
       return "";
     }
 
@@ -295,45 +715,54 @@
       targetPayload.target_settings = values;
       const bmrTitle = "BMR = 10*體重 + 6.25*身高 - 5*年齡 +5(男) / -161(女)。唯讀，由個人資料計算。";
       const tdeeTitle = "TDEE = BMR * activity factor。唯讀，由 BMR 及該 row 活動量計算。";
+      const calorieOffsetTitle = "Calorie offset = 每月體重變化 kg * 7700 / 30。負數代表減重熱量赤字，正數代表增重熱量盈餘。唯讀，由個人資料 weight change 計算。";
       const proteinMidTitle = "蛋白質中位 = 體重 * 蛋白質 g/kg。唯讀，由個人資料及該 row g/kg 計算。";
       const valueCol = () => `<col data-form-col-key="target_calc_value" data-form-col-default="72" />`;
       const settingCols = [
         valueCol(),
         ...TARGET_SETTING_ROWS.flatMap((row) => {
-          if (row.key === "calorie_range_band") return [valueCol(), valueCol()];
+          if (row.key === "calorie_range_band") return [valueCol(), valueCol(), valueCol()];
           if (row.key === "protein_g_per_kg") return [valueCol(), valueCol()];
           return [valueCol()];
         }),
       ].join("");
       const settingHeads = [
-        `<th data-form-col-key="target_calc_value" title="${esc(bmrTitle)}">基礎代謝<br>BMR kcal</th>`,
+        `<th data-form-col-key="target_calc_value" title="${esc(traditionalTooltipText(bmrTitle))}">基礎代謝<br>BMR kcal</th>`,
         ...TARGET_SETTING_ROWS.flatMap((row) => {
-          const head = `<th data-form-col-key="target_calc_value" title="${esc(targetSettingTooltip(row))}">${row.label}</th>`;
-          if (row.key === "calorie_range_band") return [`<th data-form-col-key="target_calc_value" title="${esc(tdeeTitle)}">每日消耗<br>TDEE kcal</th>`, head];
-          if (row.key === "protein_g_per_kg") return [head, `<th data-form-col-key="target_calc_value" title="${esc(proteinMidTitle)}">蛋白質中位<br>protein mid g</th>`];
+          const head = `<th data-form-col-key="target_calc_value" title="${esc(traditionalTooltipText(targetSettingTooltip(row)))}">${row.label}</th>`;
+          if (row.key === "calorie_range_band") return [
+            `<th data-form-col-key="target_calc_value" title="${esc(traditionalTooltipText(tdeeTitle))}">每日消耗<br>TDEE kcal</th>`,
+            `<th data-form-col-key="target_calc_value" title="${esc(traditionalTooltipText(calorieOffsetTitle))}">卡路里調整<br>calorie offset kcal</th>`,
+            head,
+          ];
+          if (row.key === "protein_g_per_kg") return [head, `<th data-form-col-key="target_calc_value" title="${esc(traditionalTooltipText(proteinMidTitle))}">蛋白質中位<br>protein mid g</th>`];
           return [head];
         }),
       ].join("");
       const readonlyCell = (profile, metric, title) => `
-        <td class="target-calc-readonly" data-form-col-key="target_calc_value" data-target-calc-readonly-profile="${esc(profile)}" data-target-calc-readonly-metric="${esc(metric)}" title="${esc(title)}">${esc(targetCalculationReadonlyValue(profile, metric, values))}</td>
+        <td class="target-calc-readonly" data-form-col-key="target_calc_value" data-target-calc-readonly-profile="${esc(profile)}" data-target-calc-readonly-metric="${esc(metric)}" title="${esc(traditionalTooltipText(title))}">${esc(targetCalculationReadonlyValue(profile, metric, values))}</td>
       `;
       const inputCell = (profile, key) => `
         <td data-form-col-key="target_calc_value">
-          <input type="number" step="0.001" min="0" data-target-setting-profile="${esc(profile)}" data-target-setting-key="${esc(key)}" value="${esc(targetSettingInputValue(values[profile][key]))}" />
+          <input type="text" inputmode="decimal" data-target-setting-profile="${esc(profile)}" data-target-setting-key="${esc(key)}" value="${esc(targetSettingInputValue(values[profile][key]))}" />
         </td>
       `;
       const rowHtml = (profile, label) => {
         const cells = [
           readonlyCell(profile, "bmr", bmrTitle),
           ...TARGET_SETTING_ROWS.flatMap(({ key }) => {
-            if (key === "calorie_range_band") return [readonlyCell(profile, "tdee", tdeeTitle), inputCell(profile, key)];
+            if (key === "calorie_range_band") return [
+              readonlyCell(profile, "tdee", tdeeTitle),
+              readonlyCell(profile, "calorie_offset", calorieOffsetTitle),
+              inputCell(profile, key),
+            ];
             if (key === "protein_g_per_kg") return [inputCell(profile, key), readonlyCell(profile, "protein_mid", proteinMidTitle)];
             return [inputCell(profile, key)];
           }),
         ].join("");
         return `
           <tr>
-            <th scope="row" data-form-col-key="target_calc_profile">${esc(label)}</th>
+            <th scope="row" data-form-col-key="target_calc_profile">${label}</th>
             ${cells}
           </tr>
         `;
@@ -344,15 +773,20 @@
           ${settingCols}
         </colgroup>
         <thead><tr><th data-form-col-key="target_calc_profile">目標<br>Target</th>${settingHeads}</tr></thead>
-        <tbody>${rowHtml("workday", "Workday")}${rowHtml("nonworkday", "Non-workday")}</tbody>
+        <tbody>${rowHtml("workday", "返工日<br>Workday")}${rowHtml("nonworkday", "非返工日<br>Non-workday")}</tbody>
       </table>`;
       box.querySelectorAll("input[data-target-setting-key]").forEach((input) => {
-        input.addEventListener("input", renderTargetPreviewTable);
-        input.addEventListener("change", renderTargetPreviewTable);
+        const update = () => {
+          renderTargetPreviewTable();
+          markTargetDirtyIfChanged();
+        };
+        input.addEventListener("input", update);
+        input.addEventListener("change", update);
       });
       bindTargetEnterMoveRight(box);
       applyFormColumnWidths(box);
       attachFormColumnResizers(box);
+      applyTargetConfigTabIndexes();
     }
 
     function numberOrNull(raw) {
@@ -363,10 +797,11 @@
     function currentTargetProfileFromInputs() {
       return {
         age: numberOrNull(document.getElementById("target-profile-age")?.value),
-        dob: String(document.getElementById("target-profile-dob")?.value || "").trim(),
+        dob: targetIsoDobFromInput(document.getElementById("target-profile-dob")?.value),
         gender: String(document.getElementById("target-profile-gender")?.value || "").trim(),
         height_cm: numberOrNull(document.getElementById("target-profile-height")?.value),
         weight_kg: numberOrNull(document.getElementById("target-profile-weight")?.value),
+        monthly_weight_change_kg: numberOrNull(document.getElementById("target-profile-weight-change")?.value),
       };
     }
 
@@ -398,6 +833,11 @@
       return a === b ? `${a}${suffix}` : `${a}-${b}${suffix}`;
     }
 
+    function targetDailyCalorieOffset(profile) {
+      const monthly = Number(profile && profile.monthly_weight_change_kg);
+      return Number.isFinite(monthly) ? monthly * 7700 / 30 : 0;
+    }
+
     function calculatedTargetRow(profileKey) {
       const profile = currentTargetProfileFromInputs();
       const settings = collectTargetSettings();
@@ -407,7 +847,7 @@
       const activity = Number(values.activity_factor);
       const band = Number(values.calorie_range_band);
       const hasKcal = Number.isFinite(activity) && Number.isFinite(band);
-      const midKcal = hasKcal ? bmr * activity : NaN;
+      const midKcal = hasKcal ? bmr * activity + targetDailyCalorieOffset(profile) : NaN;
       const kcalLo = hasKcal ? Math.max(0, midKcal - band) : NaN;
       const kcalHi = hasKcal ? midKcal + band : NaN;
       const protein = targetProteinMid(profile, values);
@@ -441,7 +881,7 @@
       const bmr = targetBmr(profile);
       const base = bmr == null
         ? "需要 DOB、性別、身高、體重先可計算。"
-        : `BMR = 10*體重 + 6.25*身高 - 5*年齡 ${profile.gender === "male" ? "+ 5" : "- 161"}。TDEE = BMR * activity factor。`;
+        : `BMR = 10*體重 + 6.25*身高 - 5*年齡 ${profile.gender === "male" ? "+ 5" : "- 161"}。TDEE = BMR * activity factor。Calorie offset = 每月體重變化 kg * 7700 / 30。`;
       const pair = (settingKey, unit = "") => {
         const settings = collectTargetSettings();
         const w = targetSettingInputValue(settings.workday[settingKey]);
@@ -449,7 +889,7 @@
         return `返工 ${w}${unit}；非返工 ${n}${unit}`;
       };
       return {
-        kcal: `${base} 卡路里 = TDEE ± range band；${pair("activity_factor")} activity factor；${pair("calorie_range_band", " kcal")} range band。`,
+        kcal: `${base} 卡路里 = TDEE + calorie offset ± range band；${pair("activity_factor")} activity factor；${pair("calorie_range_band", " kcal")} range band。`,
         protein_g: `蛋白質中位 = 最新體重 * g/kg；蛋白質 range = 中位 ± range band；${pair("protein_g_per_kg", " g/kg")}；${pair("protein_range_band", "g")} range band。`,
         carb_g: `碳水 = 卡路里 * 碳水% / 4；${pair("carb_pct", "%")}。`,
         sugar_g: `天然糖 = 自訂上限；${pair("sugar_g", "g")}。`,
@@ -483,6 +923,146 @@
       updateTargetCalculationReadonlyValues();
     }
 
+    function previewTargetRows() {
+      return {
+        workday: calculatedTargetRow("workday"),
+        nonworkday: calculatedTargetRow("nonworkday"),
+      };
+    }
+
+    async function applyPreviewTargetsToCurrentTargets() {
+      const rows = previewTargetRows();
+      const data = {
+        headers: targetPayload.headers || [],
+        nutrient_keys: targetPayload.nutrient_keys || [],
+        indicator_rows: rows,
+      };
+      targetPayload.indicator_rows = {
+        workday: [...data.indicator_rows.workday],
+        nonworkday: [...data.indicator_rows.nonworkday],
+      };
+      renderTargetEditorTable("target-editor", data, "config");
+      setUnsavedChanges("目標");
+      applyTargetBlockLayout();
+      await saveTargetEditor("config", { targetRows: rows });
+    }
+
+    function targetApplySizePx(axis, fallback) {
+      const saved = Number(formColumnWidths[`target_apply_${axis}`]);
+      return Number.isFinite(saved) && saved > 0 ? saved : fallback;
+    }
+
+    function applyTargetApplyButtonLayout() {
+      const btn = document.getElementById("target-apply-preview");
+      if (!btn) return;
+      btn.style.width = `${targetApplySizePx("w", 88)}px`;
+      btn.style.height = `${targetApplySizePx("h", 28)}px`;
+    }
+
+    function targetApplyPointerInResizeZone(btn, ev) {
+      const rect = btn.getBoundingClientRect();
+      return ev.clientX >= rect.right - 12 && ev.clientY >= rect.bottom - 12;
+    }
+
+    function moveTargetBlocksFromPointer(blockKey, startX, startY) {
+      const dragKeys = targetSelectedBlocks.has(blockKey) && targetSelectedBlocks.size > 1
+        ? Array.from(targetSelectedBlocks)
+        : [blockKey];
+      if (!targetSelectedBlocks.has(blockKey)) {
+        targetSelectedBlocks.clear();
+        updateTargetBlockSelection();
+      }
+      const startOffsets = new Map();
+      dragKeys.forEach((key) => {
+        const target = document.querySelector(`.target-section-block[data-target-block="${key}"]`);
+        startOffsets.set(key, {
+          x: targetBlockOffsetPx(key, "x", target?.offsetLeft || 0),
+          y: targetBlockOffsetPx(key, "y", target?.offsetTop || 0),
+        });
+      });
+      return (mv) => {
+        const dx = mv.clientX - startX;
+        const dy = mv.clientY - startY;
+        startOffsets.forEach((start, key) => {
+          formColumnWidths[`target_block_${key}_x`] = start.x + dx;
+          formColumnWidths[`target_block_${key}_y`] = start.y + dy;
+        });
+        applyTargetBlockLayout();
+      };
+    }
+
+    function bindTargetApplyButton() {
+      const btn = document.getElementById("target-apply-preview");
+      if (btn && btn.dataset.targetApplyBound !== "1") {
+        btn.dataset.targetApplyBound = "1";
+        btn.addEventListener("mousemove", (ev) => {
+          btn.style.cursor = targetApplyPointerInResizeZone(btn, ev) ? "nwse-resize" : "";
+        });
+        btn.addEventListener("mouseleave", () => {
+          btn.style.cursor = "";
+        });
+        btn.addEventListener("click", (ev) => {
+          if (btn.dataset.targetApplySuppressClick === "1") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            delete btn.dataset.targetApplySuppressClick;
+            return;
+          }
+          applyPreviewTargetsToCurrentTargets();
+        });
+        btn.addEventListener("mousedown", (ev) => {
+          if (ev.button != null && ev.button !== 0) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          const block = btn.closest(".target-section-block[data-target-block]");
+          const blockKey = block && block.getAttribute("data-target-block");
+          if (!blockKey) return;
+          if (ev.ctrlKey) {
+            btn.dataset.targetApplySuppressClick = "1";
+            toggleTargetBlockSelection(blockKey);
+            return;
+          }
+          const resizeMode = targetApplyPointerInResizeZone(btn, ev);
+          if (!resizeMode) document.body.classList.add("is-dnd-dragging");
+          btn.style.cursor = resizeMode ? "nwse-resize" : "";
+          const startX = ev.clientX;
+          const startY = ev.clientY;
+          const startW = targetApplySizePx("w", 88);
+          const startH = targetApplySizePx("h", 28);
+          const moveBlocks = resizeMode ? null : moveTargetBlocksFromPointer(blockKey, startX, startY);
+          let changed = resizeMode;
+          const onMove = (mv) => {
+            const dx = mv.clientX - startX;
+            const dy = mv.clientY - startY;
+            if (!changed && Math.abs(dx) <= 2 && Math.abs(dy) <= 2) return;
+            changed = true;
+            if (resizeMode) {
+              formColumnWidths.target_apply_w = Math.max(48, startW + dx);
+              formColumnWidths.target_apply_h = Math.max(22, startH + dy);
+              applyTargetApplyButtonLayout();
+              applyTargetBlockLayout();
+            } else if (moveBlocks) {
+              moveBlocks(mv);
+            }
+          };
+          const onUp = () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+            document.body.classList.remove("is-dnd-dragging");
+            btn.style.cursor = "";
+            if (changed) {
+              btn.dataset.targetApplySuppressClick = "1";
+              targetBlockSuppressNextClickClear = true;
+              persistColumnWidths();
+            }
+          };
+          window.addEventListener("mousemove", onMove);
+          window.addEventListener("mouseup", onUp, { once: true });
+        });
+      }
+      applyTargetApplyButtonLayout();
+    }
+
     function fillTargetProfile(profile) {
       const data = profile && typeof profile === "object" ? profile : {};
       const dob = document.getElementById("target-profile-dob");
@@ -490,14 +1070,19 @@
       const gender = document.getElementById("target-profile-gender");
       const height = document.getElementById("target-profile-height");
       const weight = document.getElementById("target-profile-weight");
-      if (dob) dob.value = data.dob ?? "";
+      const weightChange = document.getElementById("target-profile-weight-change");
+      if (dob) {
+        dob.value = targetDisplayDobFromIso(data.dob ?? "");
+        dob.dataset.targetCommittedValue = dob.value;
+      }
       if (age) age.value = data.dob ? (targetAgeFromDob(data.dob) ?? "") : (data.age ?? "");
-      if (gender) gender.value = data.gender ?? "";
+      if (gender) gender.value = data.gender === "female" ? "female" : "male";
       if (height) height.value = data.height_cm ?? "";
       if (weight) {
         weight.value = data.weight_kg ?? "";
         weight.dataset.targetOriginalWeight = data.weight_kg ?? "";
       }
+      if (weightChange) weightChange.value = data.monthly_weight_change_kg ?? 0;
       bindTargetProfileInputs();
       const history = Array.isArray(data.weight_history) ? data.weight_history : [];
       const visibleHistory = history.length || data.weight_kg == null ? history : [{
@@ -508,9 +1093,10 @@
       targetPayload.profile = {
         age: data.age ?? null,
         dob: data.dob ?? "",
-        gender: data.gender ?? "",
+        gender: gender ? gender.value : (data.gender ?? ""),
         height_cm: data.height_cm ?? null,
         weight_kg: data.weight_kg ?? null,
+        monthly_weight_change_kg: weightChange ? numberOrNull(weightChange.value) : (data.monthly_weight_change_kg ?? 0),
         last_updated: data.last_updated ?? "",
         weight_history: visibleHistory,
       };
@@ -535,8 +1121,67 @@
       return `${part(dateParts, "year")}-${part(dateParts, "month")}-${part(dateParts, "day")} ${part(timeParts, "hour")}:${part(timeParts, "minute")}:${part(timeParts, "second")}`;
     }
 
-    function targetAgeFromDob(dobValue) {
+    function targetIsoDobFromInput(dobValue) {
       const text = String(dobValue || "").trim();
+      let match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+[A-Za-z]{3})?$/);
+      if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+      match = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})(?:\s+[A-Za-z]{3})?$/);
+      if (!match) return text;
+      const day = String(Number(match[1])).padStart(2, "0");
+      const month = String(Number(match[2])).padStart(2, "0");
+      const year = targetDobFullYear(match[3], Number(month), Number(day));
+      return `${year}-${month}-${day}`;
+    }
+
+    function targetDobFullYear(yearText, month, day) {
+      if (String(yearText).length === 4) return String(yearText);
+      const yy = Number(yearText);
+      const nowParts = new Intl.DateTimeFormat("en-CA", { timeZone: HK_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+      const todayY = Number(nowParts.find((part) => part.type === "year")?.value || 0);
+      const todayM = Number(nowParts.find((part) => part.type === "month")?.value || 0);
+      const todayD = Number(nowParts.find((part) => part.type === "day")?.value || 0);
+      if (!Number.isFinite(yy) || !todayY) return String(yearText).padStart(4, "0");
+      let year = Math.floor(todayY / 100) * 100 + yy;
+      const candidate = new Date(Date.UTC(year, month - 1, day));
+      const today = new Date(Date.UTC(todayY, todayM - 1, todayD));
+      if (candidate > today) year -= 100;
+      return String(year);
+    }
+
+    function targetValidIsoDateParts(iso) {
+      const match = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) return null;
+      const y = Number(match[1]);
+      const m = Number(match[2]);
+      const d = Number(match[3]);
+      const date = new Date(Date.UTC(y, m - 1, d));
+      if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null;
+      return { y, m, d, date };
+    }
+
+    function targetWeekdayFromIso(iso) {
+      const parts = targetValidIsoDateParts(iso);
+      if (!parts) return "";
+      return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short" }).format(parts.date);
+    }
+
+    function targetDisplayDobFromIso(dobValue) {
+      const iso = targetIsoDobFromInput(dobValue);
+      const parts = targetValidIsoDateParts(iso);
+      return parts ? `${String(parts.d).padStart(2, "0")}/${String(parts.m).padStart(2, "0")}/${parts.y} ${targetWeekdayFromIso(iso)}` : String(dobValue || "");
+    }
+
+    function normalizeTargetDobInput() {
+      const dob = document.getElementById("target-profile-dob");
+      if (!dob) return;
+      const text = String(dob.value || "").trim();
+      if (!text) return;
+      const display = targetDisplayDobFromIso(text);
+      if (display) dob.value = display;
+    }
+
+    function targetAgeFromDob(dobValue) {
+      const text = targetIsoDobFromInput(dobValue);
       const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (!match) return null;
       const born = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
@@ -556,6 +1201,11 @@
       if (!dob || !age) return;
       age.value = dob.value ? (targetAgeFromDob(dob.value) ?? "") : "";
       renderTargetPreviewTable();
+      if (dob.value !== (dob.dataset.targetCommittedValue || "")) markTargetDirtyIfChanged();
+    }
+
+    function moveTargetProfileEnter(input) {
+      focusTargetEditable(nextTargetConfigOrderedCell(input) || input);
     }
 
     function appendProfileWeightToHistory() {
@@ -571,7 +1221,7 @@
       });
       input.dataset.targetOriginalWeight = String(weight);
       renderTargetWeightHistory(history);
-      setUnsavedChanges("目標");
+      markTargetDirtyIfChanged();
       renderTargetPreviewTable();
       return true;
     }
@@ -581,18 +1231,39 @@
       if (dob && dob.dataset.targetDobBound !== "1") {
         dob.dataset.targetDobBound = "1";
         dob.addEventListener("input", syncTargetAgeFromDob);
-        dob.addEventListener("change", syncTargetAgeFromDob);
+        const normalizeAndSync = () => {
+          normalizeTargetDobInput();
+          syncTargetAgeFromDob();
+        };
+        dob.addEventListener("change", normalizeAndSync);
+        dob.addEventListener("blur", normalizeAndSync);
+        dob.addEventListener("keydown", (ev) => {
+          if (ev.key !== "Enter" || ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || ev.isComposing) return;
+          ev.preventDefault();
+          normalizeTargetDobInput();
+          syncTargetAgeFromDob();
+          moveTargetProfileEnter(dob);
+        });
       }
-      ["target-profile-gender", "target-profile-height", "target-profile-weight"].forEach((id) => {
+      ["target-profile-gender", "target-profile-height", "target-profile-weight", "target-profile-weight-change"].forEach((id) => {
         const input = document.getElementById(id);
         if (!input || input.dataset.targetProfilePreviewBound === "1") return;
         input.dataset.targetProfilePreviewBound = "1";
-        input.addEventListener("input", renderTargetPreviewTable);
+        input.addEventListener("input", () => {
+          renderTargetPreviewTable();
+          markTargetDirtyIfChanged();
+        });
+        input.addEventListener("keydown", (ev) => {
+          if (ev.key !== "Enter" || ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || ev.isComposing) return;
+          ev.preventDefault();
+          moveTargetProfileEnter(input);
+        });
         input.addEventListener("change", () => {
           if (id === "target-profile-weight") {
             appendProfileWeightToHistory();
           } else {
             renderTargetPreviewTable();
+            markTargetDirtyIfChanged();
           }
         });
         if (id === "target-profile-weight") {
@@ -658,7 +1329,7 @@
       const rowHtml = (item, idx, isNew = false) => `
         <tr data-weight-history-row="${idx}">
           <td class="target-weight-value">
-            <input type="number" step="0.1" inputmode="decimal" data-weight-history-field="weight_kg" data-weight-history-index="${idx}" data-weight-original-value="${esc(item.weight_kg ?? "")}" value="${esc(item.weight_kg ?? "")}" />
+            <input type="text" inputmode="decimal" data-weight-history-field="weight_kg" data-weight-history-index="${idx}" data-weight-original-value="${esc(item.weight_kg ?? "")}" value="${esc(item.weight_kg ?? "")}" />
           </td>
           <td class="target-weight-date">
             <input type="text" data-weight-history-field="recorded_at" data-weight-history-index="${idx}" value="${esc(item.recorded_at ?? "")}" />
@@ -675,35 +1346,39 @@
           <col data-form-col-key="target_weight_history_date" data-form-col-default="150" />
           <col data-form-col-key="target_weight_history_delete" data-form-col-default="30" />
         </colgroup>
-        <thead><tr><th data-form-col-key="target_weight_history_weight">體重 (kg)</th><th data-form-col-key="target_weight_history_date">更新日期</th><th data-form-col-key="target_weight_history_delete"></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="3" class="target-empty-row">No weight history</td></tr>`}</tbody>
+        <thead><tr><th data-form-col-key="target_weight_history_weight">體重<br>weight (kg)</th><th data-form-col-key="target_weight_history_date">更新日期<br>updated at</th><th data-form-col-key="target_weight_history_delete"></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="3" class="target-empty-row">沒有體重記錄 / No weight history</td></tr>`}</tbody>
       </table>`;
       box.querySelectorAll('input[data-weight-history-field="weight_kg"]').forEach((input) => {
         input.addEventListener("input", () => {
           syncProfileWeightFromHistory();
           renderTargetPreviewTable();
+          markTargetDirtyIfChanged();
         });
         input.addEventListener("change", () => {
           stampTargetWeightDate(input);
           syncProfileWeightFromHistory();
           renderTargetPreviewTable();
+          markTargetDirtyIfChanged();
         });
       });
       box.querySelectorAll('input[data-weight-history-field="recorded_at"]').forEach((input) => {
         input.addEventListener("input", () => {
           syncProfileWeightFromHistory();
           renderTargetPreviewTable();
+          markTargetDirtyIfChanged();
         });
         input.addEventListener("change", () => {
           syncProfileWeightFromHistory();
           renderTargetPreviewTable();
+          markTargetDirtyIfChanged();
         });
       });
       box.querySelectorAll("button[data-weight-history-delete]").forEach((btn) => {
         btn.addEventListener("click", () => {
           btn.closest("tr[data-weight-history-row]")?.remove();
           syncProfileWeightFromHistory();
-          setUnsavedChanges("目標");
+          markTargetDirtyIfChanged();
           renderTargetPreviewTable();
         });
       });
@@ -759,17 +1434,36 @@
       if (!container) return;
       if (!container.getClientRects().length) return;
       const resetLayout = resetLegacyTargetBlockLayout();
+      applyTargetApplyButtonLayout();
       applyFormColumnWidths(container);
       container.classList.add("is-draggable-layout");
-      let defaultY = 0;
+      const blocks = Array.from(container.querySelectorAll(".target-section-block[data-target-block]"));
+      const defaultPositions = new Map();
+      let stackedY = 0;
+      blocks.forEach((block) => {
+        const blockKey = block.getAttribute("data-target-block");
+        const height = block.getBoundingClientRect().height;
+        defaultPositions.set(blockKey, { x: 0, y: stackedY });
+        stackedY += height + 8;
+      });
+      const targetsBlock = blocks.find((block) => block.getAttribute("data-target-block") === "targets");
+      const applyBlock = blocks.find((block) => block.getAttribute("data-target-block") === "apply");
+      if (targetsBlock && applyBlock) {
+        const targetDefault = defaultPositions.get("targets") || { x: 0, y: 0 };
+        defaultPositions.set("apply", {
+          x: targetDefault.x + targetBlockWidth(targetsBlock) + 8,
+          y: targetDefault.y,
+        });
+      }
       let maxRight = 0;
       let maxBottom = 0;
-      container.querySelectorAll(".target-section-block[data-target-block]").forEach((block) => {
+      blocks.forEach((block) => {
         const blockKey = block.getAttribute("data-target-block");
         const height = block.getBoundingClientRect().height;
         const width = targetBlockWidth(block);
-        const x = targetBlockOffsetPx(blockKey, "x", 0);
-        const y = targetBlockOffsetPx(blockKey, "y", defaultY);
+        const defaults = defaultPositions.get(blockKey) || { x: 0, y: 0 };
+        const x = targetBlockOffsetPx(blockKey, "x", defaults.x);
+        const y = targetBlockOffsetPx(blockKey, "y", defaults.y);
         block.style.width = "";
         block.style.minWidth = "";
         block.style.left = `${x}px`;
@@ -777,7 +1471,6 @@
         block.classList.toggle("is-target-block-selected", targetSelectedBlocks.has(blockKey));
         maxRight = Math.max(maxRight, x + Math.max(width, block.getBoundingClientRect().width));
         maxBottom = Math.max(maxBottom, y + height);
-        defaultY += height + 8;
       });
       container.style.width = `${Math.max(280, maxRight)}px`;
       container.style.height = `${Math.max(260, maxBottom)}px`;
@@ -789,6 +1482,20 @@
         const blockKey = block.getAttribute("data-target-block");
         block.classList.toggle("is-target-block-selected", targetSelectedBlocks.has(blockKey));
       });
+    }
+
+    function targetBlocksVisible() {
+      const root = document.querySelector('.config-view[data-config-view="targets"] .target-config-blocks');
+      return !!(root && root.getClientRects().length);
+    }
+
+    function selectAllTargetBlocks() {
+      targetSelectedBlocks.clear();
+      document.querySelectorAll(".target-section-block[data-target-block]").forEach((block) => {
+        const blockKey = block.getAttribute("data-target-block");
+        if (blockKey) targetSelectedBlocks.add(blockKey);
+      });
+      updateTargetBlockSelection();
     }
 
     function toggleTargetBlockSelection(blockKey) {
@@ -813,6 +1520,14 @@
       document.addEventListener("keydown", (ev) => {
         if (ev.key !== "Escape") return;
         clearTargetBlockSelection();
+      });
+      document.addEventListener("keydown", (ev) => {
+        if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || String(ev.key).toLowerCase() !== "a") return;
+        if (!targetBlocksVisible()) return;
+        const active = document.activeElement;
+        if (active && active.matches && active.matches("input,textarea") && active.dataset.targetEditing === "1") return;
+        ev.preventDefault();
+        selectAllTargetBlocks();
       });
       document.addEventListener("click", (ev) => {
         if (!targetSelectedBlocks.size || ev.ctrlKey) return;
@@ -866,6 +1581,7 @@
           const startX = ev.clientX;
           const startY = ev.clientY;
           let dragMoved = false;
+          document.body.classList.add("is-dnd-dragging");
           const startOffsets = new Map();
           dragKeys.forEach((key) => {
             const target = document.querySelector(`.target-section-block[data-target-block="${key}"]`);
@@ -887,6 +1603,7 @@
           const onUp = () => {
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
+            document.body.classList.remove("is-dnd-dragging");
             if (dragMoved) targetBlockSuppressNextClickClear = true;
             persistColumnWidths();
           };
@@ -984,10 +1701,11 @@
       const weightHistory = collectTargetWeightHistory();
       const profileWeight = optionalNumberValue("target-profile-weight");
       return {
-        dob: String(document.getElementById("target-profile-dob")?.value || "").trim(),
+        dob: targetIsoDobFromInput(document.getElementById("target-profile-dob")?.value),
         gender: String(document.getElementById("target-profile-gender")?.value || "").trim(),
         height_cm: optionalNumberValue("target-profile-height"),
         weight_kg: profileWeight,
+        monthly_weight_change_kg: optionalNumberValue("target-profile-weight-change"),
         weight_history: weightHistory,
       };
     }
@@ -1004,6 +1722,69 @@
         });
       });
       return rows;
+    }
+
+    function collectTargetProfileSnapshot() {
+      return {
+        dob: targetIsoDobFromInput(document.getElementById("target-profile-dob")?.value),
+        gender: String(document.getElementById("target-profile-gender")?.value || "").trim(),
+        height_cm: String(document.getElementById("target-profile-height")?.value || "").trim(),
+        weight_kg: String(document.getElementById("target-profile-weight")?.value || "").trim(),
+        monthly_weight_change_kg: String(document.getElementById("target-profile-weight-change")?.value || "").trim(),
+        weight_history: collectTargetWeightHistory(),
+      };
+    }
+
+    function collectTargetDirtySnapshot() {
+      return JSON.stringify({
+        profile: collectTargetProfileSnapshot(),
+        target_settings: collectTargetSettings(),
+        indicator_rows: {
+          workday: collectTargetValues("workday", "config"),
+          nonworkday: collectTargetValues("nonworkday", "config"),
+        },
+      });
+    }
+
+    function resetTargetDirtySnapshot() {
+      targetSavedSnapshot = collectTargetDirtySnapshot();
+    }
+
+    function markTargetDirtyIfChanged() {
+      if (!targetSavedSnapshot) return;
+      const changed = collectTargetDirtySnapshot() !== targetSavedSnapshot;
+      if (changed) {
+        setUnsavedChanges("目標");
+      } else {
+        clearUnsavedChanges("目標");
+        setTargetStatus("");
+      }
+    }
+
+    function updateTargetPayloadAfterSave(saved, source, payload) {
+      const rows = saved && saved.indicator_rows && typeof saved.indicator_rows === "object"
+        ? saved.indicator_rows
+        : { workday: payload.workday || [], nonworkday: payload.nonworkday || [] };
+      targetPayload = {
+        headers: Array.isArray(saved && saved.headers) ? saved.headers : (targetPayload.headers || []),
+        nutrient_keys: Array.isArray(saved && saved.nutrient_keys) ? saved.nutrient_keys : (targetPayload.nutrient_keys || []),
+        indicator_rows: {
+          workday: Array.isArray(rows.workday) ? rows.workday : [],
+          nonworkday: Array.isArray(rows.nonworkday) ? rows.nonworkday : [],
+        },
+        profile: source === "config" && saved && saved.profile ? saved.profile : (targetPayload.profile || {}),
+        target_settings: source === "config" && saved && saved.target_settings ? saved.target_settings : (targetPayload.target_settings || cloneTargetSettingDefaults()),
+      };
+    }
+
+    function resetTargetInputBaselinesAfterSave() {
+      const dob = document.getElementById("target-profile-dob");
+      if (dob) dob.dataset.targetCommittedValue = dob.value;
+      const weight = document.getElementById("target-profile-weight");
+      if (weight) weight.dataset.targetOriginalWeight = weight.value;
+      document.querySelectorAll('#target-weight-history input[data-weight-history-field="weight_kg"]').forEach((input) => {
+        input.dataset.weightOriginalValue = input.value;
+      });
     }
 
     function showTargetError(message, source = "config") {
@@ -1082,6 +1863,7 @@
           const startY = ev.clientY;
           const startOffsetX = detailBlockOffsetPx(blockKey, "x");
           const startOffsetY = detailBlockOffsetPx(blockKey, "y");
+          document.body.classList.add("is-dnd-dragging");
           const onMove = (mv) => {
             formColumnWidths[`detail_block_${blockKey}_x`] = startOffsetX + (mv.clientX - startX);
             formColumnWidths[`detail_block_${blockKey}_y`] = startOffsetY + (mv.clientY - startY);
@@ -1090,6 +1872,7 @@
           const onUp = () => {
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
+            document.body.classList.remove("is-dnd-dragging");
             persistColumnWidths();
           };
           window.addEventListener("mousemove", onMove);
@@ -1110,16 +1893,32 @@
     function fillDetailSettings(data) {
       const folders = data && typeof data.folders === "object" && data.folders ? data.folders : {};
       const rice = data && typeof data.rice === "object" && data.rice ? data.rice : {};
+      const gcSync = data && typeof data.google_calendar_sync === "object" && data.google_calendar_sync ? data.google_calendar_sync : googleCalendarSync;
       const defs = Array.isArray(data && data.roster_code_definitions) ? data.roster_code_definitions : [];
-      detailSettingsPayload = { folders, rice, roster_code_definitions: defs };
+      detailSettingsPayload = { folders, rice, google_calendar_sync: gcSync, roster_code_definitions: defs };
+      googleCalendarSync = {
+        ...(googleCalendarSync || {}),
+        enabled: !!(gcSync && gcSync.enabled),
+        write: !!(gcSync && gcSync.write),
+        client_secret_file: String((gcSync && gcSync.client_secret_file) || ""),
+        token_file: String((gcSync && gcSync.token_file) || ""),
+        service_account_file: String((gcSync && gcSync.service_account_file) || ""),
+        nonwork_calendar_id: String((gcSync && gcSync.nonwork_calendar_id) || ""),
+      };
       const systemFolder = document.getElementById("detail-system-folder");
       const dataFolder = document.getElementById("detail-data-folder");
       const brown = document.getElementById("detail-rice-brown");
       const other = document.getElementById("detail-rice-other");
+      const gcClientSecret = document.getElementById("detail-gc-client-secret");
+      const gcTokenFile = document.getElementById("detail-gc-token-file");
+      const gcNonworkCalendar = document.getElementById("detail-gc-nonwork-calendar");
       if (systemFolder) systemFolder.value = folders.system_folder ?? "";
       if (dataFolder) dataFolder.value = folders.data_folder ?? "";
       if (brown) brown.value = rice.cooked_to_raw_brown ?? "";
       if (other) other.value = rice.cooked_to_raw_other ?? "";
+      if (gcClientSecret) gcClientSecret.value = googleCalendarSync.client_secret_file || "";
+      if (gcTokenFile) gcTokenFile.value = googleCalendarSync.token_file || "";
+      if (gcNonworkCalendar) gcNonworkCalendar.value = googleCalendarSync.nonwork_calendar_id || "";
       renderRosterCodeDefinitions(defs);
       const detailEditor = document.querySelector(".detail-editor");
       if (detailEditor) {
@@ -1237,6 +2036,9 @@
       const dataFolder = String(document.getElementById("detail-data-folder")?.value || "").trim();
       const brown = Number(document.getElementById("detail-rice-brown")?.value);
       const other = Number(document.getElementById("detail-rice-other")?.value);
+      const gcClientSecret = String(document.getElementById("detail-gc-client-secret")?.value || "").trim();
+      const gcTokenFile = String(document.getElementById("detail-gc-token-file")?.value || "").trim();
+      const gcNonworkCalendar = String(document.getElementById("detail-gc-nonwork-calendar")?.value || "").trim();
       if (!systemFolder || !dataFolder) {
         setDetailStatus("");
         showDetailError("System folder and data folder are required.");
@@ -1253,6 +2055,13 @@
           data_folder: dataFolder,
           cooked_to_raw_brown: brown,
           cooked_to_raw_other: other,
+          google_calendar_sync: {
+            ...(googleCalendarSync || {}),
+            client_secret_file: gcClientSecret,
+            token_file: gcTokenFile,
+            service_account_file: "",
+            nonwork_calendar_id: gcNonworkCalendar,
+          },
           roster_code_definitions: collectRosterCodeDefinitions(),
         });
         fillDetailSettings(data);
@@ -1696,19 +2505,22 @@
       }
     }
 
-    async function refreshTargetEditor() {
+    async function refreshTargetEditor(options = {}) {
       try {
         showTargetError("");
         renderTargetEditors(await loadTargets());
         clearUnsavedChanges("目標");
+        if (options && options.focusDob) requestAnimationFrame(focusTargetDob);
       } catch (x) {
         showTargetError(String(x));
       }
     }
 
-    async function saveTargetEditor(source = "config") {
+    async function saveTargetEditor(source = "config", options = {}) {
       const btn = document.getElementById(source === "planner" ? "planner-target-save" : "target-save");
       if (btn) btn.disabled = true;
+      const applyBtn = document.getElementById("target-apply-preview");
+      if (source === "config" && applyBtn) applyBtn.disabled = true;
       showTargetError("", source);
       setTargetStatus("");
       try {
@@ -1726,6 +2538,9 @@
           }
           if (profile.weight_kg != null && (!Number.isFinite(profile.weight_kg) || profile.weight_kg <= 0)) {
             throw new Error("體重 must be greater than zero.");
+          }
+          if (profile.monthly_weight_change_kg != null && !Number.isFinite(profile.monthly_weight_change_kg)) {
+            throw new Error("體重變化 must be numeric.");
           }
           (profile.weight_history || []).forEach((row, idx) => {
             const weight = Number(row.weight_kg);
@@ -1747,8 +2562,12 @@
         }
         const payload = {
           headers: targetPayload.headers || [],
-          workday: collectTargetValues("workday", source),
-          nonworkday: collectTargetValues("nonworkday", source),
+          workday: Array.isArray(options.targetRows && options.targetRows.workday)
+            ? options.targetRows.workday
+            : collectTargetValues("workday", source),
+          nonworkday: Array.isArray(options.targetRows && options.targetRows.nonworkday)
+            ? options.targetRows.nonworkday
+            : collectTargetValues("nonworkday", source),
         };
         if (source === "config") {
           payload.profile = profile;
@@ -1761,15 +2580,19 @@
         if (source === "config" && (!saved.target_settings || typeof saved.target_settings !== "object")) {
           throw new Error("Save failed: server response did not include target settings. Restart the Meal Planner server and save again.");
         }
-        renderTargetEditors(saved);
+        updateTargetPayloadAfterSave(saved, source, payload);
+        resetTargetInputBaselinesAfterSave();
+        resetTargetDirtySnapshot();
         clearUnsavedChanges("目標");
-        await loadMemoryPayload();
-        renderFromMemory(captureViewportAnchor());
-        setTargetStatus(`Save Targets ${new Date().toLocaleTimeString("en-GB")}`);
+        setTargetStatus(`${options.statusPrefix || "儲存指標 / Save Targets"} ${new Date().toLocaleTimeString("en-GB")}`);
+        return true;
       } catch (x) {
         showTargetError(String(x), source);
+        setUnsavedChanges("目標");
+        return false;
       } finally {
         if (btn) btn.disabled = false;
+        if (source === "config" && applyBtn) applyBtn.disabled = false;
       }
     }
 

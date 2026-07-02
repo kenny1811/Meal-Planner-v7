@@ -1,17 +1,29 @@
 package com.example.oneshotalarm.watch;
 
 import android.app.Service;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.PixelFormat;
 import android.media.AudioAttributes;
 import android.os.Build;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
+import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
+import android.provider.Settings;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 public class WatchAlarmService extends Service {
     static final String ACTION_START = "com.example.oneshotalarm.watch.ACTION_START";
@@ -29,18 +41,14 @@ public class WatchAlarmService extends Service {
     private static final String KEY_LAST_ALARM_KEY = "last_alarm_key";
     private static final String KEY_LAST_STARTED_AT = "last_started_at";
     private static final String EXTRA_ALARM_KEY = "alarm_key";
-    private static final long MAX_ALARM_MS = 60 * 1000L;
+    private static final String CHANNEL_ID = "watch_alarm";
+    private static final int NOTIFICATION_ID = 4101;
     private static final long DUPLICATE_ALARM_MS = 2 * 60 * 1000L;
+    private static final String TAG = "ShiftAlarmWatch";
 
     private Vibrator vibrator;
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Runnable autoStopRunnable = () -> {
-        stopAlert();
-        Intent intent = new Intent(WatchAlarmActivity.ACTION_DISMISS_LOCAL);
-        intent.setPackage(getPackageName());
-        sendBroadcast(intent);
-        stopSelf();
-    };
+    private PowerManager.WakeLock alarmWakeLock;
+    private View overlayView;
 
     static void start(Context context, String alarmKey) {
         Intent intent = new Intent(context, WatchAlarmService.class);
@@ -52,6 +60,7 @@ public class WatchAlarmService extends Service {
     static void stop(Context context) {
         Intent intent = new Intent(context, WatchAlarmService.class);
         markInactive(context);
+        clearNotification(context);
         context.stopService(intent);
     }
 
@@ -76,18 +85,22 @@ public class WatchAlarmService extends Service {
         }
         String alarmKey = intent == null ? "" : intent.getStringExtra(EXTRA_ALARM_KEY);
         if (isDuplicateActiveAlarm(alarmKey)) {
+            Log.d(TAG, "Duplicate active watch alarm ignored by service");
             return START_NOT_STICKY;
         }
+        Log.d(TAG, "Watch alarm service start: " + alarmKey.replace('\n', ' '));
+        acquireAlarmWakeLock();
+        showAlarmNotification(alarmKey);
+        showAlarmOverlay(alarmKey);
         markActive(alarmKey);
         startVibration();
-        scheduleAutoStop();
         return START_NOT_STICKY;
     }
 
     @Override
     public void onDestroy() {
         markInactive(this);
-        stopAlert();
+        stopAlarmHardware();
         super.onDestroy();
     }
 
@@ -107,6 +120,7 @@ public class WatchAlarmService extends Service {
             vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         }
         if (vibrator == null || !vibrator.hasVibrator()) {
+            Log.d(TAG, "Watch vibrator unavailable");
             return;
         }
         StrengthConfig config = strengthConfig();
@@ -119,17 +133,172 @@ public class WatchAlarmService extends Service {
             if (vibrator.hasAmplitudeControl()) {
                 int[] amplitudes = config.amplitudes;
                 vibrator.vibrate(VibrationEffect.createWaveform(pattern, amplitudes, 0), attributes);
+                Log.d(TAG, "Watch vibration started with amplitude control");
                 return;
             }
             vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0), attributes);
+            Log.d(TAG, "Watch vibration started");
             return;
         }
         vibrator.vibrate(pattern, 0);
+        Log.d(TAG, "Watch vibration started legacy");
     }
 
-    private void scheduleAutoStop() {
-        handler.removeCallbacks(autoStopRunnable);
-        handler.postDelayed(autoStopRunnable, MAX_ALARM_MS);
+    private void showAlarmOverlay(String alarmKey) {
+        if (overlayView != null) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Log.e(TAG, "Watch alarm overlay unavailable: SYSTEM_ALERT_WINDOW not allowed");
+            return;
+        }
+        AlarmParts parts = AlarmParts.from(alarmKey);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.setPadding(dp(10), dp(8), dp(10), dp(8));
+        root.setBackgroundColor(0xFF000000);
+        root.setClickable(true);
+        root.setOnClickListener(v -> dismissFromOverlay(parts.id));
+
+        TextView timeView = new TextView(this);
+        timeView.setText(parts.time);
+        timeView.setTextColor(0xFFFFFFFF);
+        timeView.setTextSize(42);
+        timeView.setGravity(Gravity.CENTER);
+        timeView.setIncludeFontPadding(false);
+        root.addView(timeView, weightedHeight(1f));
+
+        TextView labelView = new TextView(this);
+        labelView.setText(parts.label);
+        labelView.setTextColor(0xFFFFFFFF);
+        labelView.setTextSize(24);
+        labelView.setGravity(Gravity.CENTER);
+        labelView.setSingleLine(false);
+        labelView.setPadding(dp(8), dp(6), dp(8), dp(6));
+        root.addView(labelView, weightedHeight(2f));
+
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                        | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                        | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.OPAQUE
+        );
+        params.gravity = Gravity.CENTER;
+        try {
+            WindowManager manager = (WindowManager) getSystemService(WINDOW_SERVICE);
+            if (manager == null) {
+                Log.e(TAG, "Watch alarm overlay unavailable: WindowManager missing");
+                return;
+            }
+            manager.addView(root, params);
+            overlayView = root;
+            Log.d(TAG, "Watch alarm overlay shown");
+        } catch (Exception e) {
+            Log.e(TAG, "Watch alarm overlay failed", e);
+        }
+    }
+
+    private void dismissFromOverlay(String alarmId) {
+        WatchDismissBridge.sendDismiss(this, alarmId);
+        Intent dismissIntent = new Intent(WatchAlarmActivity.ACTION_DISMISS_LOCAL);
+        dismissIntent.setPackage(getPackageName());
+        sendBroadcast(dismissIntent);
+        WatchScheduleDisplayState.refreshFromCacheAndRequest(this);
+        stopAlert();
+        stopSelf();
+    }
+
+    private void showAlarmNotification(String alarmKey) {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager == null) {
+            Log.d(TAG, "Notification manager unavailable");
+            return;
+        }
+        manager.notify(NOTIFICATION_ID, buildAlarmNotification(alarmKey));
+        Log.d(TAG, "Watch alarm notification shown");
+    }
+
+    private Notification buildAlarmNotification(String alarmKey) {
+        ensureNotificationChannel();
+        AlarmParts parts = AlarmParts.from(alarmKey);
+        PendingIntent contentIntent = PendingIntent.getActivity(
+                this,
+                4102,
+                alarmActivityIntent(parts),
+                pendingIntentFlags(PendingIntent.FLAG_CANCEL_CURRENT)
+        );
+        PendingIntent stopIntent = PendingIntent.getBroadcast(
+                this,
+                4103,
+                new Intent(this, WatchLocalAlarmReceiver.class)
+                        .setAction(WatchLocalAlarmReceiver.ACTION_STOP_FROM_NOTIFICATION)
+                        .putExtra(WatchAlarmActivity.EXTRA_ALARM_ID, parts.id),
+                pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT)
+        );
+        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? new Notification.Builder(this, CHANNEL_ID)
+                : new Notification.Builder(this);
+        builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle(parts.time)
+                .setContentText(parts.label)
+                .setCategory(Notification.CATEGORY_ALARM)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setContentIntent(contentIntent)
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "停止", stopIntent);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            builder.setPriority(Notification.PRIORITY_MAX);
+        }
+        return builder.build();
+    }
+
+    private Intent alarmActivityIntent(AlarmParts parts) {
+        Intent intent = new Intent(this, WatchAlarmActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra(WatchAlarmActivity.EXTRA_ALARM_ID, parts.id);
+        intent.putExtra(WatchAlarmActivity.EXTRA_TIME, parts.time);
+        intent.putExtra(WatchAlarmActivity.EXTRA_LABEL, parts.label);
+        return intent;
+    }
+
+    private void ensureNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager == null || manager.getNotificationChannel(CHANNEL_ID) != null) {
+            return;
+        }
+        NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "Watch alarm",
+                NotificationManager.IMPORTANCE_HIGH
+        );
+        channel.setDescription("Local watch alarm");
+        channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        channel.setSound(null, null);
+        channel.enableVibration(false);
+        channel.setLightColor(Color.BLUE);
+        manager.createNotificationChannel(channel);
+    }
+
+    private void acquireAlarmWakeLock() {
+        releaseAlarmWakeLock();
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        if (powerManager == null) {
+            return;
+        }
+        alarmWakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                TAG + ":alarm"
+        );
+        alarmWakeLock.setReferenceCounted(false);
+        alarmWakeLock.acquire();
     }
 
     private boolean isDuplicateActiveAlarm(String alarmKey) {
@@ -221,10 +390,86 @@ public class WatchAlarmService extends Service {
     }
 
     private void stopAlert() {
-        handler.removeCallbacks(autoStopRunnable);
+        stopAlarmHardware();
+        clearNotification(this);
+    }
+
+    private void stopAlarmHardware() {
+        removeAlarmOverlay();
         if (vibrator != null) {
             vibrator.cancel();
         }
         vibrator = null;
+        releaseAlarmWakeLock();
+    }
+
+    private void removeAlarmOverlay() {
+        if (overlayView == null) {
+            return;
+        }
+        try {
+            WindowManager manager = (WindowManager) getSystemService(WINDOW_SERVICE);
+            if (manager != null) {
+                manager.removeView(overlayView);
+            }
+        } catch (Exception ignored) {
+        }
+        overlayView = null;
+    }
+
+    private static void clearNotification(Context context) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.cancel(NOTIFICATION_ID);
+        }
+    }
+
+    private void releaseAlarmWakeLock() {
+        if (alarmWakeLock != null && alarmWakeLock.isHeld()) {
+            alarmWakeLock.release();
+        }
+        alarmWakeLock = null;
+    }
+
+    private static int pendingIntentFlags(int flags) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return flags | PendingIntent.FLAG_IMMUTABLE;
+        }
+        return flags;
+    }
+
+    private LinearLayout.LayoutParams weightedHeight(float weight) {
+        return new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                weight
+        );
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private static final class AlarmParts {
+        final String id;
+        final String time;
+        final String label;
+
+        AlarmParts(String id, String time, String label) {
+            this.id = id == null ? "" : id;
+            this.time = time == null || time.trim().isEmpty() ? "--:--" : time;
+            this.label = label == null || label.trim().isEmpty() ? "鬧鐘" : label;
+        }
+
+        static AlarmParts from(String alarmKey) {
+            String[] parts = (alarmKey == null ? "" : alarmKey).split("\\n", 3);
+            if (parts.length >= 3) {
+                return new AlarmParts(parts[0], parts[1], parts[2]);
+            }
+            if (parts.length == 2) {
+                return new AlarmParts("", parts[0], parts[1]);
+            }
+            return new AlarmParts("", "--:--", "鬧鐘");
+        }
     }
 }

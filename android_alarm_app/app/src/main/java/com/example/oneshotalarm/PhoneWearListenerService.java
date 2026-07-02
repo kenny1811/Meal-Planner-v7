@@ -5,8 +5,14 @@ import android.util.Log;
 
 import com.google.android.gms.wearable.DataEvent;
 import com.google.android.gms.wearable.DataEventBuffer;
+import com.google.android.gms.wearable.DataMap;
+import com.google.android.gms.wearable.DataMapItem;
 import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.WearableListenerService;
+
+import org.json.JSONObject;
+
+import java.nio.charset.StandardCharsets;
 
 public class PhoneWearListenerService extends WearableListenerService {
     private static final String TAG = "OneShotWearListener";
@@ -22,7 +28,8 @@ public class PhoneWearListenerService extends WearableListenerService {
                     && event.getDataItem().getUri() != null
                     && DISMISS_DATA_PATH.equals(event.getDataItem().getUri().getPath())) {
                 Log.d(TAG, "Received watch dismiss data");
-                dispatchWatchDismiss();
+                DataMap map = DataMapItem.fromDataItem(event.getDataItem()).getDataMap();
+                dispatchWatchDismiss(map.getString("alarm_id", ""));
                 return;
             }
         }
@@ -42,14 +49,28 @@ public class PhoneWearListenerService extends WearableListenerService {
             return;
         }
         Log.d(TAG, "Received watch dismiss message");
-        dispatchWatchDismiss();
+        dispatchWatchDismiss(alarmIdFromPayload(messageEvent.getData()));
     }
 
-    private void dispatchWatchDismiss() {
+    private void dispatchWatchDismiss(String alarmId) {
+        if (alarmId != null && !alarmId.trim().isEmpty()) {
+            AlarmScheduler.cancelAlarm(this, alarmId.trim(), "");
+            AlarmStore.markAlarmFired(this, alarmId.trim());
+            NextAlarmWidgetProvider.updateAll(this);
+        }
         AlarmActivity.markWatchDismiss(this);
         WatchBridge.sendTileState(this);
         Intent intent = new Intent(AlarmActivity.ACTION_WATCH_DISMISS);
         intent.setPackage(getPackageName());
         sendBroadcast(intent);
+    }
+
+    private String alarmIdFromPayload(byte[] data) {
+        String raw = new String(data == null ? new byte[0] : data, StandardCharsets.UTF_8);
+        try {
+            return new JSONObject(raw).optString("alarm_id", "");
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 }

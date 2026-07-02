@@ -11,16 +11,12 @@ from meal_planner.dates_input import validate_dates_within_allowed_months
 from meal_planner.excel_io import load_roster_map
 from meal_planner.format_rules import (
     error_font_red_calcium,
+    error_font_red_fat_pct,
     error_font_red_range,
-    error_font_red_sat_fat,
-    error_font_red_total_fat,
-    error_font_red_trans_fat,
     error_font_red_upper_only,
     total_row_font_red_calcium,
+    total_row_font_red_fat_pct,
     total_row_font_red_range,
-    total_row_font_red_sat_fat,
-    total_row_font_red_total_fat,
-    total_row_font_red_trans_fat,
     total_row_font_red_upper_only,
 )
 from meal_planner.meal_schedule import build_day_meal_plan, build_meal_planning_cache, build_rice_note
@@ -34,6 +30,9 @@ from meal_planner.indicators import (
 from meal_planner.nutrition_db import load_catalog_entries, load_target_rows
 from meal_planner.roster import code_for_date, is_work_day
 from meal_planner.settings import AppSettings, get_settings
+
+
+_FAT_PCT_KEYS = {"fat_total_g", "fat_sat_g", "fat_trans_g"}
 
 
 class IndicatorDataError(ValueError):
@@ -128,6 +127,16 @@ def _is_meal_visible(meal: str, meal_plan: dict[str, Any]) -> bool:
     return bool(re.fullmatch(r"\d{1,2}:\d{2}", s))
 
 
+def _fat_pct_for_indicator(key: str, indicator: Any) -> float:
+    if (
+        indicator is not None
+        and getattr(indicator, "kind", None) == IndicatorKind.FAT_PCT
+        and getattr(indicator, "fat_pct", None) is not None
+    ):
+        return float(indicator.fat_pct)
+    raise IndicatorDataError(f"指標格式錯誤：{key} 必須係 '<x% kcal>'，不可讀取 config。")
+
+
 def _calc_day_summary(
     meal_plan: dict[str, Any],
     indicators: DayIndicatorProfile,
@@ -171,21 +180,12 @@ def _calc_day_summary(
                 total_red = total_row_font_red_calcium(t, p.lo)
                 err_red = error_font_red_calcium(t, p.lo)
 
-        if k == "fat_total_g":
-            cap = kcal_total * settings.nutrition_format.fat_pct_total / settings.nutrition_format.kcal_per_fat_g if kcal_total > 0 else 0.0
+        if k in _FAT_PCT_KEYS:
+            pct = _fat_pct_for_indicator(k, p)
+            cap = kcal_total * pct / settings.nutrition_format.kcal_per_fat_g if kcal_total > 0 else 0.0
             e = t - cap
-            total_red = total_row_font_red_total_fat(t, kcal_total)
-            err_red = error_font_red_total_fat(t, kcal_total)
-        elif k == "fat_sat_g":
-            cap = kcal_total * settings.nutrition_format.fat_pct_saturated / settings.nutrition_format.kcal_per_fat_g if kcal_total > 0 else 0.0
-            e = t - cap
-            total_red = total_row_font_red_sat_fat(t, kcal_total)
-            err_red = error_font_red_sat_fat(t, kcal_total)
-        elif k == "fat_trans_g":
-            cap = kcal_total * settings.nutrition_format.fat_pct_trans / settings.nutrition_format.kcal_per_fat_g if kcal_total > 0 else 0.0
-            e = t - cap
-            total_red = total_row_font_red_trans_fat(t, kcal_total)
-            err_red = error_font_red_trans_fat(t, kcal_total)
+            total_red = total_row_font_red_fat_pct(t, kcal_total, pct)
+            err_red = error_font_red_fat_pct(t, kcal_total, pct)
 
         # 防止浮點尾差造成「顯示 0.0 但仍紅字」。
         # 只容許極細數值（浮點誤差）清零，避免把真實偏差吞掉。
@@ -224,6 +224,7 @@ def _calc_day_summary(
 
 def _validate_indicator_rows_or_raise(work_vals: list[Any], nonwork_vals: list[Any]) -> None:
     missing: list[str] = []
+    invalid: list[str] = []
     for i in range(len(NUTRIENT_KEYS)):
         w = work_vals[i] if i < len(work_vals) else None
         n = nonwork_vals[i] if i < len(nonwork_vals) else None
@@ -231,9 +232,18 @@ def _validate_indicator_rows_or_raise(work_vals: list[Any], nonwork_vals: list[A
             missing.append(f"返工日/{NUTRIENT_KEYS[i]}")
         if n is None or str(n).strip() == "":
             missing.append(f"非返工日/{NUTRIENT_KEYS[i]}")
+        if NUTRIENT_KEYS[i] in _FAT_PCT_KEYS:
+            for label, raw in (("返工日", w), ("非返工日", n)):
+                parsed = DayIndicatorProfile.from_row_cells([None] * i + [raw]).nutrients[i]
+                if parsed is None or parsed.kind != IndicatorKind.FAT_PCT or parsed.fat_pct is None:
+                    invalid.append(f"{label}/{NUTRIENT_KEYS[i]}")
     if missing:
         raise IndicatorDataError(
             "指標冇數據：餐單v5 頂部指標存在空白。缺少 -> " + ", ".join(missing)
+        )
+    if invalid:
+        raise IndicatorDataError(
+            "脂肪指標必須來自 target row，格式要係 '<x% kcal>'。錯誤 -> " + ", ".join(invalid)
         )
 
 

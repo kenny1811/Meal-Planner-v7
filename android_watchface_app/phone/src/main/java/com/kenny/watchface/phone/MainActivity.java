@@ -15,7 +15,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        SunTimesSync.scheduleDailyAt0530(this);
+        SunTimesSync.scheduleDailyAt0400(this);
+        BatterySync.schedulePeriodic(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -67,6 +68,7 @@ public class MainActivity extends Activity {
         int percent = BatterySync.readBatteryPercent(this);
         String percentText = percent >= 0 ? percent + "%" : "--%";
         status.setText("Phone battery " + percentText
-                + "\nSunrise/sunset syncs from HKO daily at 05:30.");
+                + "\nPhone battery syncs every 15 minutes."
+                + "\nSunrise/sunset syncs from HKO daily at 04:00.");
     }
 }

@@ -6,20 +6,18 @@
 | --- | --- | --- |
 | `餐單v5` top indicator rows | Legacy bootstrap for nutrition targets | SQLite `nutrition_targets` |
 | `營養清單` | Legacy bootstrap for optimizer catalog and shopping categories | SQLite `nutrition_catalog` |
-| `飯時` A:E | Meal time rules by roster code | SQLite `reference_meal_time_rules` |
-| `飯時` G:H | Meal patterns by meal | SQLite `reference_meal_patterns` |
-| `餐廳選擇` | Restaurant lunch rule and nutrient values | SQLite `reference_restaurant_rows` |
-| `行位表` | Schedule events used to resolve meal clock times | SQLite `reference_schedule_rows` |
-| `更表` | Monthly day-to-roster-code input | Workbook runtime input |
-| `加班表` | Date-specific start/end override input | Workbook runtime input |
+| `飯時` A:E | Meal time rules by roster code | SQLite `maintenance_sheet_rows` (`meal_times`) |
+| `飯時` G:H | Meal patterns by meal | SQLite `maintenance_sheet_rows` (`meal_patterns`) |
+| `餐廳選擇` | Restaurant lunch rule and nutrient values | SQLite `maintenance_sheet_rows` (`restaurant`) |
+| `行位表` | Schedule events used to resolve meal clock times | SQLite `maintenance_sheet_rows` (`schedule_grid`) |
+| `更表` | Monthly day-to-roster-code input | SQLite `maintenance_sheet_rows` (`roster`) |
+| `加班表` | Date-specific start/end override input | SQLite `maintenance_sheet_rows` (`overtime`) |
 | `更時表` | SQLite maintenance/reporting input for roster report views | SQLite `maintenance_sheet_rows` (`payroll_times`) |
 | `公眾假期` | SQLite maintenance/reporting input for roster report context | SQLite `maintenance_sheet_rows` (`public_holidays`) |
 
 ## First slice
 
-The first slice treats `飯時`, `餐廳選擇`, and `行位表` as planning reference sheets. They bootstrap into SQLite when the reference tables are empty, and `build_meal_planning_cache()` now reads those SQLite tables after that bootstrap.
-
-This does not remove the workbook from preview generation yet. The preview still opens and validates the workbook because `更表` and `加班表` remain live operational inputs and the legacy workbook structure check still covers all configured sheets.
+Generate/preview now reads current SQLite maintenance rows for `更表`, `飯時表`, `Pattern`, `餐廳選擇`, `加班表`, and `行位表`. It does not open Excel or fall back to legacy reference tables.
 
 ## Maintenance input import
 

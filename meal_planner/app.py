@@ -29,6 +29,7 @@ from meal_planner.alarm_plan import build_daily_alarm_plan
 from meal_planner.dates_input import DateValidationError, parse_date_expression
 from meal_planner.excel_io import WorkbookValidationError, load_workbook_data
 from meal_planner.free_port import free_tcp_port
+from meal_planner.google_calendar_sync import authorize_google_calendar, check_nonwork_calendar_consistency, google_calendar_auth_status, sync_roster_to_google_calendar
 from meal_planner.indicators import NUTRIENT_KEYS
 from meal_planner.maintenance_db import (
     MAINTENANCE_SHEETS,
@@ -71,6 +72,7 @@ from meal_planner.storage import (
     load_active_menu_path,
     load_column_widths,
     load_form_column_widths,
+    load_google_calendar_sync_settings,
     load_latest_versions,
     load_menu_hidden_keys,
     load_menu_labels,
@@ -80,11 +82,13 @@ from meal_planner.storage import (
     load_sidebar_width,
     load_show_past,
     load_target_editor_layout,
+    merge_memory_payload,
     save_active_panel,
     save_active_config_view,
     save_active_menu_path,
     save_column_widths,
     save_form_column_widths,
+    save_google_calendar_sync_settings,
     save_menu_hidden_keys,
     save_menu_labels,
     save_menu_order,
@@ -267,6 +271,7 @@ class UiStateRequest(BaseModel):
     menu_labels: dict[str, str] | None = None
     menu_hidden_keys: list[str] | None = None
     menu_tree_open: dict[str, bool] | None = None
+    google_calendar_sync: dict[str, Any] | None = None
 
 
 class MemoryPayloadRequest(BaseModel):
@@ -290,11 +295,16 @@ class DetailSettingsRequest(BaseModel):
     cooked_to_raw_other: float = Field(..., gt=0)
     system_folder: str | None = None
     data_folder: str | None = None
+    google_calendar_sync: dict[str, Any] | None = None
     roster_code_definitions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class MaintenanceSheetRequest(BaseModel):
     rows: list[list[Any]] = Field(default_factory=list)
+
+
+class RosterCalendarConsistencyRequest(BaseModel):
+    roster_text: str = ""
 
 
 def _stored_meal_plan_payloads(date_isos: set[str]) -> dict[str, dict[str, Any]]:
@@ -1351,7 +1361,6 @@ def api_preview(body: PreviewRequest) -> dict[str, Any]:
             reroll_nonce=body.reroll_nonce,
             fast_mode=body.fast_mode,
         )
-        save_memory_payload(payload)
         return payload
     except DateValidationError as e:
         raise HTTPException(
@@ -1442,9 +1451,6 @@ def api_mobile_meal_plan(date_iso: str, meta_only: bool = False) -> dict[str, An
             },
             "nutrition_format": {
                 "kcal_per_fat_g": settings.nutrition_format.kcal_per_fat_g,
-                "fat_pct_total": settings.nutrition_format.fat_pct_total,
-                "fat_pct_saturated": settings.nutrition_format.fat_pct_saturated,
-                "fat_pct_trans": settings.nutrition_format.fat_pct_trans,
             },
         }
     except IndicatorDataError as e:
@@ -1614,7 +1620,8 @@ def api_memory_list_get() -> dict[str, Any]:
 @app.post("/api/memory-list")
 def api_memory_list_set(body: MemoryPayloadRequest) -> dict[str, Any]:
     try:
-        save_memory_payload(body.payload)
+        payload = merge_memory_payload(load_memory_payload(), body.payload)
+        save_memory_payload(payload)
         return {"ok": True}
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Save memory list failed: {e}") from e
@@ -1652,6 +1659,7 @@ def _detail_settings_payload() -> dict[str, Any]:
             "cooked_to_raw_brown": settings.rice.cooked_to_raw_brown,
             "cooked_to_raw_other": settings.rice.cooked_to_raw_other,
         },
+        "google_calendar_sync": load_google_calendar_sync_settings(),
         "roster_code_definitions": load_roster_code_definitions(settings),
     }
 
@@ -1679,6 +1687,8 @@ def api_set_detail_settings(body: DetailSettingsRequest) -> dict[str, Any]:
                 system_folder=body.system_folder if body.system_folder is not None else str(current.system_folder),
                 data_folder=body.data_folder if body.data_folder is not None else str(current.data_folder),
             )
+        if body.google_calendar_sync is not None:
+            save_google_calendar_sync_settings(body.google_calendar_sync)
         save_roster_code_definitions(body.roster_code_definitions, get_settings())
         return {"ok": True, **_detail_settings_payload()}
     except ValueError as e:
@@ -1719,11 +1729,31 @@ def api_maint_sheet(sheet_key: str) -> dict[str, Any]:
 def api_save_maint_sheet(sheet_key: str, body: MaintenanceSheetRequest) -> dict[str, Any]:
     sheet_key = _validate_maintenance_key(sheet_key)
     try:
-        return {"ok": True, **save_sheet_rows(sheet_key, body.rows, get_settings())}
+        settings = get_settings()
+        response = {"ok": True, **save_sheet_rows(sheet_key, body.rows, settings)}
+        if sheet_key == "roster":
+            try:
+                response["google_calendar_sync"] = sync_roster_to_google_calendar(body.rows, settings)
+            except Exception as e:
+                response["google_calendar_sync"] = {"status": "error", "detail": str(e)}
+        return response
     except KeyError as e:
         raise HTTPException(status_code=404, detail=f"Unknown maintenance sheet: {sheet_key}") from e
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Save maintenance sheet failed: {e}") from e
+
+
+@app.post("/api/google-calendar/roster-sync")
+def api_google_calendar_roster_sync() -> dict[str, Any]:
+    try:
+        settings = get_settings()
+        payload = load_sheet_rows("roster", settings)
+        rows = payload.get("rows", []) if isinstance(payload, dict) else []
+        return {"ok": True, **sync_roster_to_google_calendar(rows if isinstance(rows, list) else [], settings)}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google Calendar roster sync failed: {e}") from e
 
 
 @app.post("/api/maint/sheets/{sheet_key}/import")
@@ -2168,6 +2198,7 @@ def api_get_ui_state() -> dict[str, Any]:
         "menu_labels": load_menu_labels(),
         "menu_hidden_keys": load_menu_hidden_keys(),
         "menu_tree_open": load_menu_tree_open(),
+        "google_calendar_sync": load_google_calendar_sync_settings(),
     }
 
 
@@ -2196,6 +2227,8 @@ def api_set_ui_state(body: UiStateRequest) -> dict[str, Any]:
             save_menu_hidden_keys(body.menu_hidden_keys)
         if body.menu_tree_open is not None:
             save_menu_tree_open(body.menu_tree_open)
+        if body.google_calendar_sync is not None:
+            save_google_calendar_sync_settings(body.google_calendar_sync)
         if body.sidebar_width is not None:
             save_sidebar_width(body.sidebar_width)
         if body.show_past is not None:
@@ -2209,6 +2242,34 @@ def api_set_ui_state(body: UiStateRequest) -> dict[str, Any]:
         return {"ok": True}
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"UI state save failed: {e}") from e
+
+
+@app.post("/api/google-calendar/auth")
+def api_google_calendar_auth() -> dict[str, Any]:
+    try:
+        return {"ok": True, **authorize_google_calendar(get_settings())}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google Calendar login failed: {e}") from e
+
+
+@app.get("/api/google-calendar/auth-status")
+def api_google_calendar_auth_status() -> dict[str, Any]:
+    try:
+        return {"ok": True, **google_calendar_auth_status(get_settings())}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google Calendar auth status failed: {e}") from e
+
+
+@app.post("/api/google-calendar/nonwork-consistency")
+def api_google_calendar_nonwork_consistency(body: RosterCalendarConsistencyRequest) -> dict[str, Any]:
+    try:
+        return {"ok": True, **check_nonwork_calendar_consistency(body.roster_text, get_settings())}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google Calendar non-work consistency check failed: {e}") from e
 
 
 def main() -> None:

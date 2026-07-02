@@ -70,6 +70,38 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(result["headers"], ["A"])
         self.assertEqual(result["days"], [{"date": "2026-05-20", "meal_plan": {"idx": 2}}])
 
+    def test_merge_memory_payload_keeps_days_missing_from_incoming_payload(self):
+        existing = {
+            "headers": ["old"],
+            "indicator_rows": {"workday": ["old"]},
+            "nutrient_keys": ["kcal"],
+            "days": [
+                {"date": "2026-06-23", "meal_plan": {"idx": 23}},
+                {"date": "2026-06-24", "meal_plan": {"idx": 24}},
+            ],
+        }
+        incoming = {
+            "headers": ["new"],
+            "indicator_rows": {"workday": ["new"]},
+            "nutrient_keys": ["protein_g"],
+            "days": [{"date": "2026-06-27", "meal_plan": {"idx": 27}}],
+        }
+
+        result = storage.merge_memory_payload(existing, incoming)
+
+        self.assertEqual(result["headers"], ["new"])
+        self.assertEqual(result["indicator_rows"], {"workday": ["new"]})
+        self.assertEqual(result["nutrient_keys"], ["protein_g"])
+        self.assertEqual([d["date"] for d in result["days"]], ["2026-06-23", "2026-06-24", "2026-06-27"])
+
+    def test_merge_memory_payload_overwrites_matching_date_only(self):
+        result = storage.merge_memory_payload(
+            {"days": [{"date": "2026-06-23", "meal_plan": {"idx": "old"}}]},
+            {"days": [{"date": "2026-06-23", "meal_plan": {"idx": "new"}}]},
+        )
+
+        self.assertEqual(result["days"], [{"date": "2026-06-23", "meal_plan": {"idx": "new"}}])
+
     def test_target_editor_layout_round_trips_with_ui_state(self):
         storage.save_target_editor_layout(840, {"kcal": 120, "protein_g": 96}, {"name": 240})
 
@@ -85,6 +117,27 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(
             storage.load_form_column_widths(),
             {"detail_code_pattern": 140.0, "maint_roster_text": 760.0},
+        )
+
+    def test_google_calendar_sync_settings_round_trip(self):
+        storage.save_google_calendar_sync_settings({
+            "enabled": True,
+            "write": True,
+            "client_secret_file": "C:/secrets/client.json",
+            "token_file": "C:/secrets/token.json",
+            "nonwork_calendar_id": "nonwork-calendar",
+        })
+
+        self.assertEqual(
+            storage.load_google_calendar_sync_settings(),
+            {
+                "enabled": True,
+                "write": True,
+                "client_secret_file": "C:/secrets/client.json",
+                "token_file": "C:/secrets/token.json",
+                "service_account_file": "",
+                "nonwork_calendar_id": "nonwork-calendar",
+            },
         )
 
 

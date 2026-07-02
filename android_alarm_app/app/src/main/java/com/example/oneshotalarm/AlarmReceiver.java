@@ -16,8 +16,8 @@ public class AlarmReceiver extends BroadcastReceiver {
         AlarmStore.markAlarmFired(context, id);
         AlarmScheduler.cancelAlarm(context, id, label);
         NextAlarmWidgetProvider.updateAll(context);
-        WatchBridge.sendAlarm(context, label, triggerAtMillis);
+        AlarmAlertService.start(context, id, label, triggerAtMillis);
+        WatchBridge.sendAlarm(context, id, label, triggerAtMillis);
         WatchBridge.sendTileState(context);
-        AlarmScheduler.sendAlarmActivity(context, id, label, triggerAtMillis);
     }
 }

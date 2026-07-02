@@ -43,6 +43,21 @@ def _nutrient_weight(key: str, settings: AppSettings) -> float:
     }.get(key, 1.0)
 
 
+_FAT_PCT_KEYS = {"fat_total_g", "fat_sat_g", "fat_trans_g"}
+
+
+def _fat_cap_ratio_for_target(key: str, indicators: DayIndicatorProfile, settings: AppSettings) -> float:
+    idx = NUTRIENT_KEYS.index(key)
+    indicator = indicators.nutrients[idx] if idx < len(indicators.nutrients) else None
+    if (
+        indicator is not None
+        and indicator.kind == IndicatorKind.FAT_PCT
+        and indicator.fat_pct is not None
+    ):
+        return float(indicator.fat_pct) / float(settings.nutrition_format.kcal_per_fat_g)
+    raise ValueError(f"{key} target must be '<x% kcal>'; reading config is not allowed.")
+
+
 
 def solve_day_meal_plan(
     *,
@@ -237,11 +252,9 @@ def solve_day_meal_plan(
             penalties.append(hard_weight * w * s_low)
             slack_vars.append((key, "low", s_low))
 
-    nf = settings.nutrition_format
     fat_caps = {
-        "fat_total_g": float(nf.fat_pct_total) / float(nf.kcal_per_fat_g),
-        "fat_sat_g": float(nf.fat_pct_saturated) / float(nf.kcal_per_fat_g),
-        "fat_trans_g": float(nf.fat_pct_trans) / float(nf.kcal_per_fat_g),
+        key: _fat_cap_ratio_for_target(key, indicators, settings)
+        for key in _FAT_PCT_KEYS
     }
     fat_cap_weights = {
         "fat_total_g": max(1.0, float(settings.optimizer.fat_cap_weights.total)),

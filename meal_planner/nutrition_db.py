@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import closing
 from datetime import datetime
+import math
 from pathlib import Path
 import sqlite3
 from typing import Any
@@ -125,6 +126,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             gender TEXT,
             height_cm REAL,
             weight_kg REAL,
+            monthly_weight_change_kg REAL,
             last_updated TEXT
         );
 
@@ -149,6 +151,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE nutrition_profile ADD COLUMN dob TEXT")
     if "last_updated" not in columns:
         conn.execute("ALTER TABLE nutrition_profile ADD COLUMN last_updated TEXT")
+    if "monthly_weight_change_kg" not in columns:
+        conn.execute("ALTER TABLE nutrition_profile ADD COLUMN monthly_weight_change_kg REAL")
     history_count = conn.execute("SELECT COUNT(*) AS c FROM nutrition_weight_history").fetchone()
     profile_row = conn.execute(
         "SELECT weight_kg, last_updated FROM nutrition_profile WHERE profile_key = 'current'"
@@ -506,7 +510,7 @@ def load_nutrition_profile(settings: AppSettings | None = None) -> dict[str, Any
         _ensure_schema(conn)
         row = conn.execute(
             """
-            SELECT dob, age, gender, height_cm, weight_kg, last_updated
+            SELECT dob, age, gender, height_cm, weight_kg, monthly_weight_change_kg, last_updated
             FROM nutrition_profile
             WHERE profile_key = 'current'
             """
@@ -534,6 +538,7 @@ def load_nutrition_profile(settings: AppSettings | None = None) -> dict[str, Any
             "gender": "",
             "height_cm": None,
             "weight_kg": None,
+            "monthly_weight_change_kg": 0.0,
             "last_updated": "",
             "weight_history": history,
         }
@@ -543,6 +548,7 @@ def load_nutrition_profile(settings: AppSettings | None = None) -> dict[str, Any
         "gender": str(row["gender"] or ""),
         "height_cm": float(row["height_cm"]) if row["height_cm"] is not None else None,
         "weight_kg": float(row["weight_kg"]) if row["weight_kg"] is not None else None,
+        "monthly_weight_change_kg": float(row["monthly_weight_change_kg"]) if row["monthly_weight_change_kg"] is not None else 0.0,
         "last_updated": str(row["last_updated"] or ""),
         "weight_history": history,
     }
@@ -605,6 +611,7 @@ def save_nutrition_profile(
     gender = str(profile.get("gender") or "").strip() if isinstance(profile, dict) else ""
     height_raw = profile.get("height_cm") if isinstance(profile, dict) else None
     weight_raw = profile.get("weight_kg") if isinstance(profile, dict) else None
+    weight_change_raw = profile.get("monthly_weight_change_kg") if isinstance(profile, dict) else None
     history = _normalize_weight_history(profile.get("weight_history") if isinstance(profile, dict) else None)
     if history:
         weight_raw = history[-1]["weight_kg"]
@@ -612,6 +619,7 @@ def save_nutrition_profile(
     age = _age_from_dob(dob) if dob else (None if age_raw in (None, "") else int(age_raw))
     height_cm = None if height_raw in (None, "") else float(height_raw)
     weight_kg = None if weight_raw in (None, "") else float(weight_raw)
+    monthly_weight_change_kg = 0.0 if weight_change_raw in (None, "") else float(weight_change_raw)
     if age is not None and age < 0:
         raise ValueError("年齡 must be zero or greater.")
     if gender and gender not in {"male", "female"}:
@@ -620,12 +628,14 @@ def save_nutrition_profile(
         raise ValueError("身高 must be greater than zero.")
     if weight_kg is not None and weight_kg <= 0:
         raise ValueError("體重 must be greater than zero.")
+    if not math.isfinite(monthly_weight_change_kg):
+        raise ValueError("體重變化 must be numeric.")
 
     with closing(_connect(settings)) as conn:
         _ensure_schema(conn)
         existing = conn.execute(
             """
-            SELECT dob, age, gender, height_cm, weight_kg, last_updated
+            SELECT dob, age, gender, height_cm, weight_kg, monthly_weight_change_kg, last_updated
             FROM nutrition_profile
             WHERE profile_key = 'current'
             """
@@ -638,17 +648,18 @@ def save_nutrition_profile(
         )
         conn.execute(
             """
-            INSERT INTO nutrition_profile(profile_key, dob, age, gender, height_cm, weight_kg, last_updated)
-            VALUES ('current', ?, ?, ?, ?, ?, ?)
+            INSERT INTO nutrition_profile(profile_key, dob, age, gender, height_cm, weight_kg, monthly_weight_change_kg, last_updated)
+            VALUES ('current', ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(profile_key) DO UPDATE SET
                 dob = excluded.dob,
                 age = excluded.age,
                 gender = excluded.gender,
                 height_cm = excluded.height_cm,
                 weight_kg = excluded.weight_kg,
+                monthly_weight_change_kg = excluded.monthly_weight_change_kg,
                 last_updated = excluded.last_updated
             """,
-            (dob, age, gender, height_cm, weight_kg, last_updated),
+            (dob, age, gender, height_cm, weight_kg, monthly_weight_change_kg, last_updated),
         )
         if history:
             conn.execute("DELETE FROM nutrition_weight_history")

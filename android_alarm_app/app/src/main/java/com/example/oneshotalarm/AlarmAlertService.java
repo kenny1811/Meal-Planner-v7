@@ -29,7 +29,11 @@ public class AlarmAlertService extends Service {
         intent.putExtra(AlarmScheduler.EXTRA_ALARM_ID, id);
         intent.putExtra(AlarmScheduler.EXTRA_ALARM_LABEL, label);
         intent.putExtra(AlarmScheduler.EXTRA_ALARM_TRIGGER_AT, triggerAtMillis);
-        context.startService(intent);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent);
+        } else {
+            context.startService(intent);
+        }
     }
 
     static void stop(Context context) {
@@ -57,6 +61,8 @@ public class AlarmAlertService extends Service {
             label = "鬧鐘響喇";
         }
 
+        stopping = false;
+        startForeground(NOTIFICATION_ID, buildNotification(id, label, triggerAtMillis));
         acquireWakeLock();
         startStrongVibration();
         AlarmScheduler.sendAlarmActivity(this, id, label, triggerAtMillis);
@@ -194,6 +200,11 @@ public class AlarmAlertService extends Service {
             wakeLock.release();
         }
         wakeLock = null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            stopForeground(true);
+        }
 
         NotificationManager notificationManager =
                 (NotificationManager) getSystemService(NOTIFICATION_SERVICE);

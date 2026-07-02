@@ -28,7 +28,7 @@ class PreviewRecalcTests(unittest.TestCase):
 
     def test_calc_day_summary_ignores_hidden_meals_and_flags_visible_range_errors(self):
         settings = get_settings()
-        indicators = DayIndicatorProfile.from_row_cells(["100-200", "10-20", "30-40", "<5", "<10", "<100", ">300"])
+        indicators = DayIndicatorProfile.from_row_cells(["100-200", "10-20", "30-40", "<5", "<10", "<100", ">300", "<30% kcal", "<7% kcal", "<1% kcal"])
         meal_plan = {
             "meal_times_resolved": {"早餐": "08:00", "午餐": ""},
             "primary_rule": {"早餐": "08:00", "午餐": ""},
@@ -48,7 +48,7 @@ class PreviewRecalcTests(unittest.TestCase):
 
     def test_calc_day_summary_clears_red_when_displayed_error_rounds_to_zero(self):
         settings = get_settings()
-        indicators = DayIndicatorProfile.from_row_cells(["100-200"])
+        indicators = DayIndicatorProfile.from_row_cells(["100-200", "", "", "", "", "", "", "<30% kcal", "<7% kcal", "<1% kcal"])
         meal_plan = {
             "meal_times_resolved": {"早餐": "08:00"},
             "meal_nutrients": {"早餐": nutrient_map(kcal=200.04)},
@@ -62,7 +62,7 @@ class PreviewRecalcTests(unittest.TestCase):
 
     def test_calc_day_summary_red_flags_values_outside_range(self):
         settings = get_settings()
-        indicators = DayIndicatorProfile.from_row_cells(["1500-1600", "95-110"])
+        indicators = DayIndicatorProfile.from_row_cells(["1500-1600", "95-110", "", "", "", "", "", "<30% kcal", "<7% kcal", "<1% kcal"])
         meal_plan = {
             "meal_times_resolved": {"早餐": "08:00"},
             "meal_nutrients": {"早餐": nutrient_map(kcal=1500.1, protein_g=113.3)},
@@ -75,6 +75,43 @@ class PreviewRecalcTests(unittest.TestCase):
         self.assertEqual(summary["errors"][protein_idx], 3.3)
         self.assertTrue(summary["total_red_flags"][protein_idx])
         self.assertTrue(summary["error_red_flags"][protein_idx])
+
+    def test_calc_day_summary_uses_indicator_fat_pct_over_config_default(self):
+        settings = get_settings()
+        indicators = DayIndicatorProfile.from_row_cells([
+            "1000-1000",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "<30% kcal",
+            "<7% kcal",
+            "<1% kcal",
+        ])
+        meal_plan = {
+            "meal_times_resolved": {"早餐": "08:00"},
+            "meal_nutrients": {"早餐": nutrient_map(kcal=1000, fat_total_g=32)},
+        }
+
+        summary = _calc_day_summary(meal_plan, indicators, settings)
+        fat_idx = NUTRIENT_KEYS.index("fat_total_g")
+
+        self.assertEqual(summary["errors"][fat_idx], -1.3)
+        self.assertFalse(summary["total_red_flags"][fat_idx])
+        self.assertFalse(summary["error_red_flags"][fat_idx])
+
+    def test_calc_day_summary_rejects_missing_fat_pct(self):
+        settings = get_settings()
+        indicators = DayIndicatorProfile.from_row_cells(["1000-1000"])
+        meal_plan = {
+            "meal_times_resolved": {"早餐": "08:00"},
+            "meal_nutrients": {"早餐": nutrient_map(kcal=1000, fat_total_g=1)},
+        }
+
+        with self.assertRaisesRegex(Exception, "不可讀取 config"):
+            _calc_day_summary(meal_plan, indicators, settings)
 
     def test_summary_score_prioritizes_red_count_then_violation_then_total_deviation(self):
         self.assertLess(

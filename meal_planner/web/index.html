@@ -5,20 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Meal Planner v7</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260520-favicon" />
-  <link rel="stylesheet" href="style.css?v=20260622-activity-tooltip-v37" />
+  <link rel="stylesheet" href="style.css?v=20260702-roster-gc-check-v1" />
 </head>
 <body>
   <div id="clock-top-right" class="clock-top-right">--/--/---- --- --:--:--</div>
   <div class="app-shell">
   <aside id="sidebar" class="sidebar">
-    <h2>Menu</h2>
+    <div class="sidebar-title" data-menu-drop-group="top">
+      <h2>Menu</h2>
+      <button type="button" class="menu-add-button" id="menu-add" title="Create menu item" aria-label="Create menu item">+</button>
+    </div>
     <div class="menu-list" data-menu-drop-group="top">
       <div class="menu-tree is-open" id="config-menu-tree">
         <button type="button" class="menu-item menu-tree-toggle" data-panel="config" data-menu-group="top" data-menu-key="config" id="menu-config" aria-expanded="true">
           <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Config</span><span class="menu-tree-mark" aria-hidden="true"></span>
         </button>
         <div class="menu-tree-children" data-menu-drop-group="config">
-          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="target" id="menu-config-target"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Target</span></button>
+          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="target" id="menu-config-target"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">營養指標 / Target</span></button>
           <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="catalog" id="menu-config-catalog"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Catalog</span></button>
           <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="details" id="menu-config-details"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Detail Settings</span></button>
         </div>
@@ -28,6 +31,14 @@
           <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Maint</span><span class="menu-tree-mark" aria-hidden="true"></span>
         </button>
         <div class="menu-tree-children" id="maint-menu-children" data-menu-drop-group="maint"></div>
+      </div>
+      <div class="menu-tree" id="reports-menu-tree">
+        <button type="button" class="menu-item menu-tree-toggle" data-panel="reports" data-menu-group="top" data-menu-key="reports" id="menu-reports" aria-expanded="false">
+          <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">報表</span><span class="menu-tree-mark" aria-hidden="true"></span>
+        </button>
+        <div class="menu-tree-children" data-menu-drop-group="reports">
+          <button type="button" class="menu-item menu-child" data-menu-group="reports" data-menu-key="shift_code_analysis" id="menu-report-shift-code-analysis"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">更碼分析</span></button>
+        </div>
       </div>
       <button type="button" class="menu-item active" data-panel="planner" data-menu-group="top" data-menu-key="planner" id="menu-planner"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Menu Planner</span></button>
       <button type="button" class="menu-item" data-panel="shopping" data-menu-group="top" data-menu-key="shopping" id="menu-shopping"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Shopping List</span></button>
@@ -44,7 +55,7 @@
     <span><label for="dates_expr">Date(s)</label><input type="text" id="dates_expr" placeholder="11 / 3 5 7 / 12-15 / 12 13 14 15-17 / 12-15,27-3" required /></span>
     <button type="button" class="btn" id="go">Generate</button>
     <button type="button" class="btn" id="recalc">Recalculate</button>
-    <button type="button" class="btn" id="planner-target-save" style="display:none;">Save Targets</button>
+    <button type="button" class="btn" id="planner-target-save" style="display:none;">儲存指標 / Save Targets</button>
     <label class="chk"><input type="checkbox" id="fast_mode" checked />Fast mode</label>
     <label class="chk"><input type="checkbox" id="show_past" checked />Show past dates</label>
   </div>
@@ -55,9 +66,9 @@
     <h1 data-title-key="config">Config</h1>
     <div class="config-views">
       <section class="config-view" data-config-view="targets">
-        <h2 data-title-key="target">Targets</h2>
+        <h2 data-title-key="target">營養指標 / Targets</h2>
         <div class="config-toolbar">
-          <button type="button" class="btn" id="target-save" style="display:none;">Save Targets</button>
+          <button type="button" class="btn" id="target-save" style="display:none;">儲存指標 / Save Targets</button>
           <span id="target-status" class="target-status"></span>
         </div>
         <div id="target-err" class="err"></div>
@@ -71,30 +82,33 @@
               </colgroup>
               <tbody>
                 <tr>
-                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-dob">DOB</label></th>
-                  <td data-form-col-key="target_profile_value"><input type="date" id="target-profile-dob" /></td>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-dob">出生日期<br>DOB</label></th>
+                  <td data-form-col-key="target_profile_value"><input type="text" id="target-profile-dob" inputmode="numeric" placeholder="dd/mm/yyyy ddd" /></td>
                 </tr>
                 <tr>
-                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-age">年齡</label></th>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-age">年齡<br>age</label></th>
                   <td data-form-col-key="target_profile_value"><input type="text" id="target-profile-age" readonly /></td>
                 </tr>
                 <tr>
-                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-gender">性別</label></th>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-gender">性別<br>gender</label></th>
                   <td data-form-col-key="target_profile_value">
                     <select id="target-profile-gender">
-                      <option value=""></option>
                       <option value="male">男</option>
                       <option value="female">女</option>
                     </select>
                   </td>
                 </tr>
                 <tr>
-                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-height">身高 (cm)</label></th>
-                  <td data-form-col-key="target_profile_value"><input type="number" id="target-profile-height" min="0.001" step="0.1" inputmode="decimal" /></td>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-height">身高<br>height (cm)</label></th>
+                  <td data-form-col-key="target_profile_value"><input type="text" id="target-profile-height" inputmode="decimal" /></td>
                 </tr>
                 <tr>
-                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-weight">體重 (kg)</label></th>
-                  <td data-form-col-key="target_profile_value"><input type="number" id="target-profile-weight" min="0.001" step="0.1" inputmode="decimal" /></td>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-weight">體重<br>weight (kg)</label></th>
+                  <td data-form-col-key="target_profile_value"><input type="text" id="target-profile-weight" inputmode="decimal" /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="target_profile_label"><label for="target-profile-weight-change">體重變化 WC<br>(kg/month)</label></th>
+                  <td data-form-col-key="target_profile_value"><input type="text" id="target-profile-weight-change" inputmode="decimal" /></td>
                 </tr>
               </tbody>
             </table>
@@ -110,6 +124,11 @@
           <section class="target-section-block target-section-table" data-target-block="targets">
             <h3>營養指標 / Nutrition Targets</h3>
             <div id="target-editor" class="target-editor"></div>
+          </section>
+          <section class="target-section-block target-apply-block" data-target-block="apply">
+            <div class="target-apply-body">
+              <button type="button" id="target-apply-preview" class="target-apply-button">Apply</button>
+            </div>
           </section>
           <section class="target-section-block target-section-table" data-target-block="preview">
             <h3>預覽指標 / Preview Targets</h3>
@@ -177,6 +196,29 @@
               </tbody>
             </table>
           </section>
+          <section class="detail-section-block" data-detail-block="google-calendar">
+            <h3>Google Calendar</h3>
+            <table class="detail-field-table" data-form-table>
+              <colgroup>
+                <col data-form-col-key="detail_google_calendar_label" data-form-col-default="210" />
+                <col data-form-col-key="detail_google_calendar_value" data-form-col-default="520" />
+              </colgroup>
+              <tbody>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-client-secret">OAuth client JSON</label></th>
+                  <td data-form-col-key="detail_google_calendar_value"><input type="text" id="detail-gc-client-secret" spellcheck="false" /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-token-file">Token JSON</label></th>
+                  <td data-form-col-key="detail_google_calendar_value"><input type="text" id="detail-gc-token-file" spellcheck="false" /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-nonwork-calendar">非返工日 Calendar ID</label></th>
+                  <td data-form-col-key="detail_google_calendar_value"><input type="text" id="detail-gc-nonwork-calendar" spellcheck="false" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
           <section class="detail-section-block detail-section-table" data-detail-block="codes">
             <h3>Roster code definitions</h3>
             <div id="detail-code-definitions"></div>
@@ -193,7 +235,7 @@
   <section id="maint-panel" style="display:none;">
     <h1 data-title-key="maint">Maint</h1>
     <div class="config-toolbar">
-      <button type="button" class="btn" id="maint-save" title="Ctrl+S" style="visibility:hidden;">Save</button>
+      <button type="button" class="btn" id="maint-save" title="Ctrl+S" disabled>Save</button>
       <span id="maint-status" class="target-status"></span>
     </div>
     <div id="maint-err" class="err"></div>
@@ -207,14 +249,24 @@
       <button type="button" data-maint-row-action="delete-version">Delete This Version</button>
     </div>
   </section>
+  <section id="reports-panel" class="reports-panel" style="display:none;">
+    <h1 data-title-key="reports">報表</h1>
+    <section class="report-view" data-report-view="shift_code_analysis">
+      <h2 data-title-key="shift_code_analysis">更碼分析</h2>
+      <div id="shift-code-analysis-status" class="target-status"></div>
+      <div id="shift-code-analysis-out"></div>
+    </section>
+  </section>
   <section id="shopping-panel" style="display:none;">
-    <h1 data-title-key="shopping">Shopping List</h1>
-    <div class="top">
-      <span><label for="shop_start">Start Date</label><input type="date" id="shop_start" /></span>
-      <span><label for="shop_end">End Date</label><input type="date" id="shop_end" /></span>
-      <button type="button" class="btn" id="shop_generate">Generate List</button>
+    <div id="shopping-content" class="shopping-content">
+      <h1 data-title-key="shopping">Shopping List</h1>
+      <div class="top">
+        <span><label for="shop_start">Start Date</label><input type="date" id="shop_start" /></span>
+        <span><label for="shop_end">End Date</label><input type="date" id="shop_end" /></span>
+        <button type="button" class="btn" id="shop_generate">Generate List</button>
+      </div>
+      <div id="shopping-out"></div>
     </div>
-    <div id="shopping-out"></div>
   </section>
   <section id="alarm-sync-panel" style="display:none;">
     <h1 data-title-key="alarm_sync">電話I/O</h1>
@@ -284,10 +336,7 @@
   </main>
   </div>
   <div id="menu-context-menu" class="menu-context-menu" hidden>
-    <button type="button" data-menu-context-action="insert-before">Insert Above</button>
-    <button type="button" data-menu-context-action="insert-after">Insert Below</button>
     <button type="button" data-menu-context-action="rename">Rename</button>
-    <button type="button" data-menu-context-action="delete">Delete Item</button>
   </div>
   <div id="unsaved-dialog" class="modal-backdrop" hidden>
     <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title">
@@ -300,14 +349,14 @@
       </div>
     </div>
   </div>
-    <script defer src="api.js?v=20260617-phone-push-picker-v1"></script>
-  <script defer src="shopping.js?v=20260523-ui-en"></script>
-  <script defer src="planner.js?v=20260623-generate-date-guard-v1"></script>
-  <script defer src="planner-menu.js?v=20260622-activity-tooltip-v37"></script>
-  <script defer src="planner-maint.js?v=20260618-duration-next-non-marker-v39"></script>
-  <script defer src="planner-maint-editor.js?v=20260618-schedule-duration-reload-v6"></script>
-  <script defer src="planner-config.js?v=20260622-activity-tooltip-v37"></script>
+    <script defer src="api.js?v=20260702-roster-gc-check-v1"></script>
+  <script defer src="shopping.js?v=20260623-shopping-range-offset-v1"></script>
+  <script defer src="planner.js?v=20260701-nonwork-calendar-v1"></script>
+  <script defer src="planner-menu.js?v=20260702-roster-header-left-v1"></script>
+  <script defer src="planner-maint.js?v=20260630-nonwork-wake-v1"></script>
+  <script defer src="planner-maint-editor.js?v=20260702-roster-gc-check-v1"></script>
+  <script defer src="planner-config.js?v=20260701-nonwork-calendar-v1"></script>
   <script defer src="planner-render.js?v=20260623-generate-date-guard-v1"></script>
-    <script defer src="planner-events.js?v=20260623-generate-date-guard-v1"></script>
+    <script defer src="planner-events.js?v=20260624-reports-menu-v1"></script>
 </body>
 </html>

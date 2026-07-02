@@ -1,0 +1,39 @@
+{
+  "account_email": "kenny1811@gmail.com",
+  "time_min": "2026-06-30T00:00:00+08:00",
+  "time_max": "2026-07-16T00:00:00+08:00",
+  "note": "Manual backup before Codex Google Calendar connector roster sync write.",
+  "calendars": {
+    "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com": [
+      {"id":"70rm4d1p68rj6b9p68pjib9k6thjabb160r34b9k6ph34chk74qmadb564","summary":"L'ecole (18-8)","location":"2-3右","start":"2026-07-01T10:00:00+08:00","end":"2026-07-01T19:00:00+08:00","description":""},
+      {"id":"74sm4ob664r3cb9kccoj0b9k6cqm8b9p6lhj8b9lc8r38c1h74o3ce9gc8","summary":"EleD (8-18)","location":"4-2右 5-2右, 7-3右 7-4左","start":"2026-07-05T12:30:00+08:00","end":"2026-07-05T20:30:00+08:00","description":""},
+      {"id":"69j3gd1l65h3gbb168pj4b9kcosj0b9o6sp64b9l6kq6ad9i60pjep1j6s","summary":"EleB (8-18)","location":"4-2右 5-2右, 7-3右 7-4左","start":"2026-07-07T10:45:00+08:00","end":"2026-07-07T21:00:00+08:00","description":""},
+      {"id":"69gm4c1hcgq38bb3ccojcb9k6kpjcbb26oojib9ncdi36o9oclj64c1p6o","summary":"VOC","location":"2-2 左","start":"2026-07-08T09:15:00+08:00","end":"2026-07-08T21:30:00+08:00","description":"0925 到場 0930 職員入場 1000 清潔入場 1001 Break 1025 門口等 1030 開舖 1330 飯60 1755 Tea 30\n2100 收舖, 門口等 2130 收工"},
+      {"id":"c9h34d316ti6abb161hjib9k6kr3cb9p70pj6bb6cgrjap366gr36c356g","summary":"VPP","location":"5-5左","start":"2026-07-11T09:45:00+08:00","end":"2026-07-11T20:00:00+08:00","description":"0945 後門等, 取檢測棒\n1030 清潔後門入場, 交檢測棒\n1100 開舖\n1400 lunch\n1930 收舖, 鎖門, 揀牌, 後門出\n2000 收工 __"},
+      {"id":"74s30c33cgom8bb6cgom4b9kclh66bb2c4sjab9ncpj3adpo65i68dhl6k","summary":"VOC","location":"2-2 左","start":"2026-07-12T09:15:00+08:00","end":"2026-07-12T21:30:00+08:00","description":"0925 到場 0930 職員入場 1000 清潔入場 1001 Break 1025 門口等 1030 開舖 1330 飯60 1755 Tea 30\n2100 收舖, 門口等 2130 收工"},
+      {"id":"74s6ac1kcks36b9hcpj64b9k6phjcb9o64p3ab9g64pj4cpn6gp6ae1n74","summary":"EleD (8-18)","location":"4-2右 5-2右, 7-3右 7-4左","start":"2026-07-13T12:30:00+08:00","end":"2026-07-13T20:30:00+08:00","description":""},
+      {"id":"cko66o9j61gj8bb465gj2b9kcgr66bb170sj2bb668r3cc9mcks64dppcg","summary":"EleB (8-18)","location":"4-2右 5-2右, 7-3右 7-4左","start":"2026-07-14T10:45:00+08:00","end":"2026-07-14T21:00:00+08:00","description":""},
+      {"id":"6os64p9mccqm4bb36cr62b9kclhm4bb1ckp34b9n70o38d1n6go66cb564","summary":"VOC","location":"2-2 左","start":"2026-07-15T09:15:00+08:00","end":"2026-07-15T21:30:00+08:00","description":"0925 到場 0930 職員入場 1000 清潔入場 1001 Break 1025 門口等 1030 開舖 1330 飯60 1755 Tea 30\n2100 收舖, 門口等 2130 收工"}
+    ],
+    "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com": [
+      {"id":"64qjac31c8p3ibb4cko30b9k64o6cb9occpj0bb260q36d1m65i3gdj26o","summary":"起身","start":"2026-07-01T07:30:00+08:00","end":"2026-07-01T08:45:00+08:00"},
+      {"id":"74o3ac9oc4q6cb9j70q36b9kcphjcbb2cdgm6b9hcgq62p1ic5j3cp9occ","summary":"起身","start":"2026-07-05T10:00:00+08:00","end":"2026-07-05T11:15:00+08:00"},
+      {"id":"6cr38dhmcco66b9k6gpjib9kc5h66bb1cop62b9p64p66e1h6cp62d9j6k","summary":"起身","start":"2026-07-07T08:15:00+08:00","end":"2026-07-07T09:30:00+08:00"},
+      {"id":"coq36p1i6or3eb9j70oj2b9kcosm6bb2ccpmabb1cpi3ie9g6ko34pb468","summary":"起身","start":"2026-07-08T06:45:00+08:00","end":"2026-07-08T08:00:00+08:00"},
+      {"id":"cgp32c1lc9i38bb269i3gb9k6di36bb1chhj8b9j70pj0d1g6pi38pj668","summary":"起身","start":"2026-07-11T07:15:00+08:00","end":"2026-07-11T08:30:00+08:00"},
+      {"id":"6csjepb46th6abb3cgs3cb9k6gr6cbb1cgo6ab9h6himccb26kpjic1kcc","summary":"起身","start":"2026-07-12T06:45:00+08:00","end":"2026-07-12T08:00:00+08:00"},
+      {"id":"c8rmao9p6crmab9lcpijcb9kcgr3abb2c9ijab9o6op62o9hcks68c9mck","summary":"起身","start":"2026-07-13T10:00:00+08:00","end":"2026-07-13T11:15:00+08:00"},
+      {"id":"64pjac1l75hjcb9kc4rjeb9k70sj4b9ocksj2b9h60pm2p1k61gm2phk6k","summary":"起身","start":"2026-07-14T08:15:00+08:00","end":"2026-07-14T09:30:00+08:00"},
+      {"id":"c4qjgdb3c8p6ab9h6hi34b9k6thj2bb269gj6bb4c5gjap1oclij6c9jcc","summary":"起身","start":"2026-07-15T06:45:00+08:00","end":"2026-07-15T08:00:00+08:00"}
+    ],
+    "lb8dr22puf0b3krrov8oti3r4c@group.calendar.google.com": [
+      {"id":"60r34chpckq36b9pcor68b9kclh68bb168pj4bb560om8phoc5j36ob46s","summary":"WL26","start":"2026-06-30T00:00:00","end":"2026-07-01T00:00:00"},
+      {"id":"6so6aor675h66b9p6ksjcb9kc8q34b9o74pm4b9o6gr34p1pc5ijcc1mcg","summary":"SH09","start":"2026-07-02T00:00:00","end":"2026-07-03T00:00:00"},
+      {"id":"c5hj6d356dh6ab9l6kqjgb9k68q3abb161h36bb66co62p9p6com4oj66c","summary":"SB","start":"2026-07-03T00:00:00","end":"2026-07-04T00:00:00"},
+      {"id":"copm8dhj60p6cb9gcdimcb9kcgp3gbb275i3ibb26hh34cr2cgomceb46g","summary":"SB","start":"2026-07-04T00:00:00","end":"2026-07-05T00:00:00"},
+      {"id":"c8rjecb1c8ojcb9n6hh30b9k70q66bb1ckp38bb1cgqmceb3c4p6ap35ck","summary":"SB","start":"2026-07-06T00:00:00","end":"2026-07-07T00:00:00"},
+      {"id":"clijge9h6kqmabb4c8rj0b9kcgqj2b9p64qmcb9o6ss32phj69im6ohnco","summary":"WL27","start":"2026-07-09T00:00:00","end":"2026-07-10T00:00:00"},
+      {"id":"6crm8d3471hm4b9gckr66b9k6kr36b9o68rm2b9m6hh6ap1g6sr6aohp74","summary":"SB","start":"2026-07-10T00:00:00","end":"2026-07-11T00:00:00"}
+    ]
+  }
+}

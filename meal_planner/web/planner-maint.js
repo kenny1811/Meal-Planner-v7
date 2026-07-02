@@ -3,6 +3,9 @@
     let scheduleGridNewShiftStartIndex = -1;
     let scheduleGridNewShiftCount = 0;
     let scheduleGridSkipNextRenderSort = false;
+    let shiftAnalysisSelectedBlocks = new Set();
+    let shiftAnalysisSuppressNextClickClear = false;
+    let shiftCodeAnalysisRows = [];
     const maintDirectKeyTimers = new WeakMap();
 
     function emptyMaintRow(rows = null) {
@@ -77,6 +80,21 @@
         rows.push(emptyMaintRow(rows));
       }
       setUnsavedChanges("餐單參數");
+      if (activeMaintSheetKey === "roster") {
+        const focusIdx = action === "append"
+          ? rows.length - 1
+          : Math.max(0, Math.min(idx, rows.length - 1));
+        activeRosterMonthIndex = focusIdx;
+        formColumnWidths.maint_roster_month_index = focusIdx;
+        setMaintRowsAndRender(rows);
+        const input = document.querySelector(`#maint-editor textarea[data-maint-roster-row="${focusIdx}"]`);
+        if (input && (action === "insert" || action === "append")) {
+          beginRosterCellEdit(input);
+        } else if (input) {
+          input.focus();
+        }
+        return;
+      }
       if (activeMaintSheetKey === "schedule_grid" && action === "delete") {
         setMaintRowsAndRender(rows, { preserveOrder: true });
         return;
@@ -246,15 +264,47 @@
       input.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
 
-    function maintTextareaCanMoveWithin(input, key) {
-      if (!input || input.tagName.toLowerCase() !== "textarea") return false;
-      const value = String(input.value || "");
-      if (!value.includes("\n")) return false;
+    function textareaCaretTop(input, position) {
+      const style = window.getComputedStyle(input);
+      const mirror = document.createElement("div");
+      [
+        "boxSizing", "fontFamily", "fontSize", "fontWeight", "fontStyle", "letterSpacing",
+        "lineHeight", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+        "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+        "textTransform", "wordSpacing", "textIndent", "tabSize", "wordBreak", "overflowWrap",
+      ].forEach((name) => {
+        mirror.style[name] = style[name];
+      });
+      mirror.style.position = "absolute";
+      mirror.style.visibility = "hidden";
+      mirror.style.left = "-9999px";
+      mirror.style.top = "0";
+      mirror.style.width = `${input.clientWidth}px`;
+      mirror.style.whiteSpace = "pre-wrap";
+      mirror.style.overflow = "hidden";
+      mirror.textContent = String(input.value || "").slice(0, position).replace(/\n$/, "\n ");
+      const marker = document.createElement("span");
+      marker.textContent = "\u200b";
+      mirror.appendChild(marker);
+      document.body.appendChild(mirror);
+      const top = marker.offsetTop;
+      mirror.remove();
+      return top;
+    }
+
+    function maintTextareaShouldKeepArrow(input, key) {
+      if (!input || !input.tagName || input.tagName.toLowerCase() !== "textarea") return false;
+      if (input.selectionStart !== input.selectionEnd) return true;
       const pos = Number.isInteger(input.selectionStart) ? input.selectionStart : 0;
-      const before = value.slice(0, pos);
-      const after = value.slice(pos);
-      if (key === "ArrowUp") return before.includes("\n");
-      if (key === "ArrowDown") return after.includes("\n");
+      const firstTop = textareaCaretTop(input, 0);
+      const caretTop = textareaCaretTop(input, pos);
+      const lastTop = textareaCaretTop(input, String(input.value || "").length);
+      const style = window.getComputedStyle(input);
+      const fontSize = parseFloat(style.fontSize) || 16;
+      const lineHeight = parseFloat(style.lineHeight) || fontSize * 1.2;
+      const tolerance = Math.max(2, lineHeight * 0.25);
+      if (key === "ArrowUp") return caretTop > firstTop + tolerance;
+      if (key === "ArrowDown") return caretTop < lastTop - tolerance;
       return false;
     }
 
@@ -422,7 +472,7 @@
           endMaintCellEdit(input);
           focusMaintCell(next || input, true);
         } else if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
-          if (maintTextareaCanMoveWithin(input, ev.key)) return;
+          if (maintTextareaShouldKeepArrow(input, ev.key)) return;
           ev.preventDefault();
           const next = maintCellInputFrom(input, ev.key === "ArrowUp" ? -1 : 1, 0);
           if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
@@ -1073,6 +1123,37 @@
       return out;
     }
 
+    function wakeRowsByDate(rows) {
+      const out = new Map();
+      if (!Array.isArray(rows) || !rows.length) return out;
+      const headers = new Map();
+      (Array.isArray(rows[0]) ? rows[0] : []).forEach((cell, idx) => {
+        const key = String(cell || "").trim();
+        if (key) headers.set(key, idx);
+      });
+      const cDate = headers.has("日期") ? headers.get("日期") : 0;
+      const cWake = headers.has("起身時間") ? headers.get("起身時間") : (headers.has("起身") ? headers.get("起身") : 1);
+      (rows || []).slice(1).forEach((row) => {
+        if (!Array.isArray(row)) return;
+        const d = parseYmd(row[cDate]);
+        const wake = normalTime(row[cWake]);
+        if (!d || !wake) return;
+        out.set(dateKey(d.year, d.month, d.day), wake);
+      });
+      return out;
+    }
+
+    function clockFromMinutes(minutes) {
+      if (!Number.isFinite(minutes)) return "";
+      const n = ((Math.round(minutes) % 1440) + 1440) % 1440;
+      return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+    }
+
+    function defaultWakeTimeForStart(start) {
+      const minutes = timeMinutes(start);
+      return minutes == null ? "" : clockFromMinutes(minutes - 180);
+    }
+
     function holidayRowsByDate(rows) {
       const out = new Map();
       (rows || []).slice(1).forEach((row) => {
@@ -1129,6 +1210,7 @@
 
     function renderRosterMaintReport(rows) {
       const overtimeByDate = overtimeRowsByDate(rosterReportSources.overtime);
+      const wakeByDate = wakeRowsByDate(rosterReportSources.wake_alarms);
       const holidaysByDate = holidayRowsByDate(rosterReportSources.public_holidays);
       const medicalByDate = medicalRowsByDate(rosterReportSources.medical_appointments);
       const todayKey = todayIsoHK();
@@ -1151,6 +1233,10 @@
           const plannedEnd = shift.end || "";
           const start = ot.start || plannedStart;
           const end = ot.end || plannedEnd;
+          const defaultWake = start ? defaultWakeTimeForStart(start) : "";
+          const wakeOverride = wakeByDate.get(key);
+          const medical = medicalByDate.get(key) || [];
+          const wake = wakeOverride || defaultWake;
           const duration = minutesBetween(start, end);
           const overtime = duration != null && duration > 615 ? duration - 600 : null;
           const overtimePay = overtime ? overtime : null;
@@ -1160,7 +1246,6 @@
           const notes = [];
           const holiday = holidaysByDate.get(key);
           if (holiday) notes.push(holiday);
-          const medical = medicalByDate.get(key) || [];
           notes.push(...medical);
           if (ot.note) notes.push(ot.note);
           const weekday = weekdayLabel(parsed.year, parsed.month, item.day);
@@ -1172,6 +1257,7 @@
           reportRows.push(`<tr class="${isToday ? "report-today-row" : ""}">
             <td class="${dateClasses}">${esc(dateDmy(parsed.year, parsed.month, item.day))}</td>
             <td class="${weekdayClasses}">${esc(weekday)}</td>
+            <td class="roster-wake-cell" data-roster-wake-cell="1" tabindex="0"><input class="roster-wake-input" type="text" inputmode="numeric" tabindex="-1" data-roster-wake-date="${esc(key)}" data-roster-wake-default="${esc(defaultWake)}" value="${esc(wake)}" /></td>
             <td>${esc(item.code)}</td>
             <td>${esc(start)}</td>
             <td>${esc(end)}</td>
@@ -1186,6 +1272,7 @@
         <colgroup>
           <col data-form-col-key="maint_roster_report_date" data-form-col-default="110" />
           <col data-form-col-key="maint_roster_report_weekday" data-form-col-default="70" />
+          <col data-form-col-key="maint_roster_report_wake" data-form-col-default="80" />
           <col data-form-col-key="maint_roster_report_code" data-form-col-default="110" />
           <col data-form-col-key="maint_roster_report_start" data-form-col-default="80" />
           <col data-form-col-key="maint_roster_report_end" data-form-col-default="80" />
@@ -1194,10 +1281,409 @@
           <col data-form-col-key="maint_roster_report_overtime_pay" data-form-col-default="90" />
           <col data-form-col-key="maint_roster_report_note" data-form-col-default="220" />
         </colgroup>
-        <thead><tr><th data-form-col-key="maint_roster_report_date">日期</th><th data-form-col-key="maint_roster_report_weekday">星期</th><th data-form-col-key="maint_roster_report_code">更碼</th><th data-form-col-key="maint_roster_report_start">開工</th><th data-form-col-key="maint_roster_report_end">收工</th><th data-form-col-key="maint_roster_report_duration">時長</th><th data-form-col-key="maint_roster_report_overtime">加班</th><th data-form-col-key="maint_roster_report_overtime_pay">加班費</th><th data-form-col-key="maint_roster_report_note">備註</th></tr></thead>
-        <tbody>${reportRows.join("") || '<tr><td colspan="9" class="maint-empty">No roster data</td></tr>'}</tbody>
-        <tfoot><tr><th colspan="5">Total</th><th>${esc(minutesLabel(totalDuration))}</th><th>${esc(minutesLabel(totalOvertime))}</th><th>${esc(totalPay ? totalPay.toFixed(0) : "")}</th><th></th></tr></tfoot>
+        <thead><tr><th data-form-col-key="maint_roster_report_date">日期</th><th data-form-col-key="maint_roster_report_weekday">星期</th><th data-form-col-key="maint_roster_report_wake">起身</th><th data-form-col-key="maint_roster_report_code">更碼</th><th data-form-col-key="maint_roster_report_start">開工</th><th data-form-col-key="maint_roster_report_end">收工</th><th data-form-col-key="maint_roster_report_duration">時長</th><th data-form-col-key="maint_roster_report_overtime">加班</th><th data-form-col-key="maint_roster_report_overtime_pay">加班費</th><th data-form-col-key="maint_roster_report_note">備註</th></tr></thead>
+        <tbody>${reportRows.join("") || '<tr><td colspan="10" class="maint-empty">No roster data</td></tr>'}</tbody>
+        <tfoot><tr><th colspan="6">Total</th><th>${esc(minutesLabel(totalDuration))}</th><th>${esc(minutesLabel(totalOvertime))}</th><th>${esc(totalPay ? totalPay.toFixed(0) : "")}</th><th></th></tr></tfoot>
       </table>`;
+    }
+
+    function isWorkRosterCode(code) {
+      const s = String(code || "").trim();
+      if (!s) return false;
+      if (s === "SB") return false;
+      return !["WL", "SH", "AL", "SL"].some((prefix) => s.startsWith(prefix));
+    }
+
+    function nonWorkRosterCategory(code) {
+      const s = String(code || "").trim();
+      if (s === "SB") return "SB";
+      for (const prefix of ["AL", "SH", "SL", "WL"]) {
+        if (s.startsWith(prefix)) return prefix;
+      }
+      return s || "非返工日";
+    }
+
+    function shiftAnalysisMonthKey(parsed) {
+      return `${parsed.year}-${String(parsed.month).padStart(2, "0")}`;
+    }
+
+    function shiftAnalysisMonthLabel(monthKey) {
+      const [year, month] = String(monthKey || "").split("-").map(Number);
+      if (!Number.isInteger(year) || !Number.isInteger(month)) return monthKey;
+      return `${MONTHS_EN[month - 1] || String(month).padStart(2, "0")} ${year}`;
+    }
+
+    function buildShiftCodeAnalysis(rows, collapseWorkdays = false) {
+      const months = [];
+      const monthSeen = new Set();
+      const stats = new Map();
+      (rows || []).forEach((row) => {
+        const parsed = parseRosterMaintLine(Array.isArray(row) ? row[0] : "");
+        if (!parsed) return;
+        const monthKey = shiftAnalysisMonthKey(parsed);
+        if (!monthSeen.has(monthKey)) {
+          monthSeen.add(monthKey);
+          months.push(monthKey);
+        }
+        parsed.days.forEach((item) => {
+          const code = String(item.code || "").trim();
+          if (!code) return;
+          const isWork = isWorkRosterCode(code);
+          const displayCode = isWork
+            ? (collapseWorkdays ? "返工日" : code)
+            : nonWorkRosterCategory(code);
+          const key = isWork
+            ? (collapseWorkdays ? "__workday__" : `work:${code}`)
+            : `nonwork:${displayCode}`;
+          const current = stats.get(key) || {
+            key,
+            code: displayCode,
+            groupIndex: isWork ? 0 : 1,
+            groupLabel: isWork ? "返工日" : "非返工日",
+            count: 0,
+            months: new Map(),
+          };
+          current.count += 1;
+          current.months.set(monthKey, (current.months.get(monthKey) || 0) + 1);
+          stats.set(key, current);
+        });
+      });
+      months.sort((a, b) => a.localeCompare(b, "zh-Hant"));
+      const records = Array.from(stats.values()).sort((a, b) => {
+        if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex;
+        return a.code.localeCompare(b.code, "zh-Hant");
+      });
+      return { months, records };
+    }
+
+    function shiftCodeAnalysisExpanded() {
+      const saved = Number(formColumnWidths.shift_analysis_expanded);
+      return !Number.isFinite(saved) || saved !== 0;
+    }
+
+    function setShiftCodeAnalysisExpanded(expanded) {
+      formColumnWidths.shift_analysis_expanded = expanded ? 1 : 0;
+    }
+
+    function renderShiftCodeAnalysisTable(analysis, blockKey, expanded) {
+      const months = analysis.months || [];
+      const records = analysis.records || [];
+      const span = Math.max(2, months.length + 2);
+      const countText = (value) => value ? String(value) : "";
+      const toggleLabel = expanded ? "▲" : "▼";
+      const toggleTitle = expanded ? "收起返工日" : "展開返工更碼";
+      const monthCols = months
+        .map(() => `<col data-form-col-key="shift_analysis_number" data-form-col-default="64" />`)
+        .join("");
+      const monthHeads = months
+        .map((month) => `<th class="shift-analysis-month-head" data-form-col-key="shift_analysis_number">${esc(shiftAnalysisMonthLabel(month))}</th>`)
+        .join("");
+      const monthTotals = new Map(months.map((month) => [month, 0]));
+      let grandTotal = 0;
+      const rowsHtml = records.map((item) => {
+        const cells = months.map((month) => {
+          const n = item.months.get(month) || 0;
+          monthTotals.set(month, (monthTotals.get(month) || 0) + n);
+          return `<td class="shift-analysis-number">${esc(countText(n))}</td>`;
+        }).join("");
+        grandTotal += item.count;
+        return `<tr>
+          <td>${esc(item.code)}</td>
+          ${cells}
+          <td class="shift-analysis-number">${esc(countText(item.count))}</td>
+        </tr>`;
+      });
+      const totalCells = months
+        .map((month) => `<th class="shift-analysis-number">${esc(countText(monthTotals.get(month) || 0))}</th>`)
+        .join("");
+      return `<table class="maint-report-table shift-code-analysis-table" data-form-table>
+        <colgroup>
+          <col data-form-col-key="shift_analysis_${blockKey}_code" data-form-col-default="110" />
+          ${monthCols}
+          <col data-form-col-key="shift_analysis_number" data-form-col-default="64" />
+        </colgroup>
+        <thead><tr><th class="shift-analysis-code-head" data-form-col-key="shift_analysis_${blockKey}_code"><button type="button" class="shift-analysis-toggle" title="${esc(toggleTitle)}" aria-label="${esc(toggleTitle)}">${toggleLabel}</button><span>更碼</span></th>${monthHeads}<th class="shift-analysis-total-head" data-form-col-key="shift_analysis_number">Total</th></tr></thead>
+        <tbody>${rowsHtml.join("") || `<tr><td colspan="${span}" class="maint-empty">No roster data</td></tr>`}</tbody>
+        <tfoot><tr><th>Total</th>${totalCells}<th class="shift-analysis-number">${esc(countText(grandTotal))}</th></tr></tfoot>
+      </table>`;
+    }
+
+    function renderShiftCodeAnalysisReport(rows) {
+      const expanded = shiftCodeAnalysisExpanded();
+      const analysis = buildShiftCodeAnalysis(rows, !expanded);
+      return `<div class="shift-code-analysis-layout">
+        <div class="shift-code-analysis-sheet">
+          ${renderShiftCodeAnalysisTable(analysis, "combined", expanded)}
+        </div>
+      </div>`;
+    }
+
+    function shiftCodeAnalysisOffsetPx() {
+      const saved = Number(formColumnWidths.table_offset_shift_code_analysis);
+      return Number.isFinite(saved) ? saved : 0;
+    }
+
+    function applyShiftCodeAnalysisSheetOffset(root = document) {
+      const sheet = document.querySelector("#shift-code-analysis-out .shift-code-analysis-layout");
+      if (!sheet) return;
+      if (root !== document && !root.contains(sheet) && sheet !== root && !sheet.contains(root)) return;
+      sheet.style.marginLeft = `${shiftCodeAnalysisOffsetPx()}px`;
+    }
+
+    function refreshShiftCodeAnalysisReport() {
+      const out = document.getElementById("shift-code-analysis-out");
+      if (!out) return;
+      out.innerHTML = renderShiftCodeAnalysisReport(shiftCodeAnalysisRows);
+      applyFormColumnWidths(out);
+      attachFormColumnResizers(out);
+      applyShiftCodeAnalysisSheetOffset(out);
+      attachShiftCodeAnalysisSheetControls(out);
+    }
+
+    function attachShiftCodeAnalysisSheetControls(root = document) {
+      const toggle = root.querySelector(".shift-analysis-toggle");
+      if (toggle && toggle.dataset.shiftAnalysisToggleBound !== "1") {
+        toggle.dataset.shiftAnalysisToggleBound = "1";
+        toggle.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          setShiftCodeAnalysisExpanded(!shiftCodeAnalysisExpanded());
+          refreshShiftCodeAnalysisReport();
+          persistColumnWidths();
+        });
+      }
+      const handle = root.querySelector(".shift-analysis-code-head");
+      if (handle && typeof attachHorizontalDragHandle === "function") {
+        attachHorizontalDragHandle(handle, "table_offset_shift_code_analysis", () => applyShiftCodeAnalysisSheetOffset(root));
+      }
+    }
+
+    function shiftAnalysisBlockOffsetPx(blockKey, axis, fallback) {
+      const saved = Number(formColumnWidths[`shift_analysis_block_${blockKey}_${axis}`]);
+      const value = Number.isFinite(saved) ? saved : fallback;
+      return axis === "y" ? Math.max(0, value) : value;
+    }
+
+    function shiftAnalysisBlockWidth(block) {
+      const table = block && block.querySelector ? block.querySelector("table[data-form-table]") : null;
+      if (!table) return block ? block.getBoundingClientRect().width : 0;
+      const colWidth = Array.from(table.querySelectorAll("col[data-form-col-key]")).reduce((total, col) => {
+        const key = col.getAttribute("data-form-col-key");
+        const fallback = Number(col.getAttribute("data-form-col-default")) || 120;
+        return total + formColumnWidthPx(key, fallback);
+      }, 0);
+      const style = getComputedStyle(block);
+      const borderX = parseFloat(style.borderLeftWidth || "0") + parseFloat(style.borderRightWidth || "0");
+      return colWidth + borderX;
+    }
+
+    function applyShiftCodeAnalysisBlockLayout(root = document) {
+      const container = document.querySelector(".shift-code-analysis-layout");
+      if (!container) return;
+      if (root !== document && !root.contains(container) && container !== root && !container.contains(root)) return;
+      applyFormColumnWidths(container);
+      const blocks = Array.from(container.querySelectorAll(".shift-analysis-block[data-shift-analysis-block]"));
+      let defaultY = 0;
+      let maxRight = 0;
+      let maxBottom = 0;
+      blocks.forEach((block) => {
+        const blockKey = block.getAttribute("data-shift-analysis-block");
+        const defaultX = 0;
+        const x = shiftAnalysisBlockOffsetPx(blockKey, "x", defaultX);
+        const y = shiftAnalysisBlockOffsetPx(blockKey, "y", defaultY);
+        const width = shiftAnalysisBlockWidth(block);
+        block.style.left = `${x}px`;
+        block.style.top = `${y}px`;
+        if (width > 0) block.style.width = `${width}px`;
+        block.classList.toggle("is-shift-analysis-block-selected", shiftAnalysisSelectedBlocks.has(blockKey));
+        const height = block.getBoundingClientRect().height;
+        maxRight = Math.max(maxRight, x + Math.max(width, block.getBoundingClientRect().width));
+        maxBottom = Math.max(maxBottom, y + height);
+        defaultY += height + 10;
+      });
+      container.style.width = `${Math.max(280, maxRight)}px`;
+      container.style.height = `${Math.max(260, maxBottom)}px`;
+    }
+
+    function updateShiftAnalysisBlockSelection() {
+      document.querySelectorAll(".shift-analysis-block[data-shift-analysis-block]").forEach((block) => {
+        const blockKey = block.getAttribute("data-shift-analysis-block");
+        block.classList.toggle("is-shift-analysis-block-selected", shiftAnalysisSelectedBlocks.has(blockKey));
+      });
+    }
+
+    function shiftAnalysisBlocksVisible() {
+      const root = document.querySelector(".shift-code-analysis-layout");
+      return activePanel === "reports" && !!(root && root.getClientRects().length);
+    }
+
+    function selectAllShiftAnalysisBlocks() {
+      shiftAnalysisSelectedBlocks.clear();
+      document.querySelectorAll(".shift-analysis-block[data-shift-analysis-block]").forEach((block) => {
+        const blockKey = block.getAttribute("data-shift-analysis-block");
+        if (blockKey) shiftAnalysisSelectedBlocks.add(blockKey);
+      });
+      updateShiftAnalysisBlockSelection();
+    }
+
+    function toggleShiftAnalysisBlockSelection(blockKey) {
+      if (!blockKey) return;
+      if (shiftAnalysisSelectedBlocks.has(blockKey)) {
+        shiftAnalysisSelectedBlocks.delete(blockKey);
+      } else {
+        shiftAnalysisSelectedBlocks.add(blockKey);
+      }
+      updateShiftAnalysisBlockSelection();
+    }
+
+    function clearShiftAnalysisBlockSelection() {
+      if (!shiftAnalysisSelectedBlocks.size) return;
+      shiftAnalysisSelectedBlocks.clear();
+      updateShiftAnalysisBlockSelection();
+    }
+
+    function bindShiftAnalysisSelectionKeys() {
+      if (document.body.dataset.shiftAnalysisSelectionKeysBound === "1") return;
+      document.body.dataset.shiftAnalysisSelectionKeysBound = "1";
+      document.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Escape") return;
+        clearShiftAnalysisBlockSelection();
+      });
+      document.addEventListener("keydown", (ev) => {
+        if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || String(ev.key).toLowerCase() !== "a") return;
+        if (!shiftAnalysisBlocksVisible()) return;
+        ev.preventDefault();
+        selectAllShiftAnalysisBlocks();
+      });
+      document.addEventListener("click", (ev) => {
+        if (!shiftAnalysisSelectedBlocks.size || ev.ctrlKey || ev.metaKey) return;
+        if (shiftAnalysisSuppressNextClickClear) {
+          shiftAnalysisSuppressNextClickClear = false;
+          return;
+        }
+        if (ev.button != null && ev.button !== 0) return;
+        clearShiftAnalysisBlockSelection();
+      });
+    }
+
+    function attachShiftCodeAnalysisBlockDragHandles(root = document) {
+      bindShiftAnalysisSelectionKeys();
+      document.querySelectorAll(".shift-analysis-block[data-shift-analysis-block]").forEach((block) => {
+        if (root !== document && !root.contains(block) && block !== root && !block.contains(root)) return;
+        if (block.dataset.shiftAnalysisSelectBound === "1") return;
+        block.dataset.shiftAnalysisSelectBound = "1";
+        block.addEventListener("mousedown", (ev) => {
+          if (!(ev.ctrlKey || ev.metaKey) || (ev.button != null && ev.button !== 0)) return;
+          const interactive = ev.target && ev.target.closest
+            ? ev.target.closest("button,input,textarea,select,a,.form-col-resizer")
+            : null;
+          if (interactive) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          toggleShiftAnalysisBlockSelection(block.getAttribute("data-shift-analysis-block"));
+        });
+      });
+      document.querySelectorAll(".shift-analysis-block[data-shift-analysis-block] thead tr").forEach((handle) => {
+        if (root !== document && !root.contains(handle) && handle !== root) return;
+        if (handle.dataset.shiftAnalysisBlockDragBound === "1") return;
+        handle.dataset.shiftAnalysisBlockDragBound = "1";
+        handle.title = handle.title || "Drag to move block";
+        handle.addEventListener("mousedown", (ev) => {
+          if (ev.button != null && ev.button !== 0) return;
+          ev.preventDefault();
+          const block = handle.closest(".shift-analysis-block[data-shift-analysis-block]");
+          const blockKey = block && block.getAttribute("data-shift-analysis-block");
+          if (!blockKey) return;
+          if (ev.ctrlKey || ev.metaKey) {
+            ev.stopPropagation();
+            toggleShiftAnalysisBlockSelection(blockKey);
+            return;
+          }
+          const dragKeys = shiftAnalysisSelectedBlocks.has(blockKey) && shiftAnalysisSelectedBlocks.size > 1
+            ? Array.from(shiftAnalysisSelectedBlocks)
+            : [blockKey];
+          if (!shiftAnalysisSelectedBlocks.has(blockKey)) {
+            shiftAnalysisSelectedBlocks.clear();
+            updateShiftAnalysisBlockSelection();
+          }
+          const startX = ev.clientX;
+          const startY = ev.clientY;
+          let dragMoved = false;
+          document.body.classList.add("is-dnd-dragging");
+          const startOffsets = new Map();
+          dragKeys.forEach((key) => {
+            const target = document.querySelector(`.shift-analysis-block[data-shift-analysis-block="${key}"]`);
+            startOffsets.set(key, {
+              x: shiftAnalysisBlockOffsetPx(key, "x", target?.offsetLeft || 0),
+              y: shiftAnalysisBlockOffsetPx(key, "y", target?.offsetTop || 0),
+            });
+          });
+        const onMove = (mv) => {
+          const dx = mv.clientX - startX;
+          let dy = mv.clientY - startY;
+          const minStartY = Math.min(...Array.from(startOffsets.values()).map((item) => item.y));
+          if (Number.isFinite(minStartY) && minStartY + dy < 0) dy = -minStartY;
+          dragMoved = dragMoved || Math.abs(dx) > 2 || Math.abs(dy) > 2;
+          startOffsets.forEach((start, key) => {
+            formColumnWidths[`shift_analysis_block_${key}_x`] = start.x + dx;
+              formColumnWidths[`shift_analysis_block_${key}_y`] = start.y + dy;
+            });
+            applyShiftCodeAnalysisBlockLayout(root);
+          };
+          const onUp = () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+            document.body.classList.remove("is-dnd-dragging");
+            if (dragMoved) shiftAnalysisSuppressNextClickClear = true;
+            persistColumnWidths();
+          };
+          window.addEventListener("mousemove", onMove);
+          window.addEventListener("mouseup", onUp);
+        });
+        handle.addEventListener("click", (ev) => {
+          if (!ev.ctrlKey && !ev.metaKey) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+        });
+        handle.addEventListener("dblclick", () => {
+          const block = handle.closest(".shift-analysis-block[data-shift-analysis-block]");
+          const blockKey = block && block.getAttribute("data-shift-analysis-block");
+          if (!blockKey) return;
+          delete formColumnWidths[`shift_analysis_block_${blockKey}_x`];
+          delete formColumnWidths[`shift_analysis_block_${blockKey}_y`];
+          applyShiftCodeAnalysisBlockLayout(root);
+          persistColumnWidths();
+        });
+      });
+    }
+
+    async function openShiftCodeAnalysisReport() {
+      if (!(await resolveUnsavedBeforeLeaving())) return;
+      setActiveMenuPathForKey("shift_code_analysis");
+      setReportsMenuTreeOpen(true);
+      setActivePanel("reports");
+      const status = document.getElementById("shift-code-analysis-status");
+      const out = document.getElementById("shift-code-analysis-out");
+      if (status) status.textContent = "Loading...";
+      if (out) out.innerHTML = "";
+      try {
+        const [roster, payroll] = await Promise.all([
+          loadMaintSheet("roster"),
+          loadMaintSheet("payroll_times").catch(() => ({ rows: [] })),
+        ]);
+        rosterReportSources = {
+          ...rosterReportSources,
+          payroll_times: Array.isArray(payroll.rows) ? payroll.rows : [],
+        };
+        const rows = Array.isArray(roster.rows) ? roster.rows : [];
+        shiftCodeAnalysisRows = rows;
+        if (out) {
+          refreshShiftCodeAnalysisReport();
+        }
+        if (status) status.textContent = "";
+      } catch (e) {
+        if (status) status.textContent = String(e && e.message ? e.message : e);
+      }
     }
 
     function refreshRosterMaintReport() {
@@ -1206,8 +1692,275 @@
       report.innerHTML = renderRosterMaintReport(collectMaintRows());
       applyFormColumnWidths(report);
       attachFormColumnResizers(report);
+      attachRosterWakeInputs(report);
       applyRosterReportOffset();
       attachRosterReportDrag();
+    }
+
+    function attachRosterWakeInputs(root = document) {
+      const report = root.matches && root.matches("#maint-roster-report") ? root : root.querySelector("#maint-roster-report");
+      if (!report) return;
+      report.tabIndex = -1;
+      const wakeCells = Array.from(report.querySelectorAll("td[data-roster-wake-cell]"))
+        .filter((cell) => cell.tabIndex >= 0 && cell.querySelector("input[data-roster-wake-date]"));
+      const wakeInputs = wakeCells.map((cell) => cell.querySelector("input[data-roster-wake-date]"));
+      report.__rosterWakeCells = wakeCells;
+      report.__rosterWakeInputs = wakeInputs;
+      wakeInputs.forEach((input, wakeIndex) => {
+        input.dataset.rosterWakeIndex = String(wakeIndex);
+        input.dataset.rosterWakeEditable = "1";
+        input.dataset.rosterWakeLastSynced = normalTime(input.value) || "";
+        input.dataset.rosterWakeEdited = "0";
+        input.readOnly = true;
+      });
+      if (report.dataset.rosterWakeDelegateBound === "1") return;
+      report.dataset.rosterWakeDelegateBound = "1";
+      report.addEventListener("keydown", handleRosterWakeKeydown);
+      report.addEventListener("input", handleRosterWakeInput);
+      report.addEventListener("focusin", handleRosterWakeFocusIn);
+      report.addEventListener("focusout", handleRosterWakeFocusOut);
+      report.addEventListener("mousedown", handleRosterWakeMouseDown);
+    }
+
+    function rosterWakeInputFromEvent(ev) {
+      const input = ev && ev.target && ev.target.closest ? ev.target.closest("input[data-roster-wake-date]") : null;
+      if (!input || input.disabled || input.dataset.rosterWakeEditable !== "1") return null;
+      return input.closest("#maint-roster-report") ? input : null;
+    }
+
+    function handleRosterWakeKeydown(ev) {
+      const report = rosterWakeReportFromEvent(ev);
+      if (!report) return;
+      const focusedInput = rosterWakeInputFromEvent(ev);
+      const input = focusedInput || activeRosterWakeInput(report);
+      if (!input) return;
+      const isEditing = focusedInput && input.dataset.rosterWakeEditing === "1";
+      if (isEditing && ev.key === "Escape") {
+        ev.preventDefault();
+        cancelRosterWakeEdit(input);
+        return;
+      }
+      if (!isEditing && ev.key === "F2") {
+        ev.preventDefault();
+        beginRosterWakeEdit(input, { select: true });
+        return;
+      }
+      if (!isEditing && ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+        ev.preventDefault();
+        beginRosterWakeEdit(input, { replaceValue: ev.key });
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        return;
+      }
+      if (!isEditing && (ev.key === "Delete" || ev.key === "Backspace")) {
+        ev.preventDefault();
+        input.value = "";
+        input.dataset.rosterWakeEdited = "1";
+        setUnsavedChanges("餐單參數");
+        return;
+      }
+      const isBack = ev.key === "ArrowUp" || (ev.key === "Tab" && ev.shiftKey);
+      const isForward = ev.key === "ArrowDown" || ev.key === "Enter" || (ev.key === "Tab" && !ev.shiftKey);
+      if (!isBack && !isForward) return;
+      ev.preventDefault();
+      const inputs = (report && report.__rosterWakeInputs) || [];
+      const idx = Number(input.dataset.rosterWakeIndex);
+      if (!Number.isInteger(idx)) return;
+      if (isEditing && input.dataset.rosterWakeEdited === "1") commitRosterWakeInput(input);
+      if (isEditing) endRosterWakeEdit(input);
+      const nextIdx = idx + (isBack ? -1 : 1);
+      if (nextIdx < 0) {
+        focusActiveRosterCell();
+      } else if (nextIdx >= inputs.length) {
+        focusRosterWakeInputElement(input);
+      } else {
+        focusRosterWakeInputElement(inputs[nextIdx]);
+      }
+    }
+
+    function handleRosterWakeInput(ev) {
+      const input = rosterWakeInputFromEvent(ev);
+      if (!input) return;
+      const wasEdited = input.dataset.rosterWakeEdited === "1";
+      input.dataset.rosterWakeEdited = "1";
+      if (!wasEdited) setUnsavedChanges("餐單參數");
+    }
+
+    function handleRosterWakeFocusIn(ev) {
+      const cell = ev.target && ev.target.closest ? ev.target.closest("td[data-roster-wake-cell]") : null;
+      if (cell && ev.target === cell) {
+        const input = cell.querySelector("input[data-roster-wake-date]");
+        if (input) setRosterWakeActive(cell.closest("#maint-roster-report"), Number(input.dataset.rosterWakeIndex), { focus: false });
+        return;
+      }
+      const input = rosterWakeInputFromEvent(ev);
+      if (!input) return;
+      const report = input.closest("#maint-roster-report");
+      setRosterWakeActive(report, Number(input.dataset.rosterWakeIndex), { focus: false });
+      if (report && report.__rosterWakeProgramViewFocus === input) {
+        report.__rosterWakeProgramViewFocus = null;
+        return;
+      }
+      if (report && report.__rosterWakeProgramInputFocus === input) {
+        report.__rosterWakeProgramInputFocus = null;
+        return;
+      }
+      beginRosterWakeEdit(input, { select: true });
+    }
+
+    function handleRosterWakeFocusOut(ev) {
+      const input = rosterWakeInputFromEvent(ev);
+      if (!input) return;
+      if (input.dataset.rosterWakeEdited === "1") commitRosterWakeInput(input);
+      endRosterWakeEdit(input);
+    }
+
+    function handleRosterWakeMouseDown(ev) {
+      const cell = ev.target && ev.target.closest ? ev.target.closest("td[data-roster-wake-cell]") : null;
+      if (!cell) return;
+      const input = cell.querySelector("input[data-roster-wake-date]");
+      if (!input) return;
+      ev.preventDefault();
+      setRosterWakeActive(cell.closest("#maint-roster-report"), Number(input.dataset.rosterWakeIndex), { focus: false });
+      beginRosterWakeEdit(input, { select: true });
+    }
+
+    function rosterWakeReportFromEvent(ev) {
+      if (!ev || !ev.target || !ev.target.closest) return null;
+      return ev.target.closest("#maint-roster-report");
+    }
+
+    function activeRosterWakeInput(report) {
+      const inputs = (report && report.__rosterWakeInputs) || [];
+      if (!inputs.length) return null;
+      const idx = Number.isInteger(report.__rosterWakeActiveIndex) ? report.__rosterWakeActiveIndex : 0;
+      return inputs[Math.max(0, Math.min(idx, inputs.length - 1))] || null;
+    }
+
+    function setRosterWakeActive(report, index, options = {}) {
+      if (!report) return false;
+      const inputs = report.__rosterWakeInputs || [];
+      const cells = report.__rosterWakeCells || [];
+      if (!inputs.length) return false;
+      const idx = Math.max(0, Math.min(index, inputs.length - 1));
+      inputs.forEach((item) => delete item.dataset.rosterWakeActive);
+      cells.forEach((item) => delete item.dataset.rosterWakeActive);
+      const input = inputs[idx];
+      const cell = cells[idx] || input.closest("td[data-roster-wake-cell]");
+      input.dataset.rosterWakeActive = "1";
+      if (cell) cell.dataset.rosterWakeActive = "1";
+      report.__rosterWakeActiveIndex = idx;
+      if (options.focus) focusRosterWakeInputElement(input);
+      return true;
+    }
+
+    function focusRosterWakeInputElement(input) {
+      if (!input) return false;
+      const report = input.closest("#maint-roster-report");
+      const idx = Number(input.dataset.rosterWakeIndex);
+      setRosterWakeActive(report, Number.isInteger(idx) ? idx : 0, { focus: false });
+      endRosterWakeEdit(input);
+      input.readOnly = true;
+      const cell = input.closest("td[data-roster-wake-cell]");
+      if (cell) cell.focus({ preventScroll: true });
+      return true;
+    }
+
+    function beginRosterWakeEdit(input, options = {}) {
+      if (!input) return false;
+      if (input.dataset.rosterWakeEditing !== "1") {
+        input.dataset.rosterWakeOriginalValue = input.value || "";
+      }
+      input.dataset.rosterWakeEditing = "1";
+      input.readOnly = false;
+      if (Object.prototype.hasOwnProperty.call(options, "replaceValue")) {
+        input.value = options.replaceValue == null ? "" : String(options.replaceValue);
+        input.dataset.rosterWakeEdited = "1";
+        setUnsavedChanges("餐單參數");
+      }
+      focusRosterWakeInputForEdit(input);
+      if (options.select) input.select();
+      else setRosterWakeCaretToEnd(input);
+      return true;
+    }
+
+    function endRosterWakeEdit(input) {
+      if (!input) return;
+      delete input.dataset.rosterWakeEditing;
+      delete input.dataset.rosterWakeOriginalValue;
+      input.readOnly = true;
+    }
+
+    function cancelRosterWakeEdit(input) {
+      if (!input) return false;
+      if (input.dataset.rosterWakeEditing === "1") {
+        input.value = input.dataset.rosterWakeOriginalValue || "";
+        input.dataset.rosterWakeEdited = "0";
+        endRosterWakeEdit(input);
+      }
+      const report = input.closest("#maint-roster-report");
+      const idx = Number(input.dataset.rosterWakeIndex);
+      setRosterWakeActive(report, Number.isInteger(idx) ? idx : 0, { focus: true });
+      return true;
+    }
+
+    function focusRosterWakeInputForEdit(input) {
+      const report = input.closest("#maint-roster-report");
+      if (report) report.__rosterWakeProgramInputFocus = input;
+      input.focus({ preventScroll: true });
+    }
+
+    function setRosterWakeCaretToEnd(input) {
+      if (!input || typeof input.setSelectionRange !== "function") return;
+      const pos = String(input.value || "").length;
+      input.setSelectionRange(pos, pos);
+    }
+
+    function commitRosterWakeInput(input, options = {}) {
+      if (!input) return false;
+      const raw = String(input.value || "").trim();
+      const normal = normalTime(raw);
+      if (normal) input.value = normal;
+      const current = normalTime(input.value) || "";
+      const last = input.dataset.rosterWakeLastSynced || "";
+      if (input.dataset.rosterWakeEdited !== "1" && current === last) return true;
+      const synced = syncRosterWakeInputToSources(input, options);
+      if (synced) {
+        input.dataset.rosterWakeLastSynced = current;
+        input.dataset.rosterWakeEdited = "0";
+      }
+      return synced;
+    }
+
+    function syncRosterWakeInputToSources(input, options = {}) {
+      if (!input) return false;
+      const key = String(input.getAttribute("data-roster-wake-date") || "").trim();
+      if (!key) return false;
+      const raw = String(input.value || "").trim();
+      const wake = normalTime(raw);
+      if (raw && !wake && options.allowInvalid) return false;
+      if (raw && !wake) throw new Error(`起身時間格式錯誤：${key} ${raw}`);
+      const defaultWake = normalTime(input.getAttribute("data-roster-wake-default") || "");
+      const existing = Array.isArray(rosterReportSources.wake_alarms) ? rosterReportSources.wake_alarms : [["日期", "起身時間", "備註"]];
+      const rows = existing.map((row) => Array.isArray(row) ? [...row] : []);
+      if (!rows.length) rows.push(["日期", "起身時間", "備註"]);
+      const next = [rows[0]];
+      let oldNote = "";
+      for (const row of rows.slice(1)) {
+        const d = parseYmd(row[0]);
+        const rowKey = d ? dateKey(d.year, d.month, d.day) : "";
+        if (rowKey === key) {
+          oldNote = String(row[2] || "").trim();
+          continue;
+        }
+        if (rowKey && normalTime(row[1])) next.push(row);
+      }
+      if (wake && (!defaultWake || wake !== defaultWake)) {
+        next.push([key, wake, oldNote]);
+      }
+      const header = next[0];
+      const body = next.slice(1).sort((a, b) => String(a[0] || "").localeCompare(String(b[0] || "")));
+      rosterReportSources.wake_alarms = [header, ...body];
+      return true;
     }
 
     function rosterReportOffsetPx() {
@@ -1231,6 +1984,7 @@
         ev.preventDefault();
         const startX = ev.clientX;
         const startOffset = rosterReportOffsetPx();
+        document.body.classList.add("is-horizontal-dragging");
         const onMove = (mv) => {
           formColumnWidths.maint_roster_report_offset = startOffset + (mv.clientX - startX);
           applyRosterReportOffset();
@@ -1238,6 +1992,7 @@
         const onUp = () => {
           window.removeEventListener("mousemove", onMove);
           window.removeEventListener("mouseup", onUp);
+          document.body.classList.remove("is-horizontal-dragging");
           persistColumnWidths();
         };
         window.addEventListener("mousemove", onMove);

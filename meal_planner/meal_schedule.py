@@ -97,6 +97,38 @@ def load_meal_time_rules(ws: Worksheet) -> list[MealTimeRule]:
     return rules
 
 
+def load_meal_time_rules_from_rows(raw_rows: list[list[Any]]) -> list[MealTimeRule]:
+    if not raw_rows:
+        return []
+    headers = [str(v).strip() if v is not None else "" for v in raw_rows[0]]
+    h = {name: idx for idx, name in enumerate(headers) if name}
+    c_code = h.get("更碼")
+    if c_code is None:
+        return []
+    cols = {k: h.get(k) for k in ("早餐", "午餐", "小食", "晚餐")}
+    rules: list[MealTimeRule] = []
+    for row_index, row in enumerate(raw_rows[1:], start=2):
+        code = row[c_code] if c_code < len(row) else None
+        if code is None or str(code).strip() == "":
+            continue
+
+        def gv(name: str) -> str | None:
+            idx = cols.get(name)
+            return _cell_str(row[idx]) if idx is not None and idx < len(row) else None
+
+        rules.append(
+            MealTimeRule(
+                row_index=row_index,
+                code_pattern=str(code).strip(),
+                breakfast=gv("早餐"),
+                lunch=gv("午餐"),
+                snack=gv("小食"),
+                dinner=gv("晚餐"),
+            )
+        )
+    return rules
+
+
 def load_meal_patterns_table(ws: Worksheet) -> dict[str, str | None]:
     """
     讀取飯時表 G:H（餐名/Pattern）作為獨立 pattern 表。
@@ -116,6 +148,26 @@ def load_meal_patterns_table(ws: Worksheet) -> dict[str, str | None]:
     for r in range(2, (ws.max_row or 0) + 1):
         meal = _cell_str(ws.cell(r, c_meal).value)
         pat = _cell_str(ws.cell(r, c_pat).value)
+        if meal not in out or not pat:
+            continue
+        if out[meal] is None:
+            out[meal] = pat
+    return out
+
+
+def load_meal_patterns_table_from_rows(raw_rows: list[list[Any]]) -> dict[str, str | None]:
+    out: dict[str, str | None] = {m: None for m in MEAL_LABELS}
+    if not raw_rows:
+        return out
+    headers = [str(v).strip() if v is not None else "" for v in raw_rows[0]]
+    h = {name: idx for idx, name in enumerate(headers) if name}
+    c_meal = h.get("餐名")
+    c_pat = h.get("Pattern")
+    if c_meal is None or c_pat is None:
+        return out
+    for row in raw_rows[1:]:
+        meal = _cell_str(row[c_meal]) if c_meal < len(row) else None
+        pat = _cell_str(row[c_pat]) if c_pat < len(row) else None
         if meal not in out or not pat:
             continue
         if out[meal] is None:
@@ -193,6 +245,49 @@ def load_restaurant_rows(ws: Worksheet) -> list[dict[str, Any]]:
                     k: float(ws.cell(r, nutrient_cols[k]).value or 0.0) if nutrient_cols[k] else 0.0
                     for k in NUTRIENT_KEYS
                 },
+            }
+        )
+    return rows
+
+
+def load_restaurant_rows_from_rows(raw_rows: list[list[Any]]) -> list[dict[str, Any]]:
+    if not raw_rows:
+        return []
+    headers = [str(v).strip() if v is not None else "" for v in raw_rows[0]]
+    h = {name: idx for idx, name in enumerate(headers) if name}
+    if "更碼關鍵字" not in h:
+        return []
+    cols = {name: h.get(name) for name in ("舖頭 (Store)", "營業時間", "餐廳選擇", "地址")}
+    nutrient_cols = {k: h.get(NUTRIENT_HEADER_BY_KEY[k]) for k in NUTRIENT_KEYS}
+    rows: list[dict[str, Any]] = []
+    for row_index, row in enumerate(raw_rows[1:], start=2):
+        kw_idx = h["更碼關鍵字"]
+        kw = row[kw_idx] if kw_idx < len(row) else None
+        if kw is None or str(kw).strip() == "":
+            continue
+
+        def gv(name: str) -> Any:
+            idx = cols.get(name)
+            return row[idx] if idx is not None and idx < len(row) else None
+
+        def nv(key: str) -> float:
+            idx = nutrient_cols.get(key)
+            if idx is None or idx >= len(row):
+                return 0.0
+            try:
+                return float(row[idx] or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        rows.append(
+            {
+                "row": row_index,
+                "keyword": str(kw).strip(),
+                "store": gv("舖頭 (Store)"),
+                "hours": gv("營業時間"),
+                "choice": gv("餐廳選擇"),
+                "address": gv("地址"),
+                "nutrients": {k: nv(k) for k in NUTRIENT_KEYS},
             }
         )
     return rows

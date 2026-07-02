@@ -25,8 +25,12 @@
     let maintSheets = [];
     let activeMaintSheetKey = null;
     let maintSheetPayload = { sheet_key: null, display_name: "", rows: [] };
-    let rosterReportSources = { payroll_times: [], overtime: [], public_holidays: [], medical_appointments: [] };
+    let rosterReportSources = { payroll_times: [], overtime: [], wake_alarms: [], public_holidays: [], medical_appointments: [] };
+    let googleCalendarSync = { enabled: false, write: false, client_secret_file: "", token_file: "", service_account_file: "", nonwork_calendar_id: "" };
+    let googleCalendarAuth = { authenticated: false, status: "" };
     let generateBusy = false;
+    let plannerDefaultDateIso = "";
+    let plannerDateInputsTouched = false;
     let unsavedChanges = false;
     let unsavedArea = "";
     let unsavedAreaKey = "";
@@ -34,13 +38,15 @@
       top: ["config", "maint", "planner", "shopping", "alarm_sync"],
       config: ["target", "catalog", "details"],
       maint: [],
+      reports: ["shift_code_analysis"],
     };
     let menuLabels = {};
     let menuHiddenKeys = [];
-    let menuTreeOpen = { config: true, maint: false };
+    let menuTreeOpen = { config: true, maint: false, reports: false };
     let menuDragState = null;
     const MAINT_SHEET_LABELS = {
       roster: "Roster",
+      wake_alarms: "起身表",
       overtime: "Overtime",
       payroll_times: "Shift Times",
       public_holidays: "Public Holidays",
@@ -49,8 +55,9 @@
       restaurant: "Restaurants",
       schedule_grid: "Schedule Grid",
     };
-    const MENU_TREE_KEYS = ["config", "maint"];
-    const MENU_STATIC_LEAF_KEYS = ["planner", "shopping", "alarm_sync", "target", "catalog", "details"];
+    const MENU_TREE_KEYS = ["config", "maint", "reports"];
+    const MENU_STATIC_LEAF_KEYS = ["planner", "shopping", "alarm_sync", "target", "catalog", "details", "shift_code_analysis"];
+    const REMOVED_MENU_KEYS = new Set(["runtime_import", "diagnostics"]);
     const MENU_DEFAULT_GROUPS = {
       planner: "top",
       shopping: "top",
@@ -58,6 +65,7 @@
       target: "config",
       catalog: "config",
       details: "config",
+      shift_code_analysis: "reports",
     };
 
     function ymdNow() {
@@ -201,18 +209,19 @@
       return firstMeal != null && currentMinutesHK() < firstMeal;
     }
     function generateBlockReasonForDate(iso) {
-      const today = todayIsoHK();
+      const today = isoFromYmd(ymdNow());
       if (iso < today) return "past";
       if (iso === today && !canRegenerateExistingToday(iso)) return "today_after_first_meal";
       return "";
     }
-    function updateGenerateButtonState() {
-      const btn = document.getElementById("go");
-      if (!btn) return;
+    function generateBlockedDatesFromInput() {
+      return plannerDatesFromInput().filter((iso) => generateBlockReasonForDate(iso));
+    }
+    function generateBlockedReasonFromState() {
       let blockedReason = "";
       let blockedDates = [];
       try {
-        blockedDates = plannerDatesFromInput().filter((iso) => generateBlockReasonForDate(iso));
+        blockedDates = generateBlockedDatesFromInput();
       } catch (_) {
         blockedDates = [];
       }
@@ -221,8 +230,46 @@
       } else if (currentFocusedDate && generateBlockReasonForDate(currentFocusedDate)) {
         blockedReason = `目前 cursor 日期 ${currentFocusedDate} 不可重新生成`;
       }
+      return blockedReason;
+    }
+    function updateGenerateButtonState() {
+      const btn = document.getElementById("go");
+      if (!btn) return "";
+      const blockedReason = generateBlockedReasonFromState();
       btn.disabled = generateBusy || !!blockedReason;
       btn.title = blockedReason || "Generate meal plan";
+      return blockedReason;
+    }
+    function defaultPlannerDateYmd() {
+      const today = ymdNow();
+      const todayIso = isoFromYmd(today);
+      return generateBlockReasonForDate(todayIso) ? ymdAddDays(today, 1) : today;
+    }
+    function currentPlannerInputIso() {
+      try {
+        const dates = plannerDatesFromInput();
+        return dates.length === 1 ? dates[0] : "";
+      } catch (_) {
+        return "";
+      }
+    }
+    function setPlannerDateInputs(ymd) {
+      document.getElementById("year").value = ymd.y;
+      document.getElementById("month").value = ymd.m;
+      document.getElementById("dates_expr").value = String(ymd.d);
+      plannerDefaultDateIso = isoFromYmd(ymd);
+    }
+    function applyDefaultPlannerDate({ preserveUserInput = false } = {}) {
+      if (preserveUserInput && plannerDateInputsTouched) return;
+      if (preserveUserInput) {
+        const currentIso = currentPlannerInputIso();
+        if (currentIso && currentIso !== plannerDefaultDateIso) return;
+      }
+      setPlannerDateInputs(defaultPlannerDateYmd());
+      updateGenerateButtonState();
+    }
+    function markPlannerDateInputsTouched() {
+      plannerDateInputsTouched = true;
     }
     function formatClockDateHK() {
       const parts = new Intl.DateTimeFormat("en-GB", {
@@ -298,6 +345,7 @@
         const startY = ev.clientY;
         const startLeft = rect.left;
         const startTop = rect.top;
+        document.body.classList.add("is-dnd-dragging");
         const onMove = (mv) => {
           const maxLeft = Math.max(0, window.innerWidth - el.offsetWidth - 4);
           const maxTop = Math.max(0, window.innerHeight - el.offsetHeight - 4);
@@ -308,6 +356,7 @@
         const onUp = () => {
           window.removeEventListener("mousemove", onMove);
           window.removeEventListener("mouseup", onUp);
+          document.body.classList.remove("is-dnd-dragging");
           persistColumnWidths();
         };
         window.addEventListener("mousemove", onMove);
@@ -317,11 +366,11 @@
       window.addEventListener("resize", applyClockPosition);
     }
     (function init() {
-      const tomorrow = ymdAddDays(ymdNow(), 1);
-      document.getElementById("year").value = tomorrow.y;
-      document.getElementById("month").value = tomorrow.m;
-      document.getElementById("dates_expr").value = String(tomorrow.d);
-      updateGenerateButtonState();
+      applyDefaultPlannerDate();
+      window.setInterval(() => {
+        applyDefaultPlannerDate({ preserveUserInput: true });
+        updateGenerateButtonState();
+      }, 30000);
     })();
 
     function esc(s) {
@@ -334,14 +383,18 @@
     }
 
     function setSaveButtonVisible(id, visible) {
-      const btn = document.getElementById(id);
-      if (!btn) return;
+      const buttons = [document.getElementById(id)].filter(Boolean);
+      if (!buttons.length) return;
       if (id === "maint-save") {
-        btn.style.display = "";
-        btn.style.visibility = visible ? "visible" : "hidden";
-        btn.setAttribute("aria-hidden", visible ? "false" : "true");
+        buttons.forEach((btn) => {
+          btn.style.display = "";
+          btn.style.visibility = "visible";
+          btn.disabled = !visible;
+          btn.setAttribute("aria-disabled", visible ? "false" : "true");
+        });
         return;
       }
+      const btn = buttons[0];
       btn.style.display = visible ? "" : "none";
     }
 
@@ -630,6 +683,7 @@
       const planner = document.getElementById("planner-panel");
       const config = document.getElementById("config-panel");
       const maint = document.getElementById("maint-panel");
+      const reports = document.getElementById("reports-panel");
       const shopping = document.getElementById("shopping-panel");
       const alarmSync = document.getElementById("alarm-sync-panel");
       const mPlanner = document.getElementById("menu-planner");
@@ -638,13 +692,16 @@
       const mConfigCatalog = document.getElementById("menu-config-catalog");
       const mConfigDetails = document.getElementById("menu-config-details");
       const mMaint = document.getElementById("menu-maint");
+      const mReports = document.getElementById("menu-reports");
+      const mShiftCodeAnalysis = document.getElementById("menu-report-shift-code-analysis");
       const mShopping = document.getElementById("menu-shopping");
       const mAlarmSync = document.getElementById("menu-alarm-sync");
       const target = panel || "planner";
-      activePanel = ["planner", "config", "maint", "shopping", "alarm_sync"].includes(target) ? target : "planner";
+      activePanel = ["planner", "config", "maint", "shopping", "alarm_sync", "reports"].includes(target) ? target : "planner";
       planner.style.display = activePanel === "planner" ? "" : "none";
       config.style.display = activePanel === "config" ? "" : "none";
       maint.style.display = activePanel === "maint" ? "" : "none";
+      reports.style.display = activePanel === "reports" ? "" : "none";
       shopping.style.display = activePanel === "shopping" ? "" : "none";
       alarmSync.style.display = activePanel === "alarm_sync" ? "" : "none";
       mPlanner.classList.toggle("active", activePanel === "planner");
@@ -656,6 +713,8 @@
       document.querySelectorAll("[data-maint-sheet-key]").forEach((btn) => {
         btn.classList.toggle("active", activePanel === "maint" && btn.dataset.maintSheetKey === activeMaintSheetKey);
       });
+      mReports.classList.toggle("active", activePanel === "reports");
+      mShiftCodeAnalysis.classList.toggle("active", activePanel === "reports");
       mShopping.classList.toggle("active", activePanel === "shopping");
       mAlarmSync.classList.toggle("active", activePanel === "alarm_sync");
       if (persist) persistColumnWidths();
@@ -684,9 +743,26 @@
       if (persist) persistMenuTreeOpen();
     }
 
+    function setReportsMenuTreeOpen(open, persist = true) {
+      const tree = document.getElementById("reports-menu-tree");
+      const toggle = document.getElementById("menu-reports");
+      const isOpen = !!open;
+      menuTreeOpen.reports = isOpen;
+      if (!tree || !toggle) return;
+      tree.classList.toggle("is-open", isOpen);
+      toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      if (persist) persistMenuTreeOpen();
+    }
+
     function applyMenuTreeOpen() {
       setConfigMenuTreeOpen(menuTreeOpen.config !== false, false);
       setMaintMenuTreeOpen(!!menuTreeOpen.maint, false);
+      setReportsMenuTreeOpen(!!menuTreeOpen.reports, false);
+      Object.keys(menuTreeOpen || {}).forEach((key) => {
+        if (!MENU_TREE_KEYS.includes(key) && typeof setCustomMenuTreeOpen === "function") {
+          setCustomMenuTreeOpen(key, !!menuTreeOpen[key], false);
+        }
+      });
     }
 
     function maintSheetKeys() {
@@ -708,6 +784,13 @@
     }
 
     function isMenuTreeKey(key) {
-      return MENU_TREE_KEYS.includes(key);
+      return MENU_TREE_KEYS.includes(key) || (key && menuOrder && Array.isArray(menuOrder[key]) && !menuNodeHasContent(key));
     }
 
+    function menuNodeHasContent(key) {
+      return MENU_STATIC_LEAF_KEYS.includes(key) || maintSheetKeys().includes(key);
+    }
+
+    function isRemovedMenuKey(key) {
+      return REMOVED_MENU_KEYS.has(String(key || ""));
+    }

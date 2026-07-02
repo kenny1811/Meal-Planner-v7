@@ -3,37 +3,48 @@ import tempfile
 import unittest
 from datetime import time
 
-from openpyxl import Workbook
-
 from meal_planner.nutrition_catalog import NUTRIENT_HEADER_BY_KEY
-from meal_planner.reference_db import load_planning_references
+from meal_planner.reference_db import ReferenceDatabaseError, load_planning_references
 from meal_planner.maintenance_db import save_sheet_rows
 from meal_planner.settings import clear_settings_cache, get_settings
 
 
-def _write_row(ws, row, values):
-    for col, value in enumerate(values, start=1):
-        ws.cell(row, col).value = value
-
-
-def _make_workbook() -> Workbook:
-    settings = get_settings()
-    wb = Workbook()
-    wb.active.title = settings.sheets.meal_times
-    restaurant_ws = wb.create_sheet(settings.sheets.restaurant)
-    schedule_ws = wb.create_sheet(settings.sheets.schedule_grid)
-
-    _write_row(wb[settings.sheets.meal_times], 1, ["更碼", "早餐", "午餐", "小食", "晚餐", None, "餐名", "Pattern"])
-    _write_row(wb[settings.sheets.meal_times], 2, ["EleM", "開工前 2 小時", "跟行位表", "跟行位表", "收工後 1.5 小時", None, "早餐", "水果"])
-    _write_row(wb[settings.sheets.meal_times], 3, ["其他", "08:00", "12:00", None, None, None, "午餐", "菜+米"])
-
+def _save_planning_maintenance(settings, *, meal_choice="餐", store="店", schedule_time="12:30", breakfast="開工前 2 小時"):
     nutrients = list(NUTRIENT_HEADER_BY_KEY.values())
-    _write_row(restaurant_ws, 1, ["更碼關鍵字", "舖頭 (Store)", "營業時間", "餐廳選擇", "地址", *nutrients])
-    _write_row(restaurant_ws, 2, ["Ele*", "店", "09:00-18:00", "餐", "地址", *range(10, 20)])
-
-    _write_row(schedule_ws, 1, ["更碼", "時間", "內容", "時長"])
-    _write_row(schedule_ws, 2, ["EleM", time(12, 30), "飯", 45])
-    return wb
+    save_sheet_rows(
+        "meal_times",
+        [
+            ["更碼", "早餐", "午餐", "小食", "晚餐"],
+            ["EleM", breakfast, "跟行位表", "跟行位表", "收工後 1.5 小時"],
+            ["其他", "08:00", "12:00", None, None],
+        ],
+        settings,
+    )
+    save_sheet_rows(
+        "meal_patterns",
+        [
+            ["餐名", "Pattern"],
+            ["早餐", "水果"],
+            ["午餐", "菜+米"],
+        ],
+        settings,
+    )
+    save_sheet_rows(
+        "restaurant",
+        [
+            ["更碼關鍵字", "舖頭 (Store)", "營業時間", "餐廳選擇", "地址", *nutrients],
+            ["Ele*", store, "09:00-18:00", meal_choice, "地址", *range(10, 20)],
+        ],
+        settings,
+    )
+    save_sheet_rows(
+        "schedule_grid",
+        [
+            ["更碼", "時間", "內容", "時長"],
+            ["EleM", schedule_time, "飯", 45],
+        ],
+        settings,
+    )
 
 
 class ReferenceDatabaseTests(unittest.TestCase):
@@ -51,32 +62,25 @@ class ReferenceDatabaseTests(unittest.TestCase):
         clear_settings_cache()
         self.tmp.cleanup()
 
-    def test_references_bootstrap_once_from_workbook(self):
+    def test_planning_references_load_from_maintenance_without_workbook(self):
         settings = get_settings()
-        wb = _make_workbook()
+        _save_planning_maintenance(settings)
 
-        first = load_planning_references(settings, wb)
-        wb[settings.sheets.meal_times].cell(2, 1).value = "Changed"
-        wb[settings.sheets.restaurant].cell(2, 2).value = "改店"
-        wb[settings.sheets.schedule_grid].cell(2, 3).value = "Changed"
-        second = load_planning_references(settings, wb)
+        rules, patterns, restaurants, schedule = load_planning_references(settings)
 
-        rules, patterns, restaurants, schedule = first
         self.assertEqual(rules[0].code_pattern, "EleM")
         self.assertEqual(patterns["早餐"], "水果")
         self.assertEqual(restaurants[0]["store"], "店")
         self.assertEqual(restaurants[0]["nutrients"]["kcal"], 10.0)
         self.assertEqual(schedule[0].t, time(12, 30))
 
-        second_rules, _, second_restaurants, second_schedule = second
-        self.assertEqual(second_rules[0].code_pattern, "EleM")
-        self.assertEqual(second_restaurants[0]["store"], "店")
-        self.assertEqual(second_schedule[0].content, "飯")
+    def test_planning_references_reject_missing_maintenance_data(self):
+        with self.assertRaisesRegex(ReferenceDatabaseError, "Excel/reference fallback is disabled"):
+            load_planning_references(get_settings())
 
-    def test_schedule_grid_maintenance_rows_override_reference_rows(self):
+    def test_schedule_grid_maintenance_rows_are_current_source(self):
         settings = get_settings()
-        wb = _make_workbook()
-        load_planning_references(settings, wb)
+        _save_planning_maintenance(settings)
         save_sheet_rows(
             "schedule_grid",
             [
@@ -90,6 +94,53 @@ class ReferenceDatabaseTests(unittest.TestCase):
 
         self.assertEqual(schedule[0].t, time(13, 10))
         self.assertEqual(schedule[0].effective_from.isoformat(), "2026-06-01")
+
+    def test_meal_times_maintenance_rows_are_current_source(self):
+        settings = get_settings()
+        _save_planning_maintenance(settings)
+        save_sheet_rows(
+            "meal_times",
+            [
+                ["更碼", "早餐", "午餐", "小食", "晚餐"],
+                ["EleM", "07:00", "13:00", "", "20:00"],
+                ["其他", "08:30", "12:30", "", ""],
+            ],
+            settings,
+        )
+        save_sheet_rows(
+            "meal_patterns",
+            [
+                ["餐名", "Pattern"],
+                ["早餐", "燕麥"],
+                ["午餐", "米+魚"],
+            ],
+            settings,
+        )
+
+        rules, patterns, _, _ = load_planning_references(settings)
+
+        self.assertEqual(rules[0].breakfast, "07:00")
+        self.assertEqual(rules[0].lunch, "13:00")
+        self.assertEqual(patterns["早餐"], "燕麥")
+        self.assertEqual(patterns["午餐"], "米+魚")
+
+    def test_restaurant_maintenance_rows_are_current_source(self):
+        settings = get_settings()
+        _save_planning_maintenance(settings)
+        save_sheet_rows(
+            "restaurant",
+            [
+                ["更碼關鍵字", "舖頭 (Store)", "營業時間", "餐廳選擇", "地址", *NUTRIENT_HEADER_BY_KEY.values()],
+                ["Ele*", "新店", "10:00-19:00", "新餐", "新地址", *range(20, 30)],
+            ],
+            settings,
+        )
+
+        _, _, restaurants, _ = load_planning_references(settings)
+
+        self.assertEqual(restaurants[0]["store"], "新店")
+        self.assertEqual(restaurants[0]["choice"], "新餐")
+        self.assertEqual(restaurants[0]["nutrients"]["kcal"], 20.0)
 
 
 if __name__ == "__main__":

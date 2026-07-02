@@ -12,6 +12,7 @@ temp.jsonl
 raw.txt
 data_backup_*/
 logs/
+google_calendar_credentials/
 
 # Local Excel workbooks and lock files
 *.xlsm

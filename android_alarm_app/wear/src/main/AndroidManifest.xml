@@ -2,6 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-feature android:name="android.hardware.type.watch" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
@@ -58,6 +67,17 @@
             android:exported="false" />
 
         <receiver
+            android:name=".WatchLocalAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.oneshotalarm.watch.ACTION_LOCAL_ALARM" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".DebugComplicationRefreshReceiver"
             android:exported="true">
             <intent-filter>
@@ -81,7 +101,7 @@
                 android:value="SHORT_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="300" />
+                android:value="0" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="com.kenny.watchface" />
@@ -103,7 +123,7 @@
                 android:value="SHORT_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="300" />
+                android:value="0" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="com.kenny.watchface" />
@@ -125,7 +145,7 @@
                 android:value="SHORT_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="300" />
+                android:value="0" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="com.kenny.watchface" />
@@ -147,7 +167,7 @@
                 android:value="SHORT_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="300" />
+                android:value="0" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="com.kenny.watchface" />
@@ -169,7 +189,7 @@
                 android:value="SHORT_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="300" />
+                android:value="0" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="com.kenny.watchface" />
@@ -191,7 +211,7 @@
                 android:value="SHORT_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="300" />
+                android:value="0" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
                 android:value="com.kenny.watchface" />

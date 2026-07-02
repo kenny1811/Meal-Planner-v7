@@ -2,7 +2,7 @@
 餐單v5：總計列／誤差列 字色與誤差數值邏輯。
 
 對應規格見專案根目錄 規則.md §16。
-數值（容忍、脂肪比例、9 kcal/g）由 config.yaml 載入（§2）。
+脂肪比例由 target row 提供；9 kcal/g 由 config.yaml 載入。
 openpyxl 字色可用 Font(color=FONT_RED_ARGB)。
 """
 
@@ -102,39 +102,3 @@ def error_font_red_fat_pct(fat_g: float, daily_kcal: float, pct_of_kcal: float) 
     cap = fat_cap_grams(daily_kcal, pct_of_kcal)
     eps = 1e-9
     return fat_g > cap + eps
-
-
-def total_row_font_red_total_fat(fat_g: float, daily_kcal: float) -> bool:
-    return total_row_font_red_fat_pct(fat_g, daily_kcal, _nutrition_format().fat_pct_total)
-
-
-def total_row_font_red_sat_fat(fat_g: float, daily_kcal: float) -> bool:
-    return total_row_font_red_fat_pct(fat_g, daily_kcal, _nutrition_format().fat_pct_saturated)
-
-
-def total_row_font_red_trans_fat(fat_g: float, daily_kcal: float) -> bool:
-    return total_row_font_red_fat_pct(fat_g, daily_kcal, _nutrition_format().fat_pct_trans)
-
-
-def error_cell_total_fat(fat_g: float, daily_kcal: float) -> float:
-    return error_cell_fat_pct(fat_g, daily_kcal, _nutrition_format().fat_pct_total)
-
-
-def error_cell_sat_fat(fat_g: float, daily_kcal: float) -> float:
-    return error_cell_fat_pct(fat_g, daily_kcal, _nutrition_format().fat_pct_saturated)
-
-
-def error_cell_trans_fat(fat_g: float, daily_kcal: float) -> float:
-    return error_cell_fat_pct(fat_g, daily_kcal, _nutrition_format().fat_pct_trans)
-
-
-def error_font_red_total_fat(fat_g: float, daily_kcal: float) -> bool:
-    return error_font_red_fat_pct(fat_g, daily_kcal, _nutrition_format().fat_pct_total)
-
-
-def error_font_red_sat_fat(fat_g: float, daily_kcal: float) -> bool:
-    return error_font_red_fat_pct(fat_g, daily_kcal, _nutrition_format().fat_pct_saturated)
-
-
-def error_font_red_trans_fat(fat_g: float, daily_kcal: float) -> bool:
-    return error_font_red_fat_pct(fat_g, daily_kcal, _nutrition_format().fat_pct_trans)

@@ -45,7 +45,6 @@ public class AlarmActivity extends Activity {
         super.onCreate(savedInstanceState);
         turnScreenOn();
         acquireWakeLock();
-        startStrongVibration();
         buildUi();
         registerWatchDismissReceiver();
         if (hasRecentWatchDismiss()) {
@@ -118,8 +117,9 @@ public class AlarmActivity extends Activity {
             return;
         }
         stopped = true;
-        WatchBridge.sendDismiss(this);
+        WatchBridge.sendDismiss(this, getIntent().getStringExtra(AlarmScheduler.EXTRA_ALARM_ID));
         WatchBridge.sendTileState(this);
+        AlarmAlertService.stop(this);
         stopAlert();
         finish();
     }
@@ -220,10 +220,6 @@ public class AlarmActivity extends Activity {
     }
 
     private void stopAlert() {
-        if (vibrator != null) {
-            vibrator.cancel();
-        }
-        vibrator = null;
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }

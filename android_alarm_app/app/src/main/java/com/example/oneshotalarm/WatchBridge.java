@@ -1,6 +1,8 @@
 package com.example.oneshotalarm;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import com.google.android.gms.wearable.DataMap;
@@ -28,6 +30,10 @@ final class WatchBridge {
     }
 
     static void sendAlarm(Context context, String label, long triggerAtMillis) {
+        sendAlarm(context, "", label, triggerAtMillis);
+    }
+
+    static void sendAlarm(Context context, String id, String label, long triggerAtMillis) {
         if (!AlarmStore.isWatchAlarmEnabled(context)) {
             Log.d(TAG, "Watch alarm disabled; skip sending alarm");
             return;
@@ -40,6 +46,7 @@ final class WatchBridge {
         }
         JSONObject payload = new JSONObject();
         try {
+            payload.put("id", id == null ? "" : id);
             payload.put("time", time);
             payload.put("label", text);
         } catch (Exception e) {
@@ -53,16 +60,34 @@ final class WatchBridge {
     }
 
     static void sendDismiss(Context context) {
-        if (!AlarmStore.isWatchAlarmEnabled(context)) {
+        sendDismiss(context, "");
+    }
+
+    static void sendDismiss(Context context, String alarmId) {
+        Context appContext = context.getApplicationContext();
+        if (!AlarmStore.isWatchAlarmEnabled(appContext)) {
             Log.d(TAG, "Watch alarm disabled; skip sending dismiss");
             return;
         }
+        sendDismissNow(appContext, alarmId);
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.postDelayed(() -> sendDismissNow(appContext, alarmId), 300);
+        handler.postDelayed(() -> sendDismissNow(appContext, alarmId), 900);
+        handler.postDelayed(() -> sendDismissNow(appContext, alarmId), 1500);
+    }
+
+    private static void sendDismissNow(Context context, String alarmId) {
+        byte[] payload = dismissPayload(alarmId);
         Wearable.getNodeClient(context).getConnectedNodes()
-                .addOnSuccessListener(nodes -> sendToNodes(context, nodes, WATCH_DISMISS_PATH, new byte[0]))
+                .addOnSuccessListener(nodes -> sendToNodes(context, nodes, WATCH_DISMISS_PATH, payload))
                 .addOnFailureListener(e -> Log.e(TAG, "Get connected watch nodes for dismiss failed", e));
         PutDataMapRequest request = PutDataMapRequest.create(WATCH_DISMISS_DATA_PATH);
         request.getDataMap().putLong("ts", System.currentTimeMillis());
-        Wearable.getDataClient(context).putDataItem(request.asPutDataRequest());
+        request.getDataMap().putString("alarm_id", alarmId == null ? "" : alarmId);
+        Wearable.getDataClient(context)
+                .putDataItem(request.asPutDataRequest().setUrgent())
+                .addOnSuccessListener(item -> Log.d(TAG, "Sent dismiss data to watch"))
+                .addOnFailureListener(e -> Log.e(TAG, "Send dismiss data to watch failed", e));
     }
 
     static void sendTileState(Context context) {
@@ -97,6 +122,16 @@ final class WatchBridge {
         Wearable.getNodeClient(context).getConnectedNodes()
                 .addOnSuccessListener(nodes -> sendToNodes(context, nodes, TILE_STATE_PATH, bytes))
                 .addOnFailureListener(e -> Log.e(TAG, "Get watch nodes for tile state failed", e));
+    }
+
+    private static byte[] dismissPayload(String alarmId) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("ts", System.currentTimeMillis());
+            payload.put("alarm_id", alarmId == null ? "" : alarmId);
+        } catch (Exception ignored) {
+        }
+        return payload.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private static AlarmPair findPrevNext(Context context, long now) {
@@ -152,6 +187,7 @@ final class WatchBridge {
             }
             JSONObject row = new JSONObject();
             try {
+                row.put("id", alarm.optString("id", ""));
                 row.put("time", timeFormat.format(triggerAt));
                 row.put("content", label);
                 row.put("at", triggerAt);

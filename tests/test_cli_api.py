@@ -15,7 +15,7 @@ import meal_planner.app as app_module
 from meal_planner import cli
 from meal_planner.app import app
 from meal_planner.settings import clear_settings_cache, get_settings
-from meal_planner.storage import save_memory_payload
+from meal_planner.storage import load_memory_payload, save_memory_payload
 
 
 class CliApiTests(unittest.TestCase):
@@ -132,6 +132,50 @@ class CliApiTests(unittest.TestCase):
             os.environ["MENU_PROJECT_ROOT"] = old_root
         clear_settings_cache()
 
+    def test_api_preview_does_not_replace_current_memory_snapshot(self):
+        old_root = os.environ.get("MENU_PROJECT_ROOT")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["MENU_PROJECT_ROOT"] = tmp
+            clear_settings_cache()
+            save_memory_payload(
+                {
+                    "headers": ["old"],
+                    "days": [
+                        {"date": "2026-06-23", "meal_plan": {"idx": 23}},
+                        {"date": "2026-06-24", "meal_plan": {"idx": 24}},
+                    ],
+                }
+            )
+            client = TestClient(app)
+            preview_payload = {
+                "headers": ["new"],
+                "indicator_rows": {},
+                "nutrient_keys": [],
+                "days": [{"date": "2099-06-27", "meal_plan": {"idx": 27}}],
+            }
+
+            with patch("meal_planner.app.preview_days", return_value=preview_payload):
+                response = client.post(
+                    "/api/preview",
+                    json={"year": 2099, "month": 6, "dates_expr": "27"},
+                )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["days"], preview_payload["days"])
+            self.assertEqual(
+                load_memory_payload()["days"],
+                [
+                    {"date": "2026-06-23", "meal_plan": {"idx": 23}},
+                    {"date": "2026-06-24", "meal_plan": {"idx": 24}},
+                ],
+            )
+
+        if old_root is None:
+            os.environ.pop("MENU_PROJECT_ROOT", None)
+        else:
+            os.environ["MENU_PROJECT_ROOT"] = old_root
+        clear_settings_cache()
+
     def test_api_health_and_debug_stats(self):
         client = TestClient(app)
 
@@ -213,6 +257,7 @@ class CliApiTests(unittest.TestCase):
                         "dob": dob,
                         "gender": "male",
                         "height_cm": 173.5,
+                        "monthly_weight_change_kg": -0.5,
                         "weight_history": [{"weight_kg": 68.2, "recorded_at": "2026-06-21 12:34:56"}],
                     },
                     "target_settings": {
@@ -231,6 +276,7 @@ class CliApiTests(unittest.TestCase):
             self.assertEqual(payload["profile"]["gender"], "male")
             self.assertEqual(payload["profile"]["height_cm"], 173.5)
             self.assertEqual(payload["profile"]["weight_kg"], 68.2)
+            self.assertEqual(payload["profile"]["monthly_weight_change_kg"], -0.5)
             self.assertEqual(payload["profile"]["last_updated"], "2026-06-21 12:34:56")
             self.assertEqual([item["weight_kg"] for item in payload["profile"]["weight_history"]], [68.2])
             self.assertEqual(payload["target_settings"]["workday"]["activity_factor"], 1.4)

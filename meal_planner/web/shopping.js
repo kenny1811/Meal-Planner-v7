@@ -54,6 +54,13 @@
       return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
     }
 
+    function inclusiveDateSpanDays(startIso, endIso) {
+      const start = new Date(`${startIso}T00:00:00`);
+      const end = new Date(`${endIso}T00:00:00`);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
+      return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    }
+
     function tomorrowIsoHK() {
       const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Hong_Kong", year: "numeric", month: "2-digit", day: "2-digit" });
       const p = fmt.formatToParts(new Date());
@@ -150,6 +157,7 @@
         out.innerHTML = '<div class="err" style="display:block;">End date cannot be before start date.</div>';
         return;
       }
+      const selectedDayCount = inclusiveDateSpanDays(startV, endV);
       const days = sortDaysByDate(memoryPayload.days || []).filter((d) => {
         const ds = String((d && d.date) || "");
         return ds >= startV && ds <= endV;
@@ -223,9 +231,9 @@
       const notes = unknownRows.length
         ? `<div class="hint" style="margin-top:6px;">Items without grams: ${unknownRows.map(([n, c]) => `${esc(n)} x${c}`).join(", ")}</div>`
         : "";
-      out.innerHTML = `<div class="hint">Range: ${esc(startV)} to ${esc(endV)} | Days: ${days.length}</div>${table}${notes}`;
+      out.innerHTML = `<div class="hint">Range: ${esc(startV)} to ${esc(endV)} | Days: ${selectedDayCount}</div>${table}${notes}`;
       applyColumnWidths();
       attachShoppingResizers();
-      applyTableOffsets(out);
+      applyTableOffsets();
       attachTableDragHandles();
     }

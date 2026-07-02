@@ -14,6 +14,7 @@ from meal_planner.settings import get_settings
 # The UI has no restore picker, so per-day history should not grow invisibly.
 MAX_VERSIONS_PER_DATE = 1
 _STORE_LOCK = RLock()
+_REMOVED_MENU_KEYS = {"runtime_import", "diagnostics"}
 
 
 def _default_memory_payload() -> dict[str, Any]:
@@ -33,11 +34,13 @@ def _default_ui() -> dict[str, Any]:
         "catalog_column_widths": {},
         "form_column_widths": {},
         "menu_order": {
-            "top": ["planner", "shopping", "config", "maint"],
+            "top": ["planner", "shopping", "alarm_sync", "config", "maint", "reports"],
             "config": ["details", "target"],
+            "reports": ["shift_code_analysis"],
             "maint": [
                 "catalog",
                 "roster",
+                "wake_alarms",
                 "payroll_times",
                 "schedule_grid",
                 "overtime",
@@ -53,10 +56,13 @@ def _default_ui() -> dict[str, Any]:
             "shopping": "購物清單",
             "config": "設置",
             "maint": "餐單參數",
+            "reports": "報表",
+            "shift_code_analysis": "更碼分析",
             "target": "營養指標",
             "catalog": "營養清單",
             "details": "系統參數",
             "roster": "更表",
+            "wake_alarms": "起身表",
             "overtime": "加班表",
             "payroll_times": "更時表",
             "schedule_grid": "行位表",
@@ -66,7 +72,15 @@ def _default_ui() -> dict[str, Any]:
             "restaurant": "餐廳選擇",
         },
         "menu_hidden_keys": [],
-        "menu_tree_open": {"config": True, "maint": False},
+        "menu_tree_open": {"config": True, "maint": False, "reports": False},
+        "google_calendar_sync": {
+            "enabled": False,
+            "write": False,
+            "client_secret_file": "",
+            "token_file": "",
+            "service_account_file": "",
+            "nonwork_calendar_id": "",
+        },
     }
 
 
@@ -81,7 +95,7 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
             pass
         ui["show_past"] = bool(raw.get("show_past", ui["show_past"]))
         panel = str(raw.get("active_panel", ui["active_panel"]))
-        ui["active_panel"] = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync"} else "planner"
+        ui["active_panel"] = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports"} else "planner"
         fallback_config_view = "catalog" if ui["active_panel"] == "config" and "active_config_view" not in raw else ui["active_config_view"]
         config_view = str(raw.get("active_config_view", fallback_config_view))
         ui["active_config_view"] = config_view if config_view in {"targets", "catalog", "details"} else "targets"
@@ -95,7 +109,7 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
             group = "config"
             raw_order = raw.get("menu_order")
             if isinstance(raw_order, dict):
-                for candidate in ("top", "config", "maint"):
+                for candidate in ("top", "config", "maint", "reports"):
                     values = raw_order.get(candidate)
                     if isinstance(values, list) and leaf in [str(v) for v in values]:
                         group = candidate
@@ -132,24 +146,42 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
             ui["form_column_widths"] = widths
         if isinstance(raw.get("menu_order"), dict):
             order: dict[str, list[str]] = {}
-            for group in ("top", "config", "maint"):
+            groups = list(dict.fromkeys([*ui["menu_order"].keys(), *[str(k) for k in raw["menu_order"].keys() if str(k)]]))
+            for group in groups:
                 values = raw["menu_order"].get(group)
                 if isinstance(values, list):
-                    order[group] = [str(v) for v in values if str(v)]
+                    order[group] = [str(v) for v in values if str(v) and str(v) not in _REMOVED_MENU_KEYS]
             ui["menu_order"] = {**ui["menu_order"], **order}
         if isinstance(raw.get("menu_labels"), dict):
             ui["menu_labels"] = {
                 str(k): str(v).strip()
                 for k, v in raw["menu_labels"].items()
-                if str(k) and str(v).strip()
+                if str(k) and str(k) not in _REMOVED_MENU_KEYS and str(v).strip()
             }
         if isinstance(raw.get("menu_hidden_keys"), list):
-            ui["menu_hidden_keys"] = [str(v) for v in raw["menu_hidden_keys"] if str(v)]
+            ui["menu_hidden_keys"] = [str(v) for v in raw["menu_hidden_keys"] if str(v) and str(v) not in _REMOVED_MENU_KEYS]
         if isinstance(raw.get("menu_tree_open"), dict):
             ui["menu_tree_open"] = {
                 "config": bool(raw["menu_tree_open"].get("config", ui["menu_tree_open"]["config"])),
                 "maint": bool(raw["menu_tree_open"].get("maint", ui["menu_tree_open"]["maint"])),
+                "reports": bool(raw["menu_tree_open"].get("reports", ui["menu_tree_open"]["reports"])),
             }
+            for key, value in raw["menu_tree_open"].items():
+                key_s = str(key)
+                if key_s and key_s not in ui["menu_tree_open"]:
+                    ui["menu_tree_open"][key_s] = bool(value)
+        if isinstance(raw.get("google_calendar_sync"), dict):
+            gc = raw["google_calendar_sync"]
+            ui["google_calendar_sync"] = {
+                "enabled": bool(gc.get("enabled", ui["google_calendar_sync"]["enabled"])),
+                "write": bool(gc.get("write", ui["google_calendar_sync"]["write"])),
+                "client_secret_file": str(gc.get("client_secret_file") or ""),
+                "token_file": str(gc.get("token_file") or ""),
+                "service_account_file": str(gc.get("service_account_file") or ""),
+                "nonwork_calendar_id": str(gc.get("nonwork_calendar_id") or ""),
+            }
+    if ui["active_menu_path"] and ui["active_menu_path"][-1] in _REMOVED_MENU_KEYS:
+        ui["active_menu_path"] = ["top", "planner"]
     return ui
 
 
@@ -282,6 +314,28 @@ def load_all_versions_meta() -> dict[str, list[str]]:
     for row in rows:
         out.setdefault(str(row["date"]), []).append(str(row["timestamp"]))
     return out
+
+
+def merge_memory_payload(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    """Merge a partial UI memory save without dropping days absent from the browser payload."""
+    existing = existing if isinstance(existing, dict) else {}
+    incoming = incoming if isinstance(incoming, dict) else {}
+    by_date: dict[str, dict[str, Any]] = {}
+    for source in (existing.get("days", []), incoming.get("days", [])):
+        if not isinstance(source, list):
+            continue
+        for day in source:
+            if not isinstance(day, dict):
+                continue
+            date_s = str(day.get("date") or "")
+            if date_s:
+                by_date[date_s] = day
+    return {
+        "headers": incoming.get("headers") or existing.get("headers", []),
+        "indicator_rows": incoming.get("indicator_rows") or existing.get("indicator_rows", {}),
+        "nutrient_keys": incoming.get("nutrient_keys") or existing.get("nutrient_keys", []),
+        "days": [by_date[k] for k in sorted(by_date)],
+    }
 
 
 def save_memory_payload(payload: dict[str, Any]) -> None:
@@ -431,9 +485,47 @@ def load_form_column_widths() -> dict[str, float]:
     return out
 
 
+def save_google_calendar_sync_settings(settings: dict[str, Any]) -> None:
+    def mutate(ui: dict[str, Any]) -> None:
+        current = ui.get("google_calendar_sync") if isinstance(ui.get("google_calendar_sync"), dict) else {}
+        ui["google_calendar_sync"] = {
+            "enabled": bool(settings.get("enabled")) if isinstance(settings, dict) and "enabled" in settings else bool(current.get("enabled")),
+            "write": bool(settings.get("write")) if isinstance(settings, dict) and "write" in settings else bool(current.get("write")),
+            "client_secret_file": str(settings.get("client_secret_file", current.get("client_secret_file", "")) or "") if isinstance(settings, dict) else str(current.get("client_secret_file", "") or ""),
+            "token_file": str(settings.get("token_file", current.get("token_file", "")) or "") if isinstance(settings, dict) else str(current.get("token_file", "") or ""),
+            "service_account_file": str(settings.get("service_account_file", current.get("service_account_file", "")) or "") if isinstance(settings, dict) else str(current.get("service_account_file", "") or ""),
+            "nonwork_calendar_id": str(settings.get("nonwork_calendar_id", current.get("nonwork_calendar_id", "")) or "") if isinstance(settings, dict) else str(current.get("nonwork_calendar_id", "") or ""),
+        }
+
+    _update_ui(mutate)
+
+
+def load_google_calendar_sync_settings() -> dict[str, Any]:
+    ui = _load_ui()
+    raw = ui.get("google_calendar_sync", {})
+    if not isinstance(raw, dict):
+        return {
+            "enabled": False,
+            "write": False,
+            "client_secret_file": "",
+            "token_file": "",
+            "service_account_file": "",
+            "nonwork_calendar_id": "",
+        }
+    return {
+        "enabled": bool(raw.get("enabled")),
+        "write": bool(raw.get("write")),
+        "client_secret_file": str(raw.get("client_secret_file") or ""),
+        "token_file": str(raw.get("token_file") or ""),
+        "service_account_file": str(raw.get("service_account_file") or ""),
+        "nonwork_calendar_id": str(raw.get("nonwork_calendar_id") or ""),
+    }
+
+
 def save_menu_order(order: dict[str, list[str]]) -> None:
     clean: dict[str, list[str]] = {}
-    for group in ("top", "config", "maint"):
+    groups = list(dict.fromkeys(["top", "config", "maint", "reports", *[str(k) for k in order.keys() if str(k)]])) if isinstance(order, dict) else ["top", "config", "maint", "reports"]
+    for group in groups:
         values = order.get(group) if isinstance(order, dict) else None
         clean[group] = [str(v) for v in values if str(v)] if isinstance(values, list) else []
     _update_ui(lambda ui: ui.update({"menu_order": clean}))
@@ -445,7 +537,9 @@ def load_menu_order() -> dict[str, list[str]]:
     if not isinstance(raw, dict):
         return _default_ui()["menu_order"]
     out: dict[str, list[str]] = {}
-    for group, defaults in _default_ui()["menu_order"].items():
+    groups = list(dict.fromkeys([*_default_ui()["menu_order"].keys(), *[str(k) for k in raw.keys() if str(k)]]))
+    for group in groups:
+        defaults = _default_ui()["menu_order"].get(group, [])
         values = raw.get(group)
         out[group] = [str(v) for v in values if str(v)] if isinstance(values, list) else list(defaults)
     return out
@@ -491,7 +585,7 @@ def save_menu_tree_open(open_state: dict[str, bool]) -> None:
         if not isinstance(current, dict):
             current = dict(_default_ui()["menu_tree_open"])
         if isinstance(open_state, dict):
-            for key in ("config", "maint"):
+            for key in list(dict.fromkeys(["config", "maint", "reports", *[str(k) for k in open_state.keys() if str(k)]])):
                 if key in open_state:
                     current[key] = bool(open_state[key])
         ui["menu_tree_open"] = current
@@ -505,10 +599,16 @@ def load_menu_tree_open() -> dict[str, bool]:
     defaults = _default_ui()["menu_tree_open"]
     if not isinstance(raw, dict):
         return dict(defaults)
-    return {
+    out = {
         "config": bool(raw.get("config", defaults["config"])),
         "maint": bool(raw.get("maint", defaults["maint"])),
+        "reports": bool(raw.get("reports", defaults["reports"])),
     }
+    for key, value in raw.items():
+        key_s = str(key)
+        if key_s and key_s not in out:
+            out[key_s] = bool(value)
+    return out
 
 
 def save_show_past(show_past: bool) -> None:
@@ -521,14 +621,14 @@ def load_show_past() -> bool:
 
 
 def save_active_panel(panel: str) -> None:
-    value = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync"} else "planner"
+    value = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports"} else "planner"
     _update_ui(lambda ui: ui.update({"active_panel": value}))
 
 
 def load_active_panel() -> str:
     ui = _load_ui()
     panel = str(ui.get("active_panel", "planner"))
-    return panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync"} else "planner"
+    return panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports"} else "planner"
 
 
 def save_active_config_view(view: str) -> None:
