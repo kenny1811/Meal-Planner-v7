@@ -90,6 +90,7 @@ if (-not $target) {
     }
 }
 Write-Host "Target watch: $target"
+$ErrorActionPreference = "Continue"   # adb 寫 stderr 唔應該當 terminating error
 Write-Host "Installing wear APK..."
 $out = & $adbPath -s $target install -r "$apkPath" 2>&1
 $out | ForEach-Object { Write-Host $_ }
@@ -98,9 +99,9 @@ if ($LASTEXITCODE -ne 0) {
         Write-Host "Install blocked (downgrade/incompatible). Uninstalling $pkg from watch and retrying clean..."
         & $adbPath -s $target uninstall $pkg | ForEach-Object { Write-Host $_ }
         & $adbPath -s $target install "$apkPath"
-        if ($LASTEXITCODE -ne 0) { throw "Watch APK install failed after clean reinstall, exit code: $LASTEXITCODE" }
+        if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: clean reinstall failed (rc=$LASTEXITCODE)."; exit 1 }
     } else {
-        throw "Watch APK install failed, exit code: $LASTEXITCODE"
+        Write-Host "ERROR: watch install failed (rc=$LASTEXITCODE)."; exit 1
     }
 }
 Write-Host "Install complete on: $target"
