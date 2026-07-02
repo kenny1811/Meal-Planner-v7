@@ -17,7 +17,7 @@ if ($ready.Count -eq 0){ Write-Host "No adb devices."; exit 1 }
 $rows=@()
 foreach($s in $ready){
     $ch=(& $adb -s $s shell getprop ro.build.characteristics) 2>$null
-    $kind = ("$ch" -match 'watch') ? "WATCH" : "PHONE"
+    if ("$ch" -match 'watch') { $kind = "WATCH" } else { $kind = "PHONE" }
     $ms = (& $adb -s $s shell date +%s%3N) 2>$null
     $ms = "$ms".Trim()
     $human = (& $adb -s $s shell date +"%H:%M:%S.%3N") 2>$null
