@@ -116,6 +116,9 @@ class OptimizerConfig:
     replacement_search_enabled: bool = False
     auto_retry_enabled: bool = False
     relaxation_simulation_enabled: bool = False
+    # 每克偏離候選中點 (min+max)/2 之軟性成本，防止低營養密度食材（如菜）
+    # 在無實際需要時被谷到 Max。0 = 停用（完全向後相容）。
+    midpoint_pull_weight: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -268,6 +271,7 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
         replacement_search_enabled=bool(oc.get("replacement_search_enabled", False)),
         auto_retry_enabled=bool(oc.get("auto_retry_enabled", False)),
         relaxation_simulation_enabled=bool(oc.get("relaxation_simulation_enabled", False)),
+        midpoint_pull_weight=float(oc.get("midpoint_pull_weight", 0.0)),
     )
 
     return AppSettings(

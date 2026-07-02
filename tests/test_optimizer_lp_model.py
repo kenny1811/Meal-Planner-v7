@@ -1,8 +1,61 @@
 import unittest
+from dataclasses import replace
 
-from meal_planner.indicators import DayIndicatorProfile
-from meal_planner.optimizer_lp_model import _fat_cap_ratio_for_target
+from meal_planner.indicators import NUTRIENT_KEYS, DayIndicatorProfile
+from meal_planner.nutrition_catalog import NutritionEntry
+from meal_planner.optimizer_lp_model import _fat_cap_ratio_for_target, solve_day_meal_plan
 from meal_planner.settings import get_settings
+
+try:
+    import pulp  # noqa: F401
+
+    _HAS_PULP = True
+except Exception:  # pragma: no cover
+    _HAS_PULP = False
+
+
+def _filler_veggie_entry() -> NutritionEntry:
+    # 低營養密度「填充」食材：碳水少、其餘近零，Min/Max 有闊範圍。
+    nutrients = {k: 0.0 for k in NUTRIENT_KEYS}
+    nutrients["carb_g"] = 10.0
+    return NutritionEntry(
+        row_index=1,
+        paused=False,
+        category="菜",
+        name="測試菜",
+        nutrients=nutrients,
+        min_g=100.0,
+        max_g=200.0,
+        daymax_g=200.0,
+    )
+
+
+def _solve_veggie_grams(midpoint_weight: float) -> float:
+    base = get_settings()
+    settings = replace(base, optimizer=replace(base.optimizer, midpoint_pull_weight=midpoint_weight))
+    # 只有碳水一個寬鬆 RANGE 目標；脂肪比例給非約束值以滿足 fat-cap 需求。
+    cells = [""] * len(NUTRIENT_KEYS)
+    cells[NUTRIENT_KEYS.index("carb_g")] = "0-100"
+    for key in ("fat_total_g", "fat_sat_g", "fat_trans_g"):
+        cells[NUTRIENT_KEYS.index(key)] = "<50% kcal"
+    indicators = DayIndicatorProfile.from_row_cells(cells)
+
+    entry = _filler_veggie_entry()
+    meal_pattern_parts = {"晚餐": [{"alternatives": ["菜"], "raw": "測試菜", "name": "測試菜"}]}
+    candidates_by_item = {("晚餐", 0): [entry]}
+
+    art = solve_day_meal_plan(
+        settings=settings,
+        indicators=indicators,
+        meal_pattern_parts=meal_pattern_parts,
+        candidates_by_item=candidates_by_item,
+        visible_meals={"晚餐"},
+        rice_token="米",
+        day_offset=0,
+    )
+    assert art is not None
+    item = art.meal_items["晚餐"][0]
+    return float(item["grams"])
 
 
 class OptimizerLpModelTests(unittest.TestCase):
@@ -30,6 +83,17 @@ class OptimizerLpModelTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "reading config is not allowed"):
             _fat_cap_ratio_for_target("fat_total_g", indicators, settings)
+
+    @unittest.skipUnless(_HAS_PULP, "pulp solver not installed")
+    def test_midpoint_pull_reduces_low_density_filler_grams(self):
+        # 冇中點回拉時，hi_pull 會把填充菜谷到 Max(200g)。
+        grams_off = _solve_veggie_grams(0.0)
+        self.assertEqual(grams_off, 200.0)
+
+        # 開啟中點回拉後，菜應離開 Max 向中點(150g)回拉。
+        grams_on = _solve_veggie_grams(0.2)
+        self.assertLess(grams_on, grams_off)
+        self.assertLessEqual(grams_on, 150.0)
 
 
 if __name__ == "__main__":

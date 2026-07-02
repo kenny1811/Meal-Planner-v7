@@ -120,6 +120,11 @@ def solve_day_meal_plan(
         by_item.setdefault(key, []).append(c)
         by_row.setdefault(c.entry.row_index, []).append(c)
 
+    # 中點回拉：對每克超出／低於 (min+max)/2 之偏離加輕微成本，令 solver 唔會
+    # 純粹因為「冇成本」就把低營養密度食材谷到 Max；有實際營養需要時硬約束
+    # (hard_weight=1000) 仍會壓過呢個軟成本。
+    midpoint_weight = max(0.0, float(settings.optimizer.midpoint_pull_weight))
+    midpoint_terms = []
     for key, cs in by_item.items():
         meal, item_idx = key
         for local_idx, c in enumerate(cs):
@@ -128,6 +133,12 @@ def solve_day_meal_plan(
             g[vkey] = pulp.LpVariable(f"g_{meal}_{item_idx}_{local_idx}", lowBound=0, cat="Integer")
             model += g[vkey] >= c.min_g * y[vkey]
             model += g[vkey] <= c.max_g * y[vkey]
+            if midpoint_weight > 0.0 and c.max_g > c.min_g:
+                mid = (float(c.min_g) + float(c.max_g)) / 2.0
+                dev = pulp.LpVariable(f"middev_{meal}_{item_idx}_{local_idx}", lowBound=0, cat="Continuous")
+                model += dev >= g[vkey] - mid * y[vkey]
+                model += dev >= mid * y[vkey] - g[vkey]
+                midpoint_terms.append(midpoint_weight * dev)
 
     for meal, idx, item in active_items:
         cs = by_item.get((meal, idx), [])
@@ -280,7 +291,9 @@ def solve_day_meal_plan(
             jitter = (zlib.crc32(token.encode("utf-8")) % 997) * 1e-7
             tie_break_terms.append((base_pref + jitter) * y[(meal, idx, j)])
 
-    model += pulp.lpSum(penalties + hi_pull_terms + duplicate_terms + tie_break_terms + reroll_bonus_terms)
+    model += pulp.lpSum(
+        penalties + hi_pull_terms + midpoint_terms + duplicate_terms + tie_break_terms + reroll_bonus_terms
+    )
 
     status = "not_solved"
     try:

@@ -77,6 +77,10 @@ optimizer:
   replacement_search_enabled: false
   auto_retry_enabled: false
   relaxation_simulation_enabled: false
+  # 中點回拉：每克偏離候選 (Min+Max)/2 之軟性成本，防止低營養密度食材（如菜）
+  # 在無實際需要時被谷到 Max。實測 0.1–0.2 可把菜由 Max 拉回中點且不觸發任何
+  # 營養紅旗；≥0.5 會開始扭曲蛋白／油／種籽份量。0 = 停用。
+  midpoint_pull_weight: 0.15
   weights:
     kcal: 1.0
     protein: 1.0
