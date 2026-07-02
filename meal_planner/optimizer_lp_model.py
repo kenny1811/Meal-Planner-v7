@@ -239,13 +239,12 @@ def solve_day_meal_plan(
             model += h_gap >= float(p.hi) - t
             hi_pull_terms.append(soft_weight * w * h_gap)
         elif p.kind == IndicatorKind.UPPER_ONLY and p.hi is not None:
+            # UPPER_ONLY 係健康上限（如糖／鈉／膽固醇），淨係唔可超標，
+            # 唔應該好似 RANGE 咁再谷向 hi，否則會逼食材（如菜）谷到頂用量。
             s_high = pulp.LpVariable(f"s_high_{key}", lowBound=0, cat="Continuous")
             model += t - s_high <= float(p.hi)
             penalties.append(hard_weight * w * s_high)
             slack_vars.append((key, "high", s_high))
-            h_gap = pulp.LpVariable(f"hgap_{key}", lowBound=0, cat="Continuous")
-            model += h_gap >= float(p.hi) - t
-            hi_pull_terms.append(soft_weight * w * h_gap)
         elif p.kind == IndicatorKind.LOWER_ONLY and p.lo is not None:
             s_low = pulp.LpVariable(f"s_low_{key}", lowBound=0, cat="Continuous")
             model += t + s_low >= float(p.lo)
