@@ -348,8 +348,9 @@
     function visibleDays() {
       const days = Array.isArray(memoryPayload.days) ? memoryPayload.days : [];
       if (showPast) return sortDaysByDate(days);
-      const today = todayIsoHK();
-      const filtered = days.filter((d) => String(d.date || "") >= today);
+      // 由「今日-1」起計，容許凌晨後（過咗 24:00）仍睇到昨日晚餐。
+      const cutoff = isoFromYmd(ymdAddDays(ymdNow(), -1));
+      const filtered = days.filter((d) => String(d.date || "") >= cutoff);
       return sortDaysByDate(filtered.length || !days.length ? filtered : days);
     }
 
