@@ -169,6 +169,24 @@ def solve_day_meal_plan(
                 if allowed:
                     model += pulp.lpSum(allowed) == 1
 
+    # 米類跨餐平均分配：對每對米餐次之克數差異加軟成本。營養目標係全日總量，
+    # 米點分餐都唔影響達標，所以呢個近乎零代價就令米平均落各餐（例如 195/195
+    # 而唔係 255/135）。硬約束（如卡路里下限）照樣壓過呢個軟成本。
+    rice_balance_weight = max(0.0, float(settings.optimizer.rice_balance_weight))
+    rice_balance_terms = []
+    if rice_balance_weight > 0.0 and len(rice_item_keys) >= 2:
+        rice_meal_grams = {
+            (meal, idx): pulp.lpSum(g[(meal, idx, j)] for j in range(len(by_item.get((meal, idx), []))))
+            for (meal, idx) in rice_item_keys
+        }
+        rk = list(rice_meal_grams.keys())
+        for a in range(len(rk)):
+            for b in range(a + 1, len(rk)):
+                d = pulp.LpVariable(f"rice_bal_{a}_{b}", lowBound=0, cat="Continuous")
+                model += d >= rice_meal_grams[rk[a]] - rice_meal_grams[rk[b]]
+                model += d >= rice_meal_grams[rk[b]] - rice_meal_grams[rk[a]]
+                rice_balance_terms.append(rice_balance_weight * d)
+
     # 午餐/晚餐避免重覆同一食材列。米類另有「同日同款」規則，所以不計入重覆 penalty。
     duplicate_terms = []
     lunch_dinner_rows = {
@@ -292,7 +310,8 @@ def solve_day_meal_plan(
             tie_break_terms.append((base_pref + jitter) * y[(meal, idx, j)])
 
     model += pulp.lpSum(
-        penalties + hi_pull_terms + midpoint_terms + duplicate_terms + tie_break_terms + reroll_bonus_terms
+        penalties + hi_pull_terms + midpoint_terms + rice_balance_terms
+        + duplicate_terms + tie_break_terms + reroll_bonus_terms
     )
 
     status = "not_solved"

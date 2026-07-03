@@ -119,6 +119,9 @@ class OptimizerConfig:
     # 每克偏離候選中點 (min+max)/2 之軟性成本，防止低營養密度食材（如菜）
     # 在無實際需要時被谷到 Max。0 = 停用（完全向後相容）。
     midpoint_pull_weight: float = 0.0
+    # 米類跨餐平均分配之軟性成本（每克餐間差異）。營養目標係全日總量，
+    # 米點分餐都唔影響達標，所以呢個令米平均落各餐而零代價。0 = 停用。
+    rice_balance_weight: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -272,6 +275,7 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
         auto_retry_enabled=bool(oc.get("auto_retry_enabled", False)),
         relaxation_simulation_enabled=bool(oc.get("relaxation_simulation_enabled", False)),
         midpoint_pull_weight=float(oc.get("midpoint_pull_weight", 0.0)),
+        rice_balance_weight=float(oc.get("rice_balance_weight", 0.0)),
     )
 
     return AppSettings(
