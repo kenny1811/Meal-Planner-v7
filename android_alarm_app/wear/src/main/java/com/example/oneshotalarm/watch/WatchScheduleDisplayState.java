@@ -11,6 +11,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 
@@ -85,7 +86,7 @@ final class WatchScheduleDisplayState {
         if (label.isEmpty()) {
             label = "鬧鐘";
         }
-        editor.putString(prev ? AlarmScheduleState.KEY_PREV_TIME : AlarmScheduleState.KEY_NEXT_TIME, format("HH:mm", at))
+        editor.putString(prev ? AlarmScheduleState.KEY_PREV_TIME : AlarmScheduleState.KEY_NEXT_TIME, format30(at))
                 .putString(prev ? AlarmScheduleState.KEY_PREV_DATE : AlarmScheduleState.KEY_NEXT_DATE, format("dd/MM EEE", at))
                 .putString(prev ? AlarmScheduleState.KEY_PREV_LABEL : AlarmScheduleState.KEY_NEXT_LABEL, label)
                 .putLong(prev ? AlarmScheduleState.KEY_PREV_AT : AlarmScheduleState.KEY_NEXT_AT, at);
@@ -93,6 +94,19 @@ final class WatchScheduleDisplayState {
 
     private static String format(String pattern, long at) {
         return new SimpleDateFormat(pattern, Locale.getDefault()).format(new Date(at));
+    }
+
+    // 30-hour clock: the shift day rolls over at 06:00 (matching the watch face date),
+    // so 00:00–05:59 is shown as 24:00–29:59.
+    private static String format30(long at) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(at);
+        int hour = cal.get(Calendar.HOUR_OF_DAY);
+        int minute = cal.get(Calendar.MINUTE);
+        if (hour < 6) {
+            hour += 24;
+        }
+        return String.format(Locale.US, "%02d:%02d", hour, minute);
     }
 
     private static JSONArray parseRows(String raw) {
