@@ -54,6 +54,7 @@
       meal_times: "Meal Times",
       restaurant: "Restaurants",
       schedule_grid: "Schedule Grid",
+      mtr_doors: "地鐵車門",
     };
     const MENU_TREE_KEYS = ["config", "maint", "reports"];
     const MENU_STATIC_LEAF_KEYS = ["planner", "shopping", "alarm_sync", "target", "catalog", "details", "shift_code_analysis"];

@@ -25,7 +25,23 @@ MAINTENANCE_SHEETS: tuple[tuple[str, str], ...] = (
     ("meal_patterns", "Pattern"),
     ("restaurant", "餐廳選擇"),
     ("schedule_grid", "行位表"),
+    ("mtr_doors", "地鐵車門"),
 )
+
+
+# 地鐵車門：更碼對應由荃灣站上車嘅車卡/車門同轉車資料（門位留空待填）。
+MTR_DOORS_DEFAULT_ROWS: list[list[str]] = [
+    ["更碼", "目的地", "上車卡門", "轉車", "轉車卡門", "落車出口"],
+    ["Ele*", "圓方（九龍站）", "", "荔景轉東涌綫（往香港）", "", "九龍站 圓方連接"],
+    ["IFC*", "IFC（香港站）", "", "荔景轉東涌綫（往香港）", "", "香港站 IFC 連接"],
+    ["Lecole", "", "", "直達", "", ""],
+    ["Lecole Event", "", "", "直達", "", ""],
+    ["Pen*", "半島酒店（尖沙咀）", "", "直達", "", "尖沙咀 E"],
+    ["VLG", "利園（銅鑼灣）", "", "金鐘轉港島綫（往柴灣）", "", "銅鑼灣 F"],
+    ["VOC", "海港城／海洋中心（尖沙咀）", "", "直達", "", "尖沙咀 A1"],
+    ["VPP", "太古廣場（金鐘）", "", "直達", "", "金鐘 F"],
+    ["TS*", "時代廣場（銅鑼灣）", "", "金鐘轉港島綫（往柴灣）", "", "銅鑼灣 A"],
+]
 
 class MaintenanceDatabaseError(RuntimeError):
     """Maintenance data is unavailable and cannot be bootstrapped."""
@@ -80,6 +96,7 @@ def _sheet_name_for_key(settings: AppSettings, sheet_key: str) -> str:
         "meal_patterns": settings.sheets.meal_times,
         "restaurant": settings.sheets.restaurant,
         "schedule_grid": settings.sheets.schedule_grid,
+        "mtr_doors": "地鐵車門",
     }
     if sheet_key not in mapping:
         raise KeyError(sheet_key)
@@ -111,6 +128,11 @@ def _read_workbook_sheet_rows(settings: AppSettings, wb: Workbook, sheet_key: st
             get_sheet(wb, _sheet_name_for_key(settings, sheet_key))
         except Exception:
             return [["日期", "起身時間", "備註"]]
+    if sheet_key == "mtr_doors":
+        try:
+            get_sheet(wb, _sheet_name_for_key(settings, sheet_key))
+        except Exception:
+            return [list(row) for row in MTR_DOORS_DEFAULT_ROWS]
     sheet_name = _sheet_name_for_key(settings, sheet_key)
     ws = get_sheet(wb, sheet_name)
     max_row = int(ws.max_row or 0)
@@ -343,6 +365,9 @@ def load_sheet_rows(
     if not has_rows:
         if sheet_key == "wake_alarms" and wb is None:
             save_sheet_rows(sheet_key, [["日期", "起身時間", "備註"]], settings)
+            has_rows = True
+        if sheet_key == "mtr_doors" and wb is None:
+            save_sheet_rows(sheet_key, [list(row) for row in MTR_DOORS_DEFAULT_ROWS], settings)
             has_rows = True
         if not has_rows and wb is None:
             raise MaintenanceDatabaseError(

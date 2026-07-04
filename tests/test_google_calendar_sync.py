@@ -43,6 +43,28 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
         self.assertTrue(plan.leave_events[0].all_day)
         self.assertEqual(plan.leave_events[0].summary, "SH08")
 
+    def test_mtr_door_rows_set_work_event_location(self):
+        roster_rows = [["2026年6月 1 TSB 2 Pen 3 Zzz"]]
+        payroll_rows = [
+            ["更碼", "開工", "收工"],
+            ["TS*", "09:00", "18:00"],
+            ["Pen*", "10:00", "19:00"],
+            ["Zzz", "08:00", "17:00"],
+        ]
+        mtr_door_rows = [
+            ["更碼", "目的地", "上車卡門", "轉車", "轉車卡門", "落車出口"],
+            ["Pen*", "半島", "2-3", "直達", "", "尖沙咀 E"],
+            ["TS*", "時代廣場", "2-3", "金鐘轉港島綫", "8-4", "銅鑼灣 A"],
+        ]
+
+        plan = build_roster_calendar_plan(roster_rows, payroll_rows, None, None, mtr_door_rows)
+
+        by_code = {event.roster_code: event for event in plan.work_events}
+        self.assertEqual(by_code["TSB"].location, "2-3 8-4")
+        self.assertEqual(by_code["Pen"].location, "2-3")
+        self.assertEqual(by_code["Zzz"].location, "")
+        self.assertEqual(event_body(by_code["TSB"], "Asia/Hong_Kong")["location"], "2-3 8-4")
+
     def test_non_workday_events_are_all_day_leave_calendar_events(self):
         plan = build_roster_calendar_plan(
             [["2026年6月 1 WL21 2 SB"]],
@@ -177,6 +199,7 @@ class GoogleCalendarSyncRuntimeTests(unittest.TestCase):
             "payroll_times": {"rows": [["更碼", "開工", "收工"], ["EleB", "10:45", "21:00"]]},
             "overtime": {"rows": [["日期", "開工", "收工", "備註"]]},
             "wake_alarms": {"rows": [["日期", "起身時間", "備註"]]},
+            "mtr_doors": {"rows": [["更碼", "目的地", "上車卡門", "轉車", "轉車卡門", "落車出口"]]},
         }
 
         with patch("meal_planner.google_calendar_sync.load_sheet_rows", side_effect=lambda key, settings: sheets[key]):

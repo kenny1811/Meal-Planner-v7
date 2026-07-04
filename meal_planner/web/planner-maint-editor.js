@@ -757,7 +757,10 @@
           && rIdx < scheduleGridNewShiftStartIndex + scheduleGridNewShiftCount
           ? ` data-schedule-new-shift-batch="${esc(scheduleGridNewShiftBatchId)}"`
           : "";
-        return `<tr data-maint-row-index="${rIdx}"${batchAttr}>${maintRowHtml(row, rIdx, cols, formKey, isShiftCodeCol)}</tr>`;
+        const headerRowClass = maintSheetPayload.sheet_key === "mtr_doors" && rIdx === 0
+          ? ' class="maint-blue-header"'
+          : "";
+        return `<tr data-maint-row-index="${rIdx}"${headerRowClass}${batchAttr}>${maintRowHtml(row, rIdx, cols, formKey, isShiftCodeCol)}</tr>`;
       }).join("");
       editor.innerHTML = `<div class="maint-sheet-title" style="display:flex;align-items:center;"><span>${esc(title)}</span>${filterHtml}</div>
         <table class="maint-table" data-form-table>
@@ -1033,6 +1036,18 @@
       }
     }
 
+    function sortMtrDoorsRows(rows) {
+      if (!Array.isArray(rows) || rows.length < 2 || !Array.isArray(rows[0])) return rows;
+      const header = rows[0];
+      let codeIdx = header.findIndex((cell) => String(cell || "").trim() === "更碼");
+      if (codeIdx < 0) codeIdx = 0;
+      const body = rows.slice(1).filter((row) => Array.isArray(row));
+      body.sort((a, b) =>
+        String(a[codeIdx] ?? "").trim().toLowerCase().localeCompare(String(b[codeIdx] ?? "").trim().toLowerCase())
+      );
+      return [header, ...body];
+    }
+
     async function openMaintSheet(sheetKey, openTree = true) {
       if (!sheetKey) return;
       if (sheetKey !== activeMaintSheetKey && !(await resolveUnsavedBeforeLeaving())) return;
@@ -1050,6 +1065,9 @@
         if (!Array.isArray(maintSheetPayload.rows)) maintSheetPayload.rows = [];
         if (sheetKey === "schedule_grid") {
           maintSheetPayload.rows = prepareScheduleGridRowsForDisplay(maintSheetPayload.rows);
+        }
+        if (sheetKey === "mtr_doors") {
+          maintSheetPayload.rows = sortMtrDoorsRows(maintSheetPayload.rows);
         }
         if (sheetKey === "roster") {
           const [payroll, overtime, wakeAlarms, holidays, medical] = await Promise.all([

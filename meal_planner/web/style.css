@@ -699,6 +699,10 @@
     table.maint-table td input[type="text"][data-maint-keyboard-selected="1"] {
       caret-color: transparent;
     }
+    table.maint-table tr.maint-blue-header td {
+      background: var(--foot);
+      font-weight: 600;
+    }
     table.maint-table td.maint-money-cell,
     table.maint-table td.maint-money-cell textarea,
     table.maint-table td.maint-money-cell input[type="text"] {
