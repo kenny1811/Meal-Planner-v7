@@ -400,9 +400,19 @@
     }
     .planner-drag-handle,
     .table-drag-handle {
-      cursor: default;
+      cursor: ew-resize;
       user-select: none;
       width: max-content;
+    }
+    /* 需求2：hover「餐單」標題（拖動左右移餐單嘅 handle）時，喺標題後顯示 ↔ 符號。 */
+    .planner-drag-handle::after {
+      content: " \2194";
+      color: #1d4ed8;
+      font-weight: 700;
+      opacity: 0;
+    }
+    .planner-drag-handle:hover::after {
+      opacity: 1;
     }
     .top {
       display: flex;
