@@ -406,6 +406,11 @@
       user-select: none;
       width: max-content;
     }
+    /* 整條標題行都可以拖，唔淨係「餐單」兩隻字。 */
+    .planner-drag-handle {
+      width: auto;
+      display: block;
+    }
     /* 拖動期間：整頁鎖住 ↔ 游標，就算移到內容欄／其他位都保持，直到放手。 */
     body.planner-offset-dragging,
     body.planner-offset-dragging * {
