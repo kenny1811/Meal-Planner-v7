@@ -369,6 +369,13 @@
       min-height: 0;
       overflow: auto;
     }
+    /* 需求1：planner 改為 flex column 且自身唔捲，捲動交俾 .panel-bottom，
+       令控制列 + 表頭固定。（shopping-panel 維持 overflow:auto 不變） */
+    #planner-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
     .clock-top-right {
       position: fixed;
       top: 8px;
@@ -1700,35 +1707,51 @@
       cursor: col-resize;
       user-select: none;
     }
+    /* 固定表頭（需求1）：由 #planner-panel 一路 flex 落 .panel-bottom，
+       令控制列 + 表頭企定，只有 .panel-bottom（日餐）內部捲動。 */
     #out {
       width: 100%;
-      height: auto;
-      overflow: visible;
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     .day-wrap {
       margin-bottom: 6px;
       background: #fff;
       border: 1px solid var(--grid);
-      height: auto;
-      overflow: auto;
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     .period-panels {
       display: flex;
       flex-direction: column;
-      height: auto;
+      flex: 1 1 auto;
       min-height: 0;
     }
     .panel-top {
       flex: 0 0 auto;
+      /* overflow-x hidden：橫向由 JS 同 .panel-bottom sync（唔顯示 scrollbar）；
+         overflow-y hidden：表頭固定，唔會垂直捲。 */
       overflow-x: hidden;
-      overflow-y: auto;
+      overflow-y: hidden;
       border-bottom: 1px solid var(--grid);
       box-sizing: border-box;
+      background: #fff;
     }
     .panel-bottom {
-      flex: 0 0 auto;
+      /* 唯一捲動區：只捲日餐，表頭同控制列企定。 */
+      flex: 1 1 auto;
       min-height: 0;
-      overflow: visible;
+      overflow: auto;
+    }
+    /* 需求2：餐單 rows 上（內容欄以外）hover 顯示左右箭咀 ↔，示意可左右拖動移餐單。 */
+    .panel-bottom td:not(.col-content) {
+      cursor: ew-resize;
     }
     table.sheet {
       border-collapse: collapse;
