@@ -406,6 +406,12 @@
       user-select: none;
       width: max-content;
     }
+    /* 拖動期間：整頁鎖住 ↔ 游標，就算移到內容欄／其他位都保持，直到放手。 */
+    body.planner-offset-dragging,
+    body.planner-offset-dragging * {
+      cursor: ew-resize !important;
+      user-select: none !important;
+    }
     .top {
       display: flex;
       flex-wrap: wrap;

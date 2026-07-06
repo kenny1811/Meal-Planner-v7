@@ -441,6 +441,8 @@
       ev.preventDefault();
       const startX = ev.clientX;
       const startOffset = plannerOffsetPx();
+      // 拖動期間鎖住整頁 ↔ 游標（就算移到內容欄／其他位都保持），放手先解除。
+      document.body.classList.add("planner-offset-dragging");
       const onMove = (mv) => {
         formColumnWidths.planner_offset = startOffset + (mv.clientX - startX);
         applyPlannerOffset();
@@ -448,6 +450,7 @@
       const onUp = () => {
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
+        document.body.classList.remove("planner-offset-dragging");
         persistColumnWidths();
       };
       window.addEventListener("mousemove", onMove);
