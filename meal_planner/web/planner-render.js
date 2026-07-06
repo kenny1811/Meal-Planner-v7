@@ -462,7 +462,7 @@
       if (handle && handle.dataset.plannerDragBound !== "1") {
         handle.dataset.plannerDragBound = "1";
         handle.classList.add("planner-drag-handle");
-        handle.title = "左右拖動可移動餐單位置";
+        handle.title = "Drag left or right to move planner";
         handle.addEventListener("mousedown", beginPlannerOffsetDrag);
         handle.addEventListener("dblclick", () => {
           formColumnWidths.planner_offset = 0;
