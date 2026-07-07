@@ -1762,11 +1762,6 @@
       min-height: 0;
       overflow: auto;
     }
-    /* 需求2：餐單 rows 上（內容欄以外）hover 令滑鼠變 ↔ 游標，
-       示意可左右拖動移餐單（游標本身就係 ↔，唔另外畫符號）。 */
-    .panel-bottom td:not(.col-content) {
-      cursor: ew-resize;
-    }
     table.sheet {
       border-collapse: collapse;
       width: auto;

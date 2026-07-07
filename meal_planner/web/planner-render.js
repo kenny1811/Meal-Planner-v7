@@ -457,10 +457,8 @@
       window.addEventListener("mouseup", onUp);
     }
 
-    // rows 上呢啲位置唔當拖動（留返俾編輯／點擊／揀欄闊）。
-    const PLANNER_NO_DRAG = ".col-content, input, textarea, button, select, a, [contenteditable], .col-resizer";
-
     function attachPlannerDrag() {
+      // 拖動 handle 只係「餐單」標題行；餐次 rows 留返睇／編輯數據，唔當拖動。
       const handle = document.querySelector("#planner-panel h1");
       if (handle && handle.dataset.plannerDragBound !== "1") {
         handle.dataset.plannerDragBound = "1";
@@ -468,25 +466,6 @@
         handle.title = "Drag left or right to move planner";
         handle.addEventListener("mousedown", beginPlannerOffsetDrag);
         handle.addEventListener("dblclick", () => {
-          formColumnWidths.planner_offset = 0;
-          applyPlannerOffset();
-          persistColumnWidths();
-        });
-      }
-
-      // 需求2：喺餐單 rows（除內容欄／輸入元素外）hover 顯示 ↔，拖動即左右移餐單。
-      const out = document.getElementById("out");
-      if (out && out.dataset.plannerRowDragBound !== "1") {
-        out.dataset.plannerRowDragBound = "1";
-        out.addEventListener("mousedown", (ev) => {
-          if (ev.button != null && ev.button !== 0) return;
-          if (ev.target.closest(PLANNER_NO_DRAG)) return; // 讓正常編輯／點擊
-          if (!ev.target.closest(".panel-bottom")) return; // 只喺日餐 rows 生效
-          beginPlannerOffsetDrag(ev);
-        });
-        out.addEventListener("dblclick", (ev) => {
-          if (ev.target.closest(PLANNER_NO_DRAG)) return;
-          if (!ev.target.closest(".panel-bottom")) return;
           formColumnWidths.planner_offset = 0;
           applyPlannerOffset();
           persistColumnWidths();
