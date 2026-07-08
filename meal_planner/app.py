@@ -1337,7 +1337,6 @@ def web_asset(asset_name: str) -> FileResponse:
         "planner-config.js",
         "planner-render.js",
         "planner-events.js",
-        "mobile.html",
         "favicon.svg",
     }:
         raise HTTPException(status_code=404, detail="Cannot find web asset")
