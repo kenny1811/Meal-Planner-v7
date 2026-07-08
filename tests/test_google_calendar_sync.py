@@ -2,7 +2,8 @@ import os
 import tempfile
 import unittest
 from datetime import date, datetime
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -15,6 +16,7 @@ from meal_planner.google_calendar_sync import (
     check_nonwork_calendar_consistency,
     config_from_env,
     event_body,
+    google_calendar_auth_status,
     sync_roster_to_google_calendar,
     _upsert_events,
 )
@@ -764,6 +766,67 @@ class GoogleCalendarSyncRuntimeTests(unittest.TestCase):
 
         self.assertEqual(counts["deleted"], 1)
         self.assertEqual(service.events_obj.calls, [("delete", "old-alarm-id")])
+
+
+class GoogleCalendarAuthStatusTests(unittest.TestCase):
+    def _oauth_config(self, tmp: str) -> GoogleCalendarSyncConfig:
+        client = Path(tmp) / "client.json"
+        client.write_text("{}", encoding="utf-8")
+        token = Path(tmp) / "token.json"
+        token.write_text("{}", encoding="utf-8")
+        return GoogleCalendarSyncConfig(
+            enabled=True,
+            dry_run=False,
+            time_zone="Asia/Hong_Kong",
+            account_email="",
+            work_calendar_id="",
+            alarm_calendar_id="",
+            leave_calendar_id="",
+            backup_dir=Path(tmp),
+            service_account_file=None,
+            oauth_client_file=client,
+            oauth_token_file=token,
+        )
+
+    def test_auth_status_reports_revoked_when_refresh_fails(self):
+        settings = get_settings()
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._oauth_config(tmp)
+            fake = MagicMock()
+            fake.valid = False
+            fake.expired = True
+            fake.refresh_token = "x"
+            fake.refresh.side_effect = Exception("invalid_grant: Token has been expired or revoked.")
+            with patch(
+                "google.oauth2.credentials.Credentials.from_authorized_user_file",
+                return_value=fake,
+            ):
+                res = google_calendar_auth_status(settings, config)
+        self.assertFalse(res["authenticated"])
+        self.assertEqual(res["status"], "revoked")
+
+    def test_auth_status_connected_when_creds_valid(self):
+        settings = get_settings()
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._oauth_config(tmp)
+            fake = MagicMock()
+            fake.valid = True
+            with patch(
+                "google.oauth2.credentials.Credentials.from_authorized_user_file",
+                return_value=fake,
+            ):
+                res = google_calendar_auth_status(settings, config)
+        self.assertTrue(res["authenticated"])
+        self.assertEqual(res["status"], "connected")
+
+    def test_auth_status_missing_token_file(self):
+        settings = get_settings()
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._oauth_config(tmp)
+            config.oauth_token_file.unlink()  # 冇 token 檔
+            res = google_calendar_auth_status(settings, config)
+        self.assertFalse(res["authenticated"])
+        self.assertEqual(res["status"], "missing_token")
 
 
 if __name__ == "__main__":

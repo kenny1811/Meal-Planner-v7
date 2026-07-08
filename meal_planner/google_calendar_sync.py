@@ -445,11 +445,39 @@ def google_calendar_auth_status(settings: AppSettings, config: GoogleCalendarSyn
             "client_secret_file": str(config.oauth_client_file),
             "token_file": str(config.oauth_token_file) if config.oauth_token_file else "",
         }
-    token_exists = bool(config.oauth_token_file and config.oauth_token_file.is_file())
+    if not (config.oauth_token_file and config.oauth_token_file.is_file()):
+        return {
+            "authenticated": False,
+            "auth_type": "oauth",
+            "status": "missing_token",
+            "client_secret_file": str(config.oauth_client_file),
+            "token_file": str(config.oauth_token_file) if config.oauth_token_file else "",
+        }
+    # 真正驗證 token（唔止查檔案存在）：load 個 token，如已過期就試 refresh；
+    # refresh 失敗（invalid_grant／被撤銷）就當「未登入」，令 UI 顯示「請登入」。
+    authed = False
+    status = "invalid_token"
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+
+        scopes = ["https://www.googleapis.com/auth/calendar"]
+        creds = Credentials.from_authorized_user_file(str(config.oauth_token_file), scopes)
+        if creds.valid:
+            authed, status = True, "connected"
+        elif creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                config.oauth_token_file.write_text(creds.to_json(), encoding="utf-8")
+                authed, status = True, "connected"
+            except Exception:
+                status = "revoked"
+    except Exception:
+        status = "invalid_token"
     return {
-        "authenticated": token_exists,
+        "authenticated": authed,
         "auth_type": "oauth",
-        "status": "connected" if token_exists else "missing_token",
+        "status": status,
         "client_secret_file": str(config.oauth_client_file),
         "token_file": str(config.oauth_token_file) if config.oauth_token_file else "",
     }
