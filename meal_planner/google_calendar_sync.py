@@ -390,10 +390,22 @@ def _load_oauth_credentials(client_file: Path, token_file: Path | None) -> Any:
     if token_file and token_file.is_file():
         creds = Credentials.from_authorized_user_file(str(token_file), scopes)
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+        try:
+            creds.refresh(Request())
+        except Exception:
+            # refresh token 已過期／被撤銷（invalid_grant）：放棄舊 token，
+            # 掉走個死檔，改行完整重新授權（下面 run_local_server），
+            # 否則呢個 exception 會令連「重新登入」都失敗。
+            creds = None
+            if token_file and token_file.is_file():
+                try:
+                    token_file.unlink()
+                except OSError:
+                    pass
     if not creds or not creds.valid:
         flow = InstalledAppFlow.from_client_secrets_file(str(client_file), scopes)
-        creds = flow.run_local_server(port=0)
+        # prompt="consent" 確保重新授權時攞返新 refresh token（唔止 access token）。
+        creds = flow.run_local_server(port=0, prompt="consent")
         if token_file:
             token_file.parent.mkdir(parents=True, exist_ok=True)
             token_file.write_text(creds.to_json(), encoding="utf-8")
