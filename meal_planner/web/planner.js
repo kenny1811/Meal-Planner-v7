@@ -26,7 +26,7 @@
     let activeMaintSheetKey = null;
     let maintSheetPayload = { sheet_key: null, display_name: "", rows: [] };
     let rosterReportSources = { payroll_times: [], overtime: [], wake_alarms: [], public_holidays: [], medical_appointments: [] };
-    let googleCalendarSync = { enabled: false, write: false, client_secret_file: "", token_file: "", service_account_file: "", nonwork_calendar_id: "" };
+    let googleCalendarSync = { enabled: false, write: false, client_secret_file: "", token_file: "", service_account_file: "", nonwork_calendar_id: "", work_calendar_id: "", alarm_calendar_id: "", wake_offset_hours: 3 };
     let googleCalendarAuth = { authenticated: false, status: "" };
     let generateBusy = false;
     let plannerDefaultDateIso = "";
@@ -35,7 +35,7 @@
     let unsavedArea = "";
     let unsavedAreaKey = "";
     let menuOrder = {
-      top: ["config", "maint", "planner", "shopping", "alarm_sync"],
+      top: ["config", "maint", "planner", "shopping"],
       config: ["target", "catalog", "details"],
       maint: [],
       reports: ["shift_code_analysis"],
@@ -57,12 +57,11 @@
       mtr_doors: "地鐵車門",
     };
     const MENU_TREE_KEYS = ["config", "maint", "reports"];
-    const MENU_STATIC_LEAF_KEYS = ["planner", "shopping", "alarm_sync", "target", "catalog", "details", "shift_code_analysis"];
-    const REMOVED_MENU_KEYS = new Set(["runtime_import", "diagnostics"]);
+    const MENU_STATIC_LEAF_KEYS = ["planner", "shopping", "target", "catalog", "details", "shift_code_analysis"];
+    const REMOVED_MENU_KEYS = new Set(["runtime_import", "diagnostics", "wake_alarms", "alarm_sync"]);
     const MENU_DEFAULT_GROUPS = {
       planner: "top",
       shopping: "top",
-      alarm_sync: "top",
       target: "config",
       catalog: "config",
       details: "config",
@@ -686,7 +685,6 @@
       const maint = document.getElementById("maint-panel");
       const reports = document.getElementById("reports-panel");
       const shopping = document.getElementById("shopping-panel");
-      const alarmSync = document.getElementById("alarm-sync-panel");
       const mPlanner = document.getElementById("menu-planner");
       const mConfig = document.getElementById("menu-config");
       const mConfigTarget = document.getElementById("menu-config-target");
@@ -696,15 +694,13 @@
       const mReports = document.getElementById("menu-reports");
       const mShiftCodeAnalysis = document.getElementById("menu-report-shift-code-analysis");
       const mShopping = document.getElementById("menu-shopping");
-      const mAlarmSync = document.getElementById("menu-alarm-sync");
       const target = panel || "planner";
-      activePanel = ["planner", "config", "maint", "shopping", "alarm_sync", "reports"].includes(target) ? target : "planner";
+      activePanel = ["planner", "config", "maint", "shopping", "reports"].includes(target) ? target : "planner";
       planner.style.display = activePanel === "planner" ? "" : "none";
       config.style.display = activePanel === "config" ? "" : "none";
       maint.style.display = activePanel === "maint" ? "" : "none";
       reports.style.display = activePanel === "reports" ? "" : "none";
       shopping.style.display = activePanel === "shopping" ? "" : "none";
-      alarmSync.style.display = activePanel === "alarm_sync" ? "" : "none";
       mPlanner.classList.toggle("active", activePanel === "planner");
       mConfig.classList.toggle("active", activePanel === "config");
       mConfigTarget.classList.remove("active");
@@ -717,7 +713,6 @@
       mReports.classList.toggle("active", activePanel === "reports");
       mShiftCodeAnalysis.classList.toggle("active", activePanel === "reports");
       mShopping.classList.toggle("active", activePanel === "shopping");
-      mAlarmSync.classList.toggle("active", activePanel === "alarm_sync");
       if (persist) persistColumnWidths();
       return true;
     }

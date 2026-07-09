@@ -2,7 +2,6 @@
       if (isRemovedMenuKey(key)) return null;
       if (key === "planner") return document.getElementById("menu-planner");
       if (key === "shopping") return document.getElementById("menu-shopping");
-      if (key === "alarm_sync") return document.getElementById("menu-alarm-sync");
       if (key === "target") return document.getElementById("menu-config-target");
       if (key === "catalog") return document.getElementById("menu-config-catalog");
       if (key === "details") return document.getElementById("menu-config-details");
@@ -68,11 +67,6 @@
       if (key === "reports") return "報表";
       if (key === "planner") return "Menu Planner";
       if (key === "shopping") return "Shopping List";
-      if (key === "alarm_sync") {
-        const staticLabel = staticMenuDefaultLabel(key);
-        if (staticLabel) return staticLabel;
-        return "alarm_sync";
-      }
       if (key === "target") return "營養指標 / Targets";
       if (key === "catalog") return "Catalog";
       if (key === "details") return "Detail Settings";
@@ -326,9 +320,12 @@
       if (!menu || !item) return;
       ev.preventDefault();
       ev.stopPropagation();
+      const key = item.getAttribute("data-menu-key") || "";
       menu.hidden = false;
-      menu.setAttribute("data-menu-key", item.getAttribute("data-menu-key") || "");
+      menu.setAttribute("data-menu-key", key);
       menu.setAttribute("data-menu-group", item.getAttribute("data-menu-group") || "top");
+      const deleteBtn = menu.querySelector("[data-menu-context-delete]");
+      if (deleteBtn) deleteBtn.hidden = !isCustomMenuKey(key);
       menu.style.left = `${ev.clientX}px`;
       menu.style.top = `${ev.clientY}px`;
     }
@@ -348,6 +345,32 @@
       persistMenuLayout();
     }
 
+    function isCustomMenuKey(key) {
+      return !!key && !MENU_TREE_KEYS.includes(key) && !menuNodeHasContent(key);
+    }
+
+    function deleteMenuItem(key) {
+      if (!isCustomMenuKey(key)) return;
+      const label = menuLabel(key);
+      if (!window.confirm(`Delete “${label}”? Any items inside move back to their default menu.`)) return;
+      const node = existingMenuNodeForKey(key);
+      delete menuLabels[key];
+      delete menuTreeOpen[key];
+      delete menuOrder[key];
+      removeKeyFromMenuOrder(key);
+      if (node) {
+        const list = document.querySelector(".sidebar .menu-list");
+        if (list) {
+          node.querySelectorAll(".menu-item[data-menu-key]").forEach((child) => {
+            if (child.getAttribute("data-menu-key") !== key) list.appendChild(child);
+          });
+        }
+        node.remove();
+      }
+      applyMenuOrder();
+      persistMenuLayout();
+    }
+
     function attachMenuContextMenuActions() {
       const menu = document.getElementById("menu-context-menu");
       if (!menu || menu.dataset.bound === "1") return;
@@ -360,6 +383,7 @@
         const group = menu.getAttribute("data-menu-group") || menuGroupForKey(key);
         hideMenuContextMenu();
         if (action === "rename") renameMenuItem(key);
+        if (action === "delete") deleteMenuItem(key);
       });
       document.addEventListener("mousedown", (ev) => {
         if (!ev.target || !ev.target.closest || !ev.target.closest("#menu-context-menu")) hideMenuContextMenu();
@@ -646,7 +670,7 @@
         activeConfigView = configView;
         return;
       }
-      if (["planner", "shopping", "alarm_sync"].includes(key)) {
+      if (["planner", "shopping"].includes(key)) {
         activePanel = key;
         return;
       }
@@ -710,68 +734,13 @@
       err.style.display = message ? "block" : "none";
     }
 
-    function setAlarmSyncStatus(message) {
-      const status = document.getElementById("alarm-sync-status");
-      if (status) status.textContent = message || "";
-    }
-
-    function showAlarmSyncError(message) {
-      const err = document.getElementById("alarm-sync-err");
-      if (!err) return;
-      err.textContent = message || "";
-      err.style.display = message ? "block" : "none";
-    }
-
-    async function openAlarmSyncPanel() {
-      if (!(await resolveUnsavedBeforeLeaving())) return;
-      setActiveMenuPathForKey("alarm_sync");
-      setActivePanel("alarm_sync");
-      showAlarmSyncError("");
-      setAlarmSyncStatus("");
-      syncAutoDeviceStateFromUi();
-      if (typeof syncAutoServerSuggestionFromBackend === "function") await syncAutoServerSuggestionFromBackend();
-      if (typeof clearAlarmSyncPreview === "function") {
-        clearAlarmSyncPreview();
-      }
-      if (typeof clearAlarmMealPlanPreview === "function") {
-        clearAlarmMealPlanPreview();
-      }
-      {
-        const display = document.getElementById("alarm-sync-server-ip");
-        if (display) {
-          display.textContent = "偵測中...";
-          try {
-            const r = await fetch("/api/network-info");
-            const data = await parseJsonSafe(r);
-            if (!r.ok) {
-              const msg = String(data.detail || data.message || "").trim();
-              display.textContent = msg ? `無法取得 (${msg})` : "無法取得";
-            } else {
-              const suggested = String(data.suggested_auto_server || "").trim();
-              const lanIps = Array.isArray(data.lan_ips) ? data.lan_ips : [];
-              const port = Number.isFinite(Number(data.port)) ? Number(data.port) : 8765;
-              display.textContent = suggested || (lanIps.length ? `http://${lanIps[0]}:${port}` : "未有可用 LAN IP");
-            }
-          } catch (_) {
-            display.textContent = "無法取得";
-          }
-        }
-      }
-      const panel = document.getElementById("alarm-sync-panel");
-      if (panel) {
-        applyFormColumnWidths(panel);
-        attachFormColumnResizers(panel);
-        applyTableOffsets(panel);
-        attachTableDragHandles(panel);
-      }
-    }
-
     function renderMaintMenu() {
       const box = document.getElementById("maint-menu-children");
       if (!box) return;
-      const byKey = new Map((maintSheets || []).map((sheet) => [sheet.sheet_key, sheet]));
+      const menuSheets = (maintSheets || []).filter((sheet) => sheet && sheet.sheet_key && !isRemovedMenuKey(sheet.sheet_key));
+      const byKey = new Map(menuSheets.map((sheet) => [sheet.sheet_key, sheet]));
       const preferredByKey = {};
-      for (const sheet of (maintSheets || [])) {
+      for (const sheet of menuSheets) {
         if (!sheet || !sheet.sheet_key) continue;
         let btn = document.querySelector(`.menu-item[data-maint-sheet-key="${CSS.escape(sheet.sheet_key)}"]`)
           || document.querySelector(`.menu-item[data-menu-key="${CSS.escape(sheet.sheet_key)}"]`);
@@ -865,7 +834,6 @@
         ["#maint-editor table.maint-roster-table", "table_offset_maint_roster"],
         ["#maint-editor .maint-roster-pane:first-child .maint-pane-title", "table_offset_maint_roster"],
         ["#shopping-content", "table_offset_shopping"],
-        ["#alarm-sync-form", "table_offset_alarm_sync"],
       ];
       for (const [selector, key] of targets) {
         document.querySelectorAll(selector).forEach((el) => {
@@ -918,7 +886,6 @@
         ["#maint-editor .maint-sheet-title:not(.maint-roster-title)", "table_offset_maint_sheet"],
         ["#maint-editor .maint-roster-pane:first-child .maint-pane-title", "table_offset_maint_roster"],
         ["#shopping-panel h1", "table_offset_shopping"],
-        ["#alarm-sync-panel h1", "table_offset_alarm_sync"],
       ];
       for (const [selector, key] of configs) {
         document.querySelectorAll(selector).forEach((handle) => {

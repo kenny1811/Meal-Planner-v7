@@ -230,6 +230,27 @@
       margin: 0 0 6px;
     }
     .sidebar h2 { margin: 0; font-size: 12px; }
+    .sidebar h2.brand {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .brand-logo {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+      color: var(--accent);
+    }
+    .brand-name {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .2px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .menu-add-button {
       width: 24px;
       height: 24px;
@@ -785,6 +806,7 @@
       padding: 3px;
     }
     .menu-context-menu[hidden] { display: none; }
+    .menu-context-menu button[hidden] { display: none; }
     .menu-context-menu button {
       display: block;
       width: 100%;
@@ -1019,8 +1041,7 @@
       text-align: right;
     }
     table.maint-report-table input.roster-wake-input:focus {
-      outline: 2px solid var(--accent);
-      outline-offset: 1px;
+      outline: none;
       background: #fff;
     }
     table.maint-report-table td.roster-wake-cell:focus,
@@ -1028,6 +1049,10 @@
       outline: 2px solid var(--accent);
       outline-offset: -2px;
       background: #fff;
+    }
+    /* 起身時間唔等如 default（開工前 N 個鐘）＝手動 override，用淡藍底色標示（同 header 藍系一致） */
+    table.maint-report-table td.roster-wake-cell.roster-wake-override {
+      background: #d6e4f7;
     }
     table.maint-report-table .report-today-cell {
       box-shadow: inset 0 0 0 2px #0b57d0;
@@ -1480,6 +1505,10 @@
     table.detail-field-table input[type="number"] {
       text-align: right;
       font-variant-numeric: tabular-nums;
+    }
+    /* 起身＝開工前（小時）：靠左顯示 */
+    table.detail-field-table input#detail-gc-wake-offset {
+      text-align: left;
     }
     .detail-section-table {
       min-width: 0;
@@ -2005,182 +2034,3 @@
       font-weight: 700;
     }
     footer { font-size: 9px; color: var(--muted); margin-top: 4px; }
-    #alarm-sync-panel {
-      height: calc(100vh - 20px);
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .alarm-sync-body {
-      flex: 1 1 auto;
-      min-width: 0;
-      min-height: 0;
-      overflow: auto;
-      padding-top: 4px;
-    }
-
-    .alarm-sync-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 6px;
-    }
-
-    .alarm-sync-server {
-      flex: 0 0 auto;
-      font-size: 12px;
-      color: #2f3b5f;
-      white-space: nowrap;
-    }
-
-    .alarm-sync-server #alarm-sync-server-ip {
-      font-family: Consolas, "Courier New", monospace;
-      font-weight: 700;
-    }
-
-    .alarm-sync-toolbar .btn {
-      min-height: 22px;
-      border-radius: 2px;
-    }
-
-    .alarm-sync-form {
-      width: max-content;
-      min-width: 0;
-    }
-
-    .alarm-preview-wrap {
-      margin-top: 8px;
-      width: max-content;
-      max-width: 100%;
-      overflow: auto;
-    }
-
-    .alarm-preview-title {
-      padding: 4px 6px;
-      border: 1px solid var(--grid);
-      border-bottom: 0;
-      background: #eef2f7;
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .alarm-meal-plan-preview {
-      margin-top: 8px;
-      width: min(860px, calc(100% - 2px));
-      border: 1px solid var(--grid);
-      background: #ffffff;
-      color: var(--text);
-      display: none;
-    }
-
-    .alarm-meal-plan-preview-title {
-      padding: 4px 6px;
-      border-bottom: 1px solid var(--grid);
-      background: #eef2f7;
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .alarm-meal-plan-preview-content {
-      margin: 0;
-      padding: 8px 10px;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 12px;
-      line-height: 1.5;
-      max-height: 240px;
-      overflow: auto;
-    }
-
-    table.alarm-sync-settings,
-    table.alarm-preview-table {
-      border-collapse: collapse;
-      table-layout: fixed;
-      width: max-content;
-      background: var(--panel);
-    }
-
-    table.alarm-sync-settings th,
-    table.alarm-sync-settings td,
-    table.alarm-preview-table th,
-    table.alarm-preview-table td {
-      position: relative;
-      border: 1px solid var(--grid);
-      height: 24px;
-      padding: 2px 6px;
-      color: var(--text);
-      font-size: 11px;
-      line-height: 1.2;
-      vertical-align: middle;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    table.alarm-sync-settings th,
-    table.alarm-preview-table th {
-      background: #eef2f7;
-      color: var(--muted);
-      font-weight: 700;
-      text-align: left;
-    }
-
-    table.alarm-sync-settings input {
-      display: block;
-      width: 100%;
-      min-width: 0;
-      height: 20px;
-      border: 0;
-      padding: 1px 4px;
-      background: transparent;
-      color: var(--text);
-      font: inherit;
-    }
-
-    table.alarm-sync-settings input:focus {
-      outline: 2px solid var(--accent);
-      outline-offset: -2px;
-      background: #fffef5;
-    }
-
-    table.alarm-sync-settings .btn {
-      width: 100%;
-      min-height: 20px;
-      padding: 2px 8px;
-      border: 1px solid #1a5fb4;
-      border-radius: 2px;
-      background: var(--accent);
-      color: #fff;
-      cursor: pointer;
-      font: inherit;
-    }
-
-    table.alarm-sync-settings .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    #alarm-sync-status {
-      display: block;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .alarm-preview-time {
-      font-variant-numeric: tabular-nums;
-      font-weight: 700;
-    }
-
-    .alarm-preview-duration {
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .alarm-preview-empty {
-      color: var(--muted) !important;
-      font-style: italic;
-    }

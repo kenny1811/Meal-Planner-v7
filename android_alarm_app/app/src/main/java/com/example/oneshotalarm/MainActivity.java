@@ -2663,21 +2663,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void pollLatestAlarms() {
-        statusView.setText("同步中...");
-        AlarmAutoSyncReceiver.pollNow(this, result -> runOnUiThread(() -> {
-            if (result != null && result.ok && result.updated) {
-                loadDraftFromStore();
-                render();
-                Toast.makeText(this, result.message, Toast.LENGTH_LONG).show();
-                return;
-            }
-            String message = result == null ? "同步失敗" : result.message;
-            statusView.setText(message == null || message.isEmpty() ? statusText() : message);
-            Toast.makeText(this, message == null || message.isEmpty() ? "同步完成" : message, Toast.LENGTH_SHORT).show();
-        }));
-    }
-
     private LinearLayout headerRow() {
         LinearLayout row = baseRow(0xFF8ED3EA);
         row.addView(iconCell(0xFF8ED3EA));

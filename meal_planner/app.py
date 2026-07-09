@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import os
-import base64
 import hashlib
 import json
 import copy
-import socket
-import subprocess
 import time
 import threading
-import urllib.parse
 import urllib.request
 import re
 from datetime import date, datetime, timedelta
@@ -25,7 +21,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from meal_planner.alarm_plan import build_daily_alarm_plan
 from meal_planner.dates_input import DateValidationError, parse_date_expression
 from meal_planner.excel_io import WorkbookValidationError, load_workbook_data
 from meal_planner.free_port import free_tcp_port
@@ -111,9 +106,6 @@ _DEBUG_STATS: dict[str, Any] = {
     "by_status": {},
     "last_error": None,
 }
-_AUTO_SYNC_STATE: dict[str, dict[str, Any]] = {}
-_AUTO_SYNC_LOCK = threading.Lock()
-_AUTO_SYNC_SEQ = 0
 _LAST_SCHEDULE_GRID_EXPORT_VERSION: str | None = None
 _PHONE_SCHEDULE_GRID_EXPORT_URL = "http://192.168.15.102:8765/export.xml"
 _PHONE_SCHEDULE_GRID_PENDING_XML: bytes | None = None
@@ -940,19 +932,6 @@ def api_debug_stats() -> dict[str, Any]:
     }
 
 
-def _lan_ip_candidates() -> list[str]:
-    ips: list[str] = []
-    try:
-        host_name = socket.gethostname()
-        for item in socket.getaddrinfo(host_name, None, socket.AF_INET):
-            ip = item[4][0]
-            if ip and not ip.startswith("127.") and ip not in ips:
-                ips.append(ip)
-    except OSError:
-        pass
-    return ips
-
-
 def _resolve_default_schedule_grid_xml() -> Path | None:
     settings = get_settings()
     target = settings.data_folder / _SCHEDULE_GRID_EXPORT_FILE_NAME
@@ -1091,224 +1070,6 @@ def _build_schedule_grid_all_variants_export() -> dict[str, Any]:
         "effective_date": export_version,
         "variant_count": len(variants),
         "variants": variants,
-    }
-
-
-@app.get("/api/network-info")
-def api_network_info(request: Request) -> dict[str, Any]:
-    port = int(os.environ.get("MENU_API_PORT", "8765"))
-    ips = _lan_ip_candidates()
-    return {
-        "ok": True,
-        "lan_ips": ips,
-        "port": port,
-        "suggested_auto_server": f"http://{_DESKTOP_LAN_HOST}:{port}",
-    }
-
-
-@app.get("/api/alarm-plan")
-def api_alarm_plan(date_iso: str | None = None) -> dict[str, Any]:
-    return _alarm_plan_response(date_iso)
-
-
-def _alarm_plan_response(date_iso: str | None = None) -> dict[str, Any]:
-    try:
-        target_date = date.fromisoformat(date_iso) if date_iso else None
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail="date_iso must be YYYY-MM-DD.") from e
-    try:
-        plan = build_daily_alarm_plan(target_date, get_settings())
-        sync_date_text = plan.get("date", "")
-        try:
-            sync_date = date.fromisoformat(str(sync_date_text).strip()) if sync_date_text else (target_date or date.today())
-        except ValueError:
-            sync_date = target_date or date.today()
-        sync_day_payload, _ = _resolve_day_payload_for_sync(sync_date)
-        plan["meal_plan_text"] = _build_sync_meal_plan_text(sync_day_payload)
-        compact = json.dumps(plan, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        token = base64.urlsafe_b64encode(compact).decode("ascii").rstrip("=")
-        return {"ok": True, "sync_url": f"oneshotalarm://sync?payload={token}", **plan}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Build alarm plan failed: {e}") from e
-
-
-def _normalize_sync_device(device: str | None) -> str:
-    if device is None:
-        return "default"
-    cleaned = device.strip()
-    return cleaned if cleaned else "default"
-
-
-def _next_auto_sync_id() -> int:
-    global _AUTO_SYNC_SEQ
-    _AUTO_SYNC_SEQ += 1
-    return _AUTO_SYNC_SEQ
-
-
-def _publish_auto_sync_plan(date_iso: str | None, device: str | None) -> tuple[dict[str, Any], int]:
-    payload = _alarm_plan_response(date_iso)
-    device_id = _normalize_sync_device(device)
-    sync_id = _next_auto_sync_id()
-    record = {
-        "sync_id": sync_id,
-        "payload": payload,
-        "updated_at": time.time(),
-        "device_id": device_id,
-    }
-    with _AUTO_SYNC_LOCK:
-        _AUTO_SYNC_STATE[device_id] = record
-    return payload, sync_id
-
-
-def _normalize_auto_server(auto_server: str | None, request: Request) -> str:
-    port = int(os.environ.get("MENU_API_PORT", "8765"))
-    return f"http://{_DESKTOP_LAN_HOST}:{port}"
-
-
-def _adb_path() -> str:
-    env_adb = os.environ.get("ADB_EXE")
-    if env_adb and Path(env_adb).is_file():
-        return env_adb
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        candidate = Path(local_app_data) / "Android" / "Sdk" / "platform-tools" / "adb.exe"
-        if candidate.is_file():
-            return str(candidate)
-    return "adb"
-
-
-def _first_adb_device(adb: str) -> str:
-    try:
-        proc = subprocess.run(
-            [adb, "devices", "-l"],
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=20,
-        )
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Cannot run adb: {e}") from e
-    if proc.returncode != 0:
-        raise HTTPException(status_code=500, detail=(proc.stderr or proc.stdout or "adb devices failed").strip())
-    for line in proc.stdout.splitlines()[1:]:
-        parts = line.split()
-        if len(parts) >= 2 and parts[1] == "device":
-            return parts[0]
-    raise HTTPException(status_code=400, detail="No authorized USB debugging phone found.")
-
-
-def _fetch_schedule_grid_xml_from_phone_ip() -> bytes:
-    try:
-        with urllib.request.urlopen(_PHONE_SCHEDULE_GRID_EXPORT_URL, timeout=12) as response:
-            return response.read()
-    except OSError as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Cannot fetch phone schedule_grid from {_PHONE_SCHEDULE_GRID_EXPORT_URL}: {e}",
-        ) from e
-
-
-@app.post("/api/alarm-plan/send-usb")
-def api_alarm_plan_send_usb(date_iso: str | None = None) -> dict[str, Any]:
-    payload = _alarm_plan_response(date_iso)
-    sync_url = str(payload.get("sync_url") or "")
-    if not sync_url:
-        raise HTTPException(status_code=500, detail="Alarm sync URL was not generated.")
-    adb = _adb_path()
-    serial = _first_adb_device(adb)
-    proc = subprocess.run(
-        [
-            adb,
-            "-s",
-            serial,
-            "shell",
-            "am",
-            "start",
-            "-a",
-            "android.intent.action.VIEW",
-            "-d",
-            sync_url,
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=30,
-    )
-    if proc.returncode != 0:
-        raise HTTPException(status_code=500, detail=(proc.stderr or proc.stdout or "adb am start failed").strip())
-    return {
-        **payload,
-        "sent_to_usb": True,
-        "adb_serial": serial,
-        "adb_output": (proc.stdout or proc.stderr or "").strip(),
-    }
-
-
-@app.post("/api/alarm-plan/publish")
-def api_alarm_plan_publish(
-    request: Request,
-    date_iso: str | None = None,
-    device: str | None = None,
-    auto_server: str | None = None,
-) -> dict[str, Any]:
-    payload, sync_id = _publish_auto_sync_plan(date_iso, device)
-    server_base = _normalize_auto_server(auto_server, request)
-    device_id = _normalize_sync_device(device)
-    setup_uri = (
-        "oneshotalarm://sync?"
-        + f"auto_server={urllib.parse.quote(server_base, safe='')}"
-        + f"&auto_device={urllib.parse.quote(device_id, safe='')}"
-    )
-    return {
-        **payload,
-        "ok": True,
-        "published": True,
-        "sync_id": sync_id,
-        "auto_device": device_id,
-        "auto_setup_uri": setup_uri,
-        "auto_server": server_base,
-        "sync_pull_hint": f"/api/alarm-plan/poll?device={_normalize_sync_device(device)}",
-    }
-
-
-@app.get("/api/alarm-plan/poll")
-def api_alarm_plan_poll(
-    device: str | None = None,
-    last_sync_id: int = 0,
-) -> dict[str, Any]:
-    device_id = _normalize_sync_device(device)
-    with _AUTO_SYNC_LOCK:
-        record = _AUTO_SYNC_STATE.get(device_id)
-    if not record:
-        return {"ok": True, "updated": False, "auto_device": device_id}
-
-    current_sync_id = record.get("sync_id", 0)
-    if current_sync_id <= last_sync_id:
-        return {
-            "ok": True,
-            "updated": False,
-            "auto_device": device_id,
-            "sync_id": current_sync_id,
-        }
-
-    payload = record.get("payload")
-    if not isinstance(payload, dict):
-        return {
-            "ok": True,
-            "updated": False,
-            "auto_device": device_id,
-            "sync_id": current_sync_id,
-        }
-    return {
-        "ok": True,
-        "updated": True,
-        "auto_device": device_id,
-        "sync_id": current_sync_id,
-        "payload": payload,
     }
 
 
@@ -1495,97 +1256,6 @@ def _with_mobile_restaurant_lunch_label(day_payload: dict[str, Any]) -> dict[str
         meal_plan["meal_items"] = items
     items["午餐"] = []
     return out
-
-
-def _resolve_day_payload_for_sync(target_date: date) -> tuple[dict[str, Any], dict[str, Any]]:
-    payload = load_memory_payload()
-    if isinstance(payload.get("days"), list):
-        payload = refresh_payload_with_latest_indicators(payload)
-    day_payload = next(
-        (
-            item for item in (payload.get("days", []) if isinstance(payload.get("days"), list) else [])
-            if isinstance(item, dict) and str(item.get("date") or "") == target_date.isoformat()
-        ),
-        None,
-    )
-    if day_payload is None:
-        latest = load_latest_versions([target_date.isoformat()])
-        latest_days = latest.get("days", []) if isinstance(latest.get("days"), list) else []
-        if latest_days:
-            payload = {
-                "headers": payload.get("headers", []),
-                "indicator_rows": payload.get("indicator_rows", {}),
-                "nutrient_keys": payload.get("nutrient_keys", list(NUTRIENT_KEYS)),
-                "days": latest_days,
-            }
-            payload = refresh_payload_with_latest_indicators(payload)
-            day_payload = next(
-                (
-                    item for item in (payload.get("days", []) if isinstance(payload.get("days"), list) else [])
-                    if isinstance(item, dict) and str(item.get("date") or "") == target_date.isoformat()
-                ),
-                None,
-            )
-    if day_payload is None:
-        payload = preview_days(
-            [target_date],
-            skip_allowed_month_validation=True,
-            reroll_nonce=0,
-            fast_mode=True,
-        )
-        days = payload.get("days", [])
-        day_payload = days[0] if isinstance(days, list) and days else {}
-    return day_payload if isinstance(day_payload, dict) else {}, payload
-
-
-def _build_sync_meal_plan_text(day_payload: dict[str, Any]) -> str:
-    if not isinstance(day_payload, dict):
-        return ""
-    meal_plan = day_payload.get("meal_plan") if isinstance(day_payload.get("meal_plan"), dict) else None
-    if not isinstance(meal_plan, dict):
-        return ""
-    resolved = meal_plan.get("meal_times_resolved")
-    if not isinstance(resolved, dict):
-        resolved = {}
-    ingredients_by_meal = meal_plan.get("meal_ingredients")
-    if not isinstance(ingredients_by_meal, dict):
-        ingredients_by_meal = {}
-    patterns_by_meal = meal_plan.get("meal_patterns")
-    if not isinstance(patterns_by_meal, dict):
-        patterns_by_meal = {}
-    rl = meal_plan.get("restaurant_lunch")
-
-    lines: list[str] = []
-    is_work_day = day_payload.get("is_work_day")
-    for meal in ("早餐", "午餐", "小食", "晚餐"):
-        time_cell = str(resolved.get(meal, "")).strip()
-        if not time_cell:
-            continue
-        if (
-            meal == "午餐"
-            and is_work_day is True
-            and isinstance(rl, dict)
-            and "choice" in rl
-        ):
-            choice = str(rl.get("choice", "—")).strip()
-            store = str(rl.get("store", "—")).strip()
-            lines.append(f"{time_cell} {meal}：{choice}（{store}）")
-            continue
-        items = ingredients_by_meal.get(meal)
-        if isinstance(items, list):
-            text = " + ".join([str(x).strip() for x in items if str(x).strip() != ""])
-            if text:
-                lines.append(f"{time_cell} {meal}：{text}")
-                continue
-        patt = str(patterns_by_meal.get(meal, "")).strip()
-        if patt:
-            lines.append(f"{time_cell} {meal}：{patt}")
-    if not lines:
-        note = str(meal_plan.get("note", "")).strip()
-        if note:
-            return note
-        return ""
-    return "\n".join(lines)
 
 
 @app.post("/api/recalc")
@@ -2003,6 +1673,17 @@ async def api_import_schedule_grid_from_phone_push(request: Request) -> dict[str
         "ok": True,
         "source": "phone_push",
     }
+
+
+def _fetch_schedule_grid_xml_from_phone_ip() -> bytes:
+    try:
+        with urllib.request.urlopen(_PHONE_SCHEDULE_GRID_EXPORT_URL, timeout=12) as response:
+            return response.read()
+    except OSError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Cannot fetch phone schedule_grid from {_PHONE_SCHEDULE_GRID_EXPORT_URL}: {e}",
+        ) from e
 
 
 @app.post("/api/maint/sheets/schedule_grid/preview-from-phone-ip")

@@ -4,15 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Meal Planner v7</title>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260520-favicon" />
-  <link rel="stylesheet" href="style.css?v=20260705-mtr-doors-v1" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260709-bowl" />
+  <link rel="stylesheet" href="style.css?v=20260709-remove-phoneio" />
 </head>
 <body>
   <div id="clock-top-right" class="clock-top-right">--/--/---- --- --:--:--</div>
   <div class="app-shell">
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-title" data-menu-drop-group="top">
-      <h2>Menu</h2>
+      <h2 class="brand">
+        <svg class="brand-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M9 3c-1 1-1 2 0 3s1 2 0 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity=".5"/>
+          <path d="M12 2.5c-1 1-1 2 0 3s1 2 0 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity=".75"/>
+          <path d="M15 3c-1 1-1 2 0 3s1 2 0 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity=".5"/>
+          <path d="M3.5 12.5h17a8.5 8.5 0 0 1-17 0z" fill="currentColor"/>
+          <ellipse cx="12" cy="12.5" rx="8.5" ry="1.6" fill="currentColor" opacity=".4"/>
+        </svg>
+        <span class="brand-name">餐單生成v7</span>
+      </h2>
       <button type="button" class="menu-add-button" id="menu-add" title="Create menu item" aria-label="Create menu item">+</button>
     </div>
     <div class="menu-list" data-menu-drop-group="top">
@@ -42,7 +51,6 @@
       </div>
       <button type="button" class="menu-item active" data-panel="planner" data-menu-group="top" data-menu-key="planner" id="menu-planner"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Menu Planner</span></button>
       <button type="button" class="menu-item" data-panel="shopping" data-menu-group="top" data-menu-key="shopping" id="menu-shopping"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Shopping List</span></button>
-      <button type="button" class="menu-item" data-menu-group="top" data-menu-key="alarm_sync" id="menu-alarm-sync"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">電話I/O</span></button>
     </div>
   </aside>
   <div id="sidebar-resizer" class="sidebar-resizer" title="Drag to resize sidebar"></div>
@@ -216,6 +224,18 @@
                   <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-nonwork-calendar">非返工日 Calendar ID</label></th>
                   <td data-form-col-key="detail_google_calendar_value"><input type="text" id="detail-gc-nonwork-calendar" spellcheck="false" /></td>
                 </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-work-calendar">更表 Calendar ID</label></th>
+                  <td data-form-col-key="detail_google_calendar_value"><input type="text" id="detail-gc-work-calendar" spellcheck="false" placeholder="留空＝用內建預設" /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-alarm-calendar">起身 Calendar ID</label></th>
+                  <td data-form-col-key="detail_google_calendar_value"><input type="text" id="detail-gc-alarm-calendar" spellcheck="false" placeholder="留空＝用內建預設" /></td>
+                </tr>
+                <tr>
+                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-wake-offset">起身＝開工前（小時）</label></th>
+                  <td data-form-col-key="detail_google_calendar_value"><input type="number" id="detail-gc-wake-offset" step="0.25" min="0.25" spellcheck="false" /></td>
+                </tr>
               </tbody>
             </table>
           </section>
@@ -268,75 +288,12 @@
       <div id="shopping-out"></div>
     </div>
   </section>
-  <section id="alarm-sync-panel" style="display:none;">
-    <h1 data-title-key="alarm_sync">電話I/O</h1>
-    <div class="alarm-sync-body">
-    <div class="alarm-sync-toolbar">
-      <span class="alarm-sync-server">Server IP: <span id="alarm-sync-server-ip">偵測中...</span></span>
-      <span class="status-inline" id="alarm-sync-status"></span>
-    </div>
-      <div id="alarm-sync-err" class="err"></div>
-      <table id="alarm-sync-form" class="alarm-sync-settings" data-form-table>
-        <colgroup>
-          <col data-form-col-key="alarm_sync_label" data-form-col-default="120" />
-          <col data-form-col-key="alarm_sync_value" data-form-col-default="260" />
-          <col data-form-col-key="alarm_sync_action" data-form-col-default="150" />
-          <col data-form-col-key="alarm_sync_action_2" data-form-col-default="150" />
-        </colgroup>
-        <tbody>
-          <tr>
-            <th data-form-col-key="alarm_sync_label">Device</th>
-            <td data-form-col-key="alarm_sync_value"><input id="auto-sync-device" value="default" /></td>
-            <td data-form-col-key="alarm_sync_action"><button type="button" class="btn" id="alarm-sync-preview-plan">Preview</button></td>
-            <td data-form-col-key="alarm_sync_action_2"><button type="button" class="btn" id="alarm-sync-send-usb">USB Send</button></td>
-          </tr>
-          <tr>
-            <th data-form-col-key="alarm_sync_label">Server</th>
-            <td data-form-col-key="alarm_sync_value"><input id="auto-sync-server" /></td>
-            <td data-form-col-key="alarm_sync_action"><button type="button" class="btn" id="alarm-sync-publish">Publish</button></td>
-            <td data-form-col-key="alarm_sync_action_2"><button type="button" class="btn" id="alarm-sync-import-xml">Import Phone</button></td>
-          </tr>
-          <tr>
-            <th data-form-col-key="alarm_sync_label">Pending</th>
-            <td data-form-col-key="alarm_sync_value"></td>
-            <td data-form-col-key="alarm_sync_action"><button type="button" class="btn" id="alarm-sync-confirm-import" style="display:none;">Confirm</button></td>
-            <td data-form-col-key="alarm_sync_action_2"></td>
-          </tr>
-        </tbody>
-      </table>
-      <div id="alarm-preview-wrap" class="alarm-preview-wrap">
-        <div id="alarm-preview-title" class="alarm-preview-title"></div>
-        <table id="alarm-preview-table" class="alarm-preview-table" data-form-table>
-          <colgroup>
-            <col data-form-col-key="alarm_sync_code" data-form-col-default="130" />
-            <col data-form-col-key="alarm_sync_time" data-form-col-default="85" />
-            <col data-form-col-key="alarm_sync_content" data-form-col-default="360" />
-            <col data-form-col-key="alarm_sync_duration" data-form-col-default="90" />
-            <col data-form-col-key="alarm_sync_effective" data-form-col-default="170" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th data-form-col-key="alarm_sync_code">更碼</th>
-              <th data-form-col-key="alarm_sync_time">時間</th>
-              <th data-form-col-key="alarm_sync_content">內容</th>
-              <th data-form-col-key="alarm_sync_duration">時長</th>
-              <th data-form-col-key="alarm_sync_effective">生效日期</th>
-            </tr>
-          </thead>
-          <tbody id="alarm-preview-body"></tbody>
-        </table>
-      </div>
-      <div id="alarm-meal-plan-preview" class="alarm-meal-plan-preview">
-        <div id="alarm-meal-plan-title" class="alarm-meal-plan-preview-title">餐單預覽</div>
-        <pre id="alarm-meal-plan-content" class="alarm-meal-plan-preview-content"></pre>
-      </div>
-    </div>
-  </section>
   <footer>Local API: <code>/api/preview</code></footer>
   </main>
   </div>
   <div id="menu-context-menu" class="menu-context-menu" hidden>
     <button type="button" data-menu-context-action="rename">Rename</button>
+    <button type="button" data-menu-context-action="delete" data-menu-context-delete hidden>Delete</button>
   </div>
   <div id="unsaved-dialog" class="modal-backdrop" hidden>
     <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title">
@@ -349,14 +306,14 @@
       </div>
     </div>
   </div>
-    <script defer src="api.js?v=20260702-roster-gc-check-v1"></script>
+    <script defer src="api.js?v=20260709-remove-phoneio"></script>
   <script defer src="shopping.js?v=20260623-shopping-range-offset-v1"></script>
-  <script defer src="planner.js?v=20260705-mtr-doors-v1"></script>
-  <script defer src="planner-menu.js?v=20260702-roster-header-left-v1"></script>
+  <script defer src="planner.js?v=20260709-remove-phoneio"></script>
+  <script defer src="planner-menu.js?v=20260709-remove-phoneio"></script>
   <script defer src="planner-maint.js?v=20260630-nonwork-wake-v1"></script>
   <script defer src="planner-maint-editor.js?v=20260705-mtr-doors-v1"></script>
   <script defer src="planner-config.js?v=20260701-nonwork-calendar-v1"></script>
   <script defer src="planner-render.js?v=20260623-generate-date-guard-v1"></script>
-    <script defer src="planner-events.js?v=20260624-reports-menu-v1"></script>
+    <script defer src="planner-events.js?v=20260709-remove-phoneio"></script>
 </body>
 </html>

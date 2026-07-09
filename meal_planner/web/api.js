@@ -45,7 +45,7 @@
         if (data && typeof data.show_past === "boolean") {
           showPast = data.show_past;
         }
-        if (data && ["planner", "config", "maint", "shopping", "alarm_sync", "reports"].includes(data.active_panel)) {
+        if (data && ["planner", "config", "maint", "shopping", "reports"].includes(data.active_panel)) {
           activePanel = data.active_panel;
         }
         const hasServerConfigView = data && ["targets", "catalog", "details"].includes(data.active_config_view);
@@ -413,45 +413,6 @@
       const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Confirm phone schedule_grid import failed.", r.status));
-      }
-      return data || {};
-    }
-
-    async function loadAlarmPlan(dateIso) {
-      const params = new URLSearchParams();
-      if (dateIso) params.set("date_iso", dateIso);
-      const r = await fetch(`/api/alarm-plan${params.toString() ? `?${params}` : ""}`);
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Load alarm plan failed.", r.status));
-      }
-      return data || {};
-    }
-
-    async function publishAlarmPlan(dateIso, device, autoServer) {
-      const params = new URLSearchParams();
-      if (dateIso) params.set("date_iso", dateIso);
-      if (device) params.set("device", device);
-      if (autoServer) params.set("auto_server", autoServer);
-      const r = await fetch(`/api/alarm-plan/publish${params.toString() ? `?${params}` : ""}`, {
-        method: "POST",
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Publish alarm plan failed.", r.status));
-      }
-      return data || {};
-    }
-
-    async function sendAlarmPlanUsb(dateIso) {
-      const params = new URLSearchParams();
-      if (dateIso) params.set("date_iso", dateIso);
-      const r = await fetch(`/api/alarm-plan/send-usb${params.toString() ? `?${params}` : ""}`, {
-        method: "POST",
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Send alarm plan by USB failed.", r.status));
       }
       return data || {};
     }
