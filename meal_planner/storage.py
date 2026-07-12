@@ -14,7 +14,21 @@ from meal_planner.settings import get_settings
 # The UI has no restore picker, so per-day history should not grow invisibly.
 MAX_VERSIONS_PER_DATE = 1
 _STORE_LOCK = RLock()
-_REMOVED_MENU_KEYS = {"runtime_import", "diagnostics"}
+# 起身表 no longer has its own menu leaf; it is edited via the roster report.
+_REMOVED_MENU_KEYS = {"runtime_import", "diagnostics", "wake_alarms"}
+
+DEFAULT_WAKE_OFFSET_HOURS = 3.0
+
+
+def _coerce_wake_offset_hours(value: Any) -> float:
+    """開工前 N 個鐘：非數值或非正數一律回落 3.0 鐘。"""
+    try:
+        hours = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_WAKE_OFFSET_HOURS
+    if not (hours > 0):
+        return DEFAULT_WAKE_OFFSET_HOURS
+    return hours
 
 
 def _default_memory_payload() -> dict[str, Any]:
@@ -80,6 +94,9 @@ def _default_ui() -> dict[str, Any]:
             "token_file": "",
             "service_account_file": "",
             "nonwork_calendar_id": "",
+            "work_calendar_id": "",
+            "alarm_calendar_id": "",
+            "wake_offset_hours": DEFAULT_WAKE_OFFSET_HOURS,
         },
     }
 
@@ -95,7 +112,7 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
             pass
         ui["show_past"] = bool(raw.get("show_past", ui["show_past"]))
         panel = str(raw.get("active_panel", ui["active_panel"]))
-        ui["active_panel"] = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports"} else "planner"
+        ui["active_panel"] = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports", "duty_report"} else "planner"
         fallback_config_view = "catalog" if ui["active_panel"] == "config" and "active_config_view" not in raw else ui["active_config_view"]
         config_view = str(raw.get("active_config_view", fallback_config_view))
         ui["active_config_view"] = config_view if config_view in {"targets", "catalog", "details"} else "targets"
@@ -179,6 +196,11 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
                 "token_file": str(gc.get("token_file") or ""),
                 "service_account_file": str(gc.get("service_account_file") or ""),
                 "nonwork_calendar_id": str(gc.get("nonwork_calendar_id") or ""),
+                "work_calendar_id": str(gc.get("work_calendar_id") or ""),
+                "alarm_calendar_id": str(gc.get("alarm_calendar_id") or ""),
+                "wake_offset_hours": _coerce_wake_offset_hours(
+                    gc.get("wake_offset_hours", ui["google_calendar_sync"]["wake_offset_hours"])
+                ),
             }
     if ui["active_menu_path"] and ui["active_menu_path"][-1] in _REMOVED_MENU_KEYS:
         ui["active_menu_path"] = ["top", "planner"]
@@ -500,23 +522,27 @@ def save_google_calendar_sync_settings(settings: dict[str, Any]) -> None:
             "token_file": str(settings.get("token_file", current.get("token_file", "")) or "") if isinstance(settings, dict) else str(current.get("token_file", "") or ""),
             "service_account_file": str(settings.get("service_account_file", current.get("service_account_file", "")) or "") if isinstance(settings, dict) else str(current.get("service_account_file", "") or ""),
             "nonwork_calendar_id": str(settings.get("nonwork_calendar_id", current.get("nonwork_calendar_id", "")) or "") if isinstance(settings, dict) else str(current.get("nonwork_calendar_id", "") or ""),
+            "work_calendar_id": str(settings.get("work_calendar_id", current.get("work_calendar_id", "")) or "") if isinstance(settings, dict) else str(current.get("work_calendar_id", "") or ""),
+            "alarm_calendar_id": str(settings.get("alarm_calendar_id", current.get("alarm_calendar_id", "")) or "") if isinstance(settings, dict) else str(current.get("alarm_calendar_id", "") or ""),
+            "wake_offset_hours": _coerce_wake_offset_hours(settings.get("wake_offset_hours", current.get("wake_offset_hours", DEFAULT_WAKE_OFFSET_HOURS))) if isinstance(settings, dict) else _coerce_wake_offset_hours(current.get("wake_offset_hours", DEFAULT_WAKE_OFFSET_HOURS)),
         }
 
     _update_ui(mutate)
+
+
+def _builtin_calendar_ids() -> tuple[str, str]:
+    """更表 / 起身 兩個內建預設 Calendar ID（單一來源喺 google_calendar_sync）。"""
+    from meal_planner.google_calendar_sync import ALARM_CALENDAR_ID, WORK_CALENDAR_ID
+
+    return WORK_CALENDAR_ID, ALARM_CALENDAR_ID
 
 
 def load_google_calendar_sync_settings() -> dict[str, Any]:
     ui = _load_ui()
     raw = ui.get("google_calendar_sync", {})
     if not isinstance(raw, dict):
-        return {
-            "enabled": False,
-            "write": False,
-            "client_secret_file": "",
-            "token_file": "",
-            "service_account_file": "",
-            "nonwork_calendar_id": "",
-        }
+        raw = {}
+    default_work, default_alarm = _builtin_calendar_ids()
     return {
         "enabled": bool(raw.get("enabled")),
         "write": bool(raw.get("write")),
@@ -524,6 +550,9 @@ def load_google_calendar_sync_settings() -> dict[str, Any]:
         "token_file": str(raw.get("token_file") or ""),
         "service_account_file": str(raw.get("service_account_file") or ""),
         "nonwork_calendar_id": str(raw.get("nonwork_calendar_id") or ""),
+        "work_calendar_id": str(raw.get("work_calendar_id") or "") or default_work,
+        "alarm_calendar_id": str(raw.get("alarm_calendar_id") or "") or default_alarm,
+        "wake_offset_hours": _coerce_wake_offset_hours(raw.get("wake_offset_hours", DEFAULT_WAKE_OFFSET_HOURS)),
     }
 
 
@@ -626,14 +655,14 @@ def load_show_past() -> bool:
 
 
 def save_active_panel(panel: str) -> None:
-    value = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports"} else "planner"
+    value = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports", "duty_report"} else "planner"
     _update_ui(lambda ui: ui.update({"active_panel": value}))
 
 
 def load_active_panel() -> str:
     ui = _load_ui()
     panel = str(ui.get("active_panel", "planner"))
-    return panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports"} else "planner"
+    return panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports", "duty_report"} else "planner"
 
 
 def save_active_config_view(view: str) -> None:
