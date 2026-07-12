@@ -357,6 +357,11 @@ def save_memory_payload(payload: dict[str, Any]) -> None:
             """,
             (_sqlite_json_dumps(base), ts),
         )
+    # 同步鏡射每日餐單入 plan_versions，令直接讀 sqlite（一行一日嘅 plan_versions 表）
+    # 都見到最新資料，而唔止收埋喺 planner_snapshots 嗰浸大 JSON blob 入面。
+    days = base.get("days")
+    if isinstance(days, list) and days:
+        save_plan_versions(days)
 
 
 def load_memory_payload() -> dict[str, Any]:

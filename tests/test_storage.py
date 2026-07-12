@@ -70,6 +70,20 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(result["headers"], ["A"])
         self.assertEqual(result["days"], [{"date": "2026-05-20", "meal_plan": {"idx": 2}}])
 
+    def test_saving_memory_payload_mirrors_days_into_plan_versions(self):
+        # 直接讀 sqlite（plan_versions，一行一日）都要見到最新資料，唔止困喺 snapshot blob。
+        storage.save_memory_payload({
+            "headers": ["A"],
+            "days": [
+                {"date": "2026-07-10", "meal_plan": {"idx": 10}},
+                {"date": "2026-07-11", "meal_plan": {"idx": 11}},
+            ],
+        })
+
+        latest = storage.load_latest_versions(["2026-07-10", "2026-07-11"])
+        got = {d["date"]: d["meal_plan"]["idx"] for d in latest["days"]}
+        self.assertEqual(got, {"2026-07-10": 10, "2026-07-11": 11})
+
     def test_merge_memory_payload_keeps_days_missing_from_incoming_payload(self):
         existing = {
             "headers": ["old"],
@@ -126,6 +140,9 @@ class StorageTests(unittest.TestCase):
             "client_secret_file": "C:/secrets/client.json",
             "token_file": "C:/secrets/token.json",
             "nonwork_calendar_id": "nonwork-calendar",
+            "work_calendar_id": "work-calendar",
+            "alarm_calendar_id": "alarm-calendar",
+            "wake_offset_hours": 2.5,
         })
 
         self.assertEqual(
@@ -137,8 +154,21 @@ class StorageTests(unittest.TestCase):
                 "token_file": "C:/secrets/token.json",
                 "service_account_file": "",
                 "nonwork_calendar_id": "nonwork-calendar",
+                "work_calendar_id": "work-calendar",
+                "alarm_calendar_id": "alarm-calendar",
+                "wake_offset_hours": 2.5,
             },
         )
+
+    def test_google_calendar_sync_settings_defaults_wake_offset(self):
+        from meal_planner.google_calendar_sync import ALARM_CALENDAR_ID, WORK_CALENDAR_ID
+
+        storage.save_google_calendar_sync_settings({"enabled": True})
+        loaded = storage.load_google_calendar_sync_settings()
+        self.assertEqual(loaded["wake_offset_hours"], 3.0)
+        # 留空時回落內建預設 Calendar ID，而唔係空字串
+        self.assertEqual(loaded["work_calendar_id"], WORK_CALENDAR_ID)
+        self.assertEqual(loaded["alarm_calendar_id"], ALARM_CALENDAR_ID)
 
 
 if __name__ == "__main__":
