@@ -110,6 +110,58 @@ def _solve_rice_split(rice_balance_weight: float) -> tuple[float, float]:
     return lunch, dinner
 
 
+def _protein_entry() -> NutritionEntry:
+    nutrients = {k: 0.0 for k in NUTRIENT_KEYS}
+    nutrients["protein_g"] = 25.0  # 25g 蛋白 / 100g
+    nutrients["kcal"] = 120.0
+    return NutritionEntry(
+        row_index=1,
+        paused=False,
+        category="蛋白質",
+        name="測試肉",
+        nutrients=nutrients,
+        min_g=40.0,   # 40g → 10g 蛋白（低過 floor）
+        max_g=120.0,  # 120g → 30g 蛋白
+        daymax_g=120.0,
+    )
+
+
+def _solve_meal_protein(floor: float, weight: float) -> float:
+    base = get_settings()
+    settings = replace(
+        base,
+        optimizer=replace(
+            base.optimizer,
+            # 用中點回拉做向下 baseline：無 floor 時拉去中點 80g(=20g 蛋白，低過 floor)，
+            # 咁 floor 先有嘢可以托上去，測試先有意義。
+            midpoint_pull_weight=0.5,
+            rice_balance_weight=0.0,
+            meal_protein_floor_g=floor,
+            meal_protein_floor_weight=weight,
+        ),
+    )
+    cells = [""] * len(NUTRIENT_KEYS)
+    for key in ("fat_total_g", "fat_sat_g", "fat_trans_g"):
+        cells[NUTRIENT_KEYS.index(key)] = "<50% kcal"
+    indicators = DayIndicatorProfile.from_row_cells(cells)
+
+    entry = _protein_entry()
+    meal_pattern_parts = {"晚餐": [{"alternatives": ["肉"], "raw": "測試肉", "name": "測試肉"}]}
+    candidates_by_item = {("晚餐", 0): [entry]}
+
+    art = solve_day_meal_plan(
+        settings=settings,
+        indicators=indicators,
+        meal_pattern_parts=meal_pattern_parts,
+        candidates_by_item=candidates_by_item,
+        visible_meals={"晚餐"},
+        rice_token="米",
+        day_offset=0,
+    )
+    assert art is not None
+    return float(art.meal_nutrients["晚餐"]["protein_g"])
+
+
 class OptimizerLpModelTests(unittest.TestCase):
     def test_fat_cap_ratio_uses_indicator_fat_pct(self):
         settings = get_settings()
@@ -160,6 +212,17 @@ class OptimizerLpModelTests(unittest.TestCase):
 
         # 且至少同「未開啟」一樣平均（唔會更唔平均）。
         self.assertLessEqual(abs(on[0] - on[1]), abs(off[0] - off[1]))
+
+    @unittest.skipUnless(_HAS_PULP, "pulp solver not installed")
+    def test_meal_protein_floor_lifts_low_protein_meal(self):
+        # 冇 floor（得中點回拉）時，蛋白餐坐中點 80g → 約 20g 蛋白，低過門檻。
+        prot_off = _solve_meal_protein(0.0, 0.0)
+        self.assertLess(prot_off, 24.0)
+
+        # 開 floor=25 後，該餐蛋白應托到門檻附近。
+        prot_on = _solve_meal_protein(25.0, 8.0)
+        self.assertGreaterEqual(prot_on, 24.0)
+        self.assertGreater(prot_on, prot_off)
 
 
 if __name__ == "__main__":

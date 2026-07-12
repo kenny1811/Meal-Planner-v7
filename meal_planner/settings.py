@@ -122,6 +122,11 @@ class OptimizerConfig:
     # 米類跨餐平均分配之軟性成本（每克餐間差異）。營養目標係全日總量，
     # 米點分餐都唔影響達標，所以呢個令米平均落各餐而零代價。0 = 停用。
     rice_balance_weight: float = 0.0
+    # 每餐蛋白下限（克）：長者 anabolic resistance，每餐要 ~25-30g 先有效
+    # 刺激肌肉合成。以下係軟性 floor，不足時罰分，但鈣等硬約束仍優先。
+    # 0 = 停用。只套用喺 LP 優化嘅屋企餐（餐廳午餐屬 fixed，本身已足）。
+    meal_protein_floor_g: float = 0.0
+    meal_protein_floor_weight: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -276,6 +281,8 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
         relaxation_simulation_enabled=bool(oc.get("relaxation_simulation_enabled", False)),
         midpoint_pull_weight=float(oc.get("midpoint_pull_weight", 0.0)),
         rice_balance_weight=float(oc.get("rice_balance_weight", 0.0)),
+        meal_protein_floor_g=float(oc.get("meal_protein_floor_g", 0.0)),
+        meal_protein_floor_weight=float(oc.get("meal_protein_floor_weight", 0.0)),
     )
 
     return AppSettings(

@@ -231,11 +231,14 @@ def solve_day_meal_plan(
         model += pulp.lpSum(row_grams) <= daymax
 
     nutrient_expr = {k: [] for k in NUTRIENT_KEYS}
+    protein_meal_terms: dict[str, list[Any]] = {}
     for (meal, idx), cs in by_item.items():
         for j, c in enumerate(cs):
             for k in NUTRIENT_KEYS:
                 coef = float(c.entry.nutrients.get(k, 0.0)) / 100.0
                 nutrient_expr[k].append(coef * g[(meal, idx, j)])
+            pcoef = float(c.entry.nutrients.get("protein_g", 0.0)) / 100.0
+            protein_meal_terms.setdefault(meal, []).append(pcoef * g[(meal, idx, j)])
     fixed_totals = {
         k: float((fixed_nutrients or {}).get(k, 0.0) or 0.0)
         for k in NUTRIENT_KEYS
@@ -295,6 +298,20 @@ def solve_day_meal_plan(
         penalties.append(hard_weight * fat_cap_weights[key] * s_fat)
         slack_vars.append((key, "fat_cap", s_fat))
 
+    # 每餐蛋白下限（長者防肌少症）：每個 LP 優化嘅屋企餐蛋白不足 floor 就軟性罰分。
+    # 軟性 = 同鈣等硬約束（weight 1000）衝突時，硬約束優先、蛋白讓步，唔會爆鈣。
+    # 餐廳午餐屬 fixed_nutrients 唔喺 protein_meal_terms，自動唔會被 floor（本身已足）。
+    meal_protein_floor = max(0.0, float(settings.optimizer.meal_protein_floor_g))
+    meal_protein_floor_weight = max(0.0, float(settings.optimizer.meal_protein_floor_weight))
+    meal_protein_floor_terms = []
+    if meal_protein_floor > 0.0 and meal_protein_floor_weight > 0.0:
+        for meal, terms in protein_meal_terms.items():
+            if not terms:
+                continue
+            s_prot = pulp.LpVariable(f"s_protfloor_{meal}", lowBound=0, cat="Continuous")
+            model += pulp.lpSum(terms) + s_prot >= meal_protein_floor
+            meal_protein_floor_terms.append(meal_protein_floor_weight * s_prot)
+
     # 同分時輕微偏好：跟日期偏移與餐次偏移排序，保留「每日有變化」感
     tie_break_terms = []
     reroll_bonus_terms = []
@@ -311,7 +328,7 @@ def solve_day_meal_plan(
 
     model += pulp.lpSum(
         penalties + hi_pull_terms + midpoint_terms + rice_balance_terms
-        + duplicate_terms + tie_break_terms + reroll_bonus_terms
+        + meal_protein_floor_terms + duplicate_terms + tie_break_terms + reroll_bonus_terms
     )
 
     status = "not_solved"

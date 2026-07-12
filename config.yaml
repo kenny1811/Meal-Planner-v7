@@ -85,6 +85,11 @@ optimizer:
   # 唔影響達標，所以呢個近乎零代價就令米平均落各餐（實測 255/135 → 195/195，
   # 總量不變、零紅旗）。0 = 停用。
   rice_balance_weight: 1.0
+  # 每餐蛋白下限（長者防肌少症，每餐 ~25-30g 先有效刺激肌肉合成）。軟性 floor，
+  # 只套用喺 LP 優化嘅屋企餐；同鈣等硬約束衝突時鈣優先。實測 floor=28 對 7 月
+  # 各日零紅旗、鈣不爆，把臨界晚餐托上門檻。0 = 停用。
+  meal_protein_floor_g: 28.0
+  meal_protein_floor_weight: 2.0
   weights:
     kcal: 1.0
     protein: 1.0
