@@ -282,6 +282,10 @@
       await openShiftCodeAnalysisReport();
     });
     document.getElementById("menu-report-shift-code-analysis").addEventListener("click", openShiftCodeAnalysisReport);
+    document.getElementById("menu-duty-report").addEventListener("click", async () => {
+      if (!(await resolveUnsavedBeforeLeaving())) return;
+      await openDutyReportPanel();
+    });
     document.getElementById("menu-shopping").addEventListener("click", async () => {
       if (!(await resolveUnsavedBeforeLeaving())) return;
       setActiveMenuPathForKey("shopping");
@@ -754,6 +758,7 @@
         }
       }
       if (activePanel === "reports") await openShiftCodeAnalysisReport();
+      if (activePanel === "duty_report") await refreshDutyReport();
       applyTableOffsets();
       attachTableDragHandles();
       applyFormColumnWidths();

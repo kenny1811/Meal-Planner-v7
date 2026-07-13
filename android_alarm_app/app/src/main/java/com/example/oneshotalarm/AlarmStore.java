@@ -13,6 +13,8 @@ import java.util.LinkedHashSet;
 final class AlarmStore {
     private static final String PREFS = "alarm_store";
     static final String DEFAULT_AUTO_SYNC_SERVER = "http://192.168.15.125:8765";
+    // NordVPN Meshnet：出街（mobile data）時 LAN 到唔到，經 meshnet IP 直達 PC。
+    static final String MESHNET_AUTO_SYNC_SERVER = "http://100.119.164.40:8765";
     private static final String KEY_ALARMS = "alarms_json";
     private static final String KEY_PLAN_DATE = "plan_date";
     private static final String KEY_ROSTER_CODE = "roster_code";
@@ -170,7 +172,7 @@ final class AlarmStore {
     }
 
     static String[] getAutoSyncServerCandidates(Context context) {
-        return new String[]{DEFAULT_AUTO_SYNC_SERVER};
+        return new String[]{DEFAULT_AUTO_SYNC_SERVER, MESHNET_AUTO_SYNC_SERVER};
     }
 
     static String getAutoSyncServerUrl(Context context, boolean fallbackToLoopback) {

@@ -35,7 +35,7 @@
     let unsavedArea = "";
     let unsavedAreaKey = "";
     let menuOrder = {
-      top: ["config", "maint", "planner", "shopping"],
+      top: ["config", "maint", "planner", "shopping", "duty_report"],
       config: ["target", "catalog", "details"],
       maint: [],
       reports: ["shift_code_analysis"],
@@ -57,11 +57,12 @@
       mtr_doors: "地鐵車門",
     };
     const MENU_TREE_KEYS = ["config", "maint", "reports"];
-    const MENU_STATIC_LEAF_KEYS = ["planner", "shopping", "target", "catalog", "details", "shift_code_analysis"];
+    const MENU_STATIC_LEAF_KEYS = ["planner", "shopping", "duty_report", "target", "catalog", "details", "shift_code_analysis"];
     const REMOVED_MENU_KEYS = new Set(["runtime_import", "diagnostics", "wake_alarms", "alarm_sync"]);
     const MENU_DEFAULT_GROUPS = {
       planner: "top",
       shopping: "top",
+      duty_report: "top",
       target: "config",
       catalog: "config",
       details: "config",
@@ -272,22 +273,31 @@
       plannerDateInputsTouched = true;
     }
     function formatClockDateHK() {
-      const parts = new Intl.DateTimeFormat("en-GB", {
-        timeZone: HK_TZ,
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        weekday: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      }).formatToParts(new Date());
+      // 30-hour clock: 00:00-05:59 is shown as 24:00-29:59 of the previous day.
+      const now = new Date();
+      const fmt = (date) =>
+        new Intl.DateTimeFormat("en-GB", {
+          timeZone: HK_TZ,
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          weekday: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).formatToParts(date);
+      let parts = fmt(now);
+      let hour = Number(parts.find((x) => x.type === "hour")?.value);
+      let hh = parts.find((x) => x.type === "hour")?.value || "--";
+      if (hour >= 0 && hour < 6) {
+        hh = String(hour + 24);
+        parts = fmt(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+      }
       const d = parts.find((x) => x.type === "day")?.value || "--";
       const m = parts.find((x) => x.type === "month")?.value || "--";
       const y = parts.find((x) => x.type === "year")?.value || "----";
       const wd = parts.find((x) => x.type === "weekday")?.value || "---";
-      const hh = parts.find((x) => x.type === "hour")?.value || "--";
       const mm = parts.find((x) => x.type === "minute")?.value || "--";
       const ss = parts.find((x) => x.type === "second")?.value || "--";
       return `${d}/${m}/${y} ${wd} ${hh}:${mm}:${ss}`;
@@ -685,6 +695,7 @@
       const maint = document.getElementById("maint-panel");
       const reports = document.getElementById("reports-panel");
       const shopping = document.getElementById("shopping-panel");
+      const duty = document.getElementById("duty-report-panel");
       const mPlanner = document.getElementById("menu-planner");
       const mConfig = document.getElementById("menu-config");
       const mConfigTarget = document.getElementById("menu-config-target");
@@ -694,13 +705,15 @@
       const mReports = document.getElementById("menu-reports");
       const mShiftCodeAnalysis = document.getElementById("menu-report-shift-code-analysis");
       const mShopping = document.getElementById("menu-shopping");
+      const mDuty = document.getElementById("menu-duty-report");
       const target = panel || "planner";
-      activePanel = ["planner", "config", "maint", "shopping", "reports"].includes(target) ? target : "planner";
+      activePanel = ["planner", "config", "maint", "shopping", "reports", "duty_report"].includes(target) ? target : "planner";
       planner.style.display = activePanel === "planner" ? "" : "none";
       config.style.display = activePanel === "config" ? "" : "none";
       maint.style.display = activePanel === "maint" ? "" : "none";
       reports.style.display = activePanel === "reports" ? "" : "none";
       shopping.style.display = activePanel === "shopping" ? "" : "none";
+      if (duty) duty.style.display = activePanel === "duty_report" ? "" : "none";
       mPlanner.classList.toggle("active", activePanel === "planner");
       mConfig.classList.toggle("active", activePanel === "config");
       mConfigTarget.classList.remove("active");
@@ -713,6 +726,7 @@
       mReports.classList.toggle("active", activePanel === "reports");
       mShiftCodeAnalysis.classList.toggle("active", activePanel === "reports");
       mShopping.classList.toggle("active", activePanel === "shopping");
+      if (mDuty) mDuty.classList.toggle("active", activePanel === "duty_report");
       if (persist) persistColumnWidths();
       return true;
     }

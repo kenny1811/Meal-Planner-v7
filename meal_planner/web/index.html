@@ -49,6 +49,7 @@
           <button type="button" class="menu-item menu-child" data-menu-group="reports" data-menu-key="shift_code_analysis" id="menu-report-shift-code-analysis"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">更碼分析</span></button>
         </div>
       </div>
+      <button type="button" class="menu-item" data-panel="duty_report" data-menu-group="top" data-menu-key="duty_report" id="menu-duty-report"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">報更</span></button>
       <button type="button" class="menu-item active" data-panel="planner" data-menu-group="top" data-menu-key="planner" id="menu-planner"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Menu Planner</span></button>
       <button type="button" class="menu-item" data-panel="shopping" data-menu-group="top" data-menu-key="shopping" id="menu-shopping"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Shopping List</span></button>
     </div>
@@ -277,6 +278,11 @@
       <div id="shift-code-analysis-out"></div>
     </section>
   </section>
+  <section id="duty-report-panel" style="display:none;">
+    <h1 data-title-key="duty_report">報更</h1>
+    <div id="duty-report-err" class="err"></div>
+    <div id="duty-report-out" class="duty-report-out"></div>
+  </section>
   <section id="shopping-panel" style="display:none;">
     <div id="shopping-content" class="shopping-content">
       <h1 data-title-key="shopping">Shopping List</h1>
@@ -314,6 +320,7 @@
   <script defer src="planner-maint-editor.js?v=20260705-mtr-doors-v1"></script>
   <script defer src="planner-config.js?v=20260701-nonwork-calendar-v1"></script>
   <script defer src="planner-render.js?v=20260623-generate-date-guard-v1"></script>
+  <script defer src="planner-duty.js?v=20260713-duty-report-v1"></script>
     <script defer src="planner-events.js?v=20260709-remove-phoneio"></script>
 </body>
 </html>

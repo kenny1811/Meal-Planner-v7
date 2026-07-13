@@ -45,7 +45,7 @@
         if (data && typeof data.show_past === "boolean") {
           showPast = data.show_past;
         }
-        if (data && ["planner", "config", "maint", "shopping", "reports"].includes(data.active_panel)) {
+        if (data && ["planner", "config", "maint", "shopping", "reports", "duty_report"].includes(data.active_panel)) {
           activePanel = data.active_panel;
         }
         const hasServerConfigView = data && ["targets", "catalog", "details"].includes(data.active_config_view);
@@ -355,6 +355,55 @@
       const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Save maintenance sheet failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function loadDutyReportPlan(dateIso) {
+      const url = dateIso ? `/api/duty-report/plan?date_iso=${encodeURIComponent(dateIso)}` : "/api/duty-report/plan";
+      const r = await fetch(url);
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Load duty report plan failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function postDutyReportOverride(payload) {
+      const r = await fetch("/api/duty-report/override", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Duty report override failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function postDutyReportSend(slotId, dateIso) {
+      const r = await fetch("/api/duty-report/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slot_id: slotId, source: "web", date_iso: dateIso || null }),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Duty report send failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function postDutyReportConfig(payload) {
+      const r = await fetch("/api/duty-report/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Duty report config failed.", r.status));
       }
       return data || {};
     }

@@ -62,6 +62,7 @@ public class MainActivity extends Activity {
     private static final int HTTP_READ_TIMEOUT_MS = 7000;
     private static final int PAGE_MEAL = 0;
     private static final int PAGE_SHIFT = 1;
+    private static final int PAGE_DUTY = 2;
     private static final String ACTION_TEST_DAILY_IMPORT = "com.example.oneshotalarm.ACTION_TEST_DAILY_IMPORT";
     private static final Pattern TIME_RE = Pattern.compile("^\\d{1,2}:\\d{2}$");
     private static final Pattern SCHEDULE_GRID_HEADER_RE = Pattern.compile(
@@ -97,8 +98,11 @@ public class MainActivity extends Activity {
     private LinearLayout mealSummaryView;
     private LinearLayout mealCardsView;
     private LinearLayout shiftSection;
+    private LinearLayout dutySection;
+    private DutyReportView dutyReportView;
     private Button mealTabButton;
     private Button shiftTabButton;
+    private Button dutyTabButton;
     private Button importXmlButton;
     private Button shiftVariantButton;
     private Button watchAlarmToggleButton;
@@ -157,12 +161,14 @@ public class MainActivity extends Activity {
         NextAlarmWidgetProvider.updateAll(this);
         if (currentPage == PAGE_MEAL) {
             fetchMealPlanForSelectedDate();
+        } else if (currentPage == PAGE_DUTY && dutyReportView != null) {
+            dutyReportView.refresh();
         }
     }
 
     @Override
     public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
-        if (currentPage == PAGE_MEAL) {
+        if (currentPage == PAGE_MEAL || currentPage == PAGE_DUTY) {
             if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN) {
                 mealSwipeDownX = ev.getX();
                 mealSwipeDownY = ev.getY();
@@ -171,7 +177,11 @@ public class MainActivity extends Activity {
                 float dy = ev.getY() - mealSwipeDownY;
                 float threshold = dp(72);
                 if (Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.8f) {
-                    shiftMealDate(dx < 0 ? 1 : -1);
+                    if (currentPage == PAGE_MEAL) {
+                        shiftMealDate(dx < 0 ? 1 : -1);
+                    } else if (dutyReportView != null) {
+                        dutyReportView.shiftDate(dx < 0 ? 1 : -1);
+                    }
                     return true;
                 }
             }
@@ -217,10 +227,13 @@ public class MainActivity extends Activity {
 
         mealTabButton = buildTopTabButton("餐單");
         shiftTabButton = buildTopTabButton("行位表");
+        dutyTabButton = buildTopTabButton("報更");
         mealTabButton.setOnClickListener(v -> switchPage(PAGE_MEAL));
         shiftTabButton.setOnClickListener(v -> switchPage(PAGE_SHIFT));
+        dutyTabButton.setOnClickListener(v -> switchPage(PAGE_DUTY));
         tabRow.addView(mealTabButton, weightedParams(1f));
         tabRow.addView(shiftTabButton, weightedParams(1f));
+        tabRow.addView(dutyTabButton, weightedParams(1f));
         root.addView(tabRow, fullWidthWrapHeight());
 
         mealSection = new LinearLayout(this);
@@ -397,6 +410,13 @@ public class MainActivity extends Activity {
 
         root.addView(shiftSection, fullWidthWrapHeight());
 
+        dutySection = new LinearLayout(this);
+        dutySection.setOrientation(LinearLayout.VERTICAL);
+        dutySection.setPadding(0, dp(2), 0, dp(10));
+        dutySection.setBackgroundColor(0xFFFFFFFF);
+        dutyReportView = new DutyReportView(this, dutySection, mealTypeface(), mealBoldTypeface());
+        root.addView(dutySection, fullWidthWrapHeight());
+
         scrollView.addView(
                 root,
                 new ScrollView.LayoutParams(
@@ -447,27 +467,36 @@ public class MainActivity extends Activity {
 
     private void switchPage(int page) {
         boolean wasMeal = currentPage == PAGE_MEAL;
-        currentPage = page == PAGE_MEAL ? PAGE_MEAL : PAGE_SHIFT;
+        boolean wasDuty = currentPage == PAGE_DUTY;
+        currentPage = page == PAGE_MEAL ? PAGE_MEAL : page == PAGE_DUTY ? PAGE_DUTY : PAGE_SHIFT;
         updatePageVisibility();
         render();
         if (currentPage == PAGE_MEAL && !wasMeal) {
             fetchMealPlanForSelectedDate();
         }
+        if (currentPage == PAGE_DUTY && !wasDuty && dutyReportView != null) {
+            dutyReportView.refresh();
+        }
     }
 
     private void updatePageVisibility() {
-        if (mealSection == null || shiftSection == null
-                || mealTabButton == null || shiftTabButton == null) {
+        if (mealSection == null || shiftSection == null || dutySection == null
+                || mealTabButton == null || shiftTabButton == null || dutyTabButton == null) {
             return;
         }
         boolean isMeal = currentPage == PAGE_MEAL;
+        boolean isDuty = currentPage == PAGE_DUTY;
+        boolean isShift = !isMeal && !isDuty;
         mealSection.setVisibility(isMeal ? View.VISIBLE : View.GONE);
-        shiftSection.setVisibility(isMeal ? View.GONE : View.VISIBLE);
+        shiftSection.setVisibility(isShift ? View.VISIBLE : View.GONE);
+        dutySection.setVisibility(isDuty ? View.VISIBLE : View.GONE);
 
         mealTabButton.setBackgroundColor(isMeal ? 0xFF0B1026 : 0xFFDDEBF5);
         mealTabButton.setTextColor(isMeal ? 0xFFFFFFFF : 0xFF334155);
-        shiftTabButton.setBackgroundColor(!isMeal ? 0xFF0B1026 : 0xFFDDEBF5);
-        shiftTabButton.setTextColor(!isMeal ? 0xFFFFFFFF : 0xFF334155);
+        shiftTabButton.setBackgroundColor(isShift ? 0xFF0B1026 : 0xFFDDEBF5);
+        shiftTabButton.setTextColor(isShift ? 0xFFFFFFFF : 0xFF334155);
+        dutyTabButton.setBackgroundColor(isDuty ? 0xFF0B1026 : 0xFFDDEBF5);
+        dutyTabButton.setTextColor(isDuty ? 0xFFFFFFFF : 0xFF334155);
     }
 
     private void launchImportScheduleGridXml() {

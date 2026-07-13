@@ -299,6 +299,26 @@ class RosterCalendarConsistencyRequest(BaseModel):
     roster_text: str = ""
 
 
+class DutyReportOverrideRequest(BaseModel):
+    mode: str | None = None
+    segments: list[dict[str, str]] | None = None
+    slot: dict[str, Any] | None = None
+    source: str = "web"
+    date_iso: str | None = None
+
+
+class DutyReportSendRequest(BaseModel):
+    slot_id: str
+    source: str = "web"
+    date_iso: str | None = None
+
+
+class DutyReportConfigRequest(BaseModel):
+    mapping: dict[str, str] | None = None
+    message_template: str | None = None
+    auto_send: bool | None = None
+
+
 def _stored_meal_plan_payloads(date_isos: set[str]) -> dict[str, dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     if not date_isos:
@@ -1098,6 +1118,7 @@ def web_asset(asset_name: str) -> FileResponse:
         "planner-config.js",
         "planner-render.js",
         "planner-events.js",
+        "planner-duty.js",
         "favicon.svg",
     }:
         raise HTTPException(status_code=404, detail="Cannot find web asset")
@@ -1953,12 +1974,106 @@ def api_google_calendar_nonwork_consistency(body: RosterCalendarConsistencyReque
         raise HTTPException(status_code=500, detail=f"Google Calendar non-work consistency check failed: {e}") from e
 
 
+@app.get("/api/duty-report/plan")
+def api_duty_report_plan(date_iso: str | None = None) -> dict[str, Any]:
+    from meal_planner.duty_report import build_plan
+    from meal_planner.whatsapp_send import cdp_health
+
+    biz_date: date | None = None
+    if date_iso:
+        try:
+            biz_date = date.fromisoformat(date_iso)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date_iso: {date_iso}") from e
+    try:
+        plan = build_plan(get_settings(), biz_date=biz_date)
+        plan["health"] = cdp_health()
+        return plan
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Duty report plan failed: {e}") from e
+
+
+@app.post("/api/duty-report/override")
+def api_duty_report_override(body: DutyReportOverrideRequest) -> dict[str, Any]:
+    from meal_planner.duty_report import apply_override
+    from meal_planner.whatsapp_send import cdp_health
+
+    biz_date: date | None = None
+    if body.date_iso:
+        try:
+            biz_date = date.fromisoformat(body.date_iso)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date_iso: {body.date_iso}") from e
+    try:
+        plan = apply_override(
+            get_settings(),
+            mode=body.mode,
+            segments=body.segments,
+            slot_patch=body.slot,
+            source=body.source,
+            biz_date=biz_date,
+        )
+        plan["health"] = cdp_health()
+        return plan
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Duty report override failed: {e}") from e
+
+
+@app.post("/api/duty-report/send")
+def api_duty_report_send(body: DutyReportSendRequest) -> dict[str, Any]:
+    from meal_planner.duty_report import send_slot
+    from meal_planner.whatsapp_send import WhatsAppSendError, cdp_health
+
+    try:
+        plan = send_slot(get_settings(), body.slot_id, manual=True, source=body.source, date_iso=body.date_iso)
+        plan["health"] = cdp_health()
+        return plan
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except WhatsAppSendError as e:
+        raise HTTPException(status_code=502, detail=f"WhatsApp send failed: {e}") from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Duty report send failed: {e}") from e
+
+
+@app.post("/api/duty-report/config")
+def api_duty_report_config(body: DutyReportConfigRequest) -> dict[str, Any]:
+    from meal_planner.duty_report import build_plan, record_event, save_config
+    from meal_planner.whatsapp_send import cdp_health
+
+    try:
+        settings = get_settings()
+        patch: dict[str, Any] = {}
+        if body.mapping is not None:
+            patch["mapping"] = body.mapping
+        if body.message_template is not None:
+            patch["message_template"] = body.message_template
+        if body.auto_send is not None:
+            patch["auto_send"] = body.auto_send
+        save_config(settings, patch)
+        if body.auto_send is not None:
+            record_event(settings, "auto_send", "on" if body.auto_send else "off", source="web")
+        if body.mapping is not None:
+            record_event(settings, "mapping", "code→group mapping updated", source="web")
+        plan = build_plan(settings)
+        plan["health"] = cdp_health()
+        return plan
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Duty report config failed: {e}") from e
+
+
 def main() -> None:
     import uvicorn
 
-    host = _DESKTOP_LAN_HOST
+    from meal_planner.duty_report_scheduler import start_scheduler
+
+    # 0.0.0.0：同時聽 LAN（192.168.x）同 Tailscale（100.x），電話出街先連到。
+    host = os.environ.get("MENU_API_HOST", "0.0.0.0")
     port = int(os.environ.get("MENU_API_PORT", "8765"))
     free_tcp_port(port)
+    start_scheduler()
     uvicorn.run("meal_planner.app:app", host=host, port=port, reload=False)
 
 

@@ -2,7 +2,8 @@
 setlocal
 
 set "ROOT=%~dp0"
-set "MENU_API_HOST=192.168.15.125"
+rem 0.0.0.0 = 同時聽 LAN 同 Tailscale；瀏覽器仍用 http://192.168.15.125:8765/
+set "MENU_API_HOST=0.0.0.0"
 set "MENU_PROJECT_ROOT=%ROOT%"
 if "%MENU_API_PORT%"=="" set "MENU_API_PORT=8765"
 

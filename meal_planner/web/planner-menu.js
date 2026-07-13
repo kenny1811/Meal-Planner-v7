@@ -6,6 +6,7 @@
       if (key === "catalog") return document.getElementById("menu-config-catalog");
       if (key === "details") return document.getElementById("menu-config-details");
       if (key === "shift_code_analysis") return document.getElementById("menu-report-shift-code-analysis");
+      if (key === "duty_report") return document.getElementById("menu-duty-report");
       if (maintSheetKeys().includes(key)) {
         const sheetBtn = document.querySelector(`.menu-item[data-maint-sheet-key="${CSS.escape(key)}"]`);
         if (sheetBtn) return sheetBtn;
@@ -71,6 +72,7 @@
       if (key === "catalog") return "Catalog";
       if (key === "details") return "Detail Settings";
       if (key === "shift_code_analysis") return "更碼分析";
+      if (key === "duty_report") return "報更";
       const sheet = (maintSheets || []).find((item) => item && item.sheet_key === key);
       if (sheet) return MAINT_SHEET_LABELS[key] || sheet.display_name || key;
       return String(menuLabels[key] || key);
@@ -670,7 +672,7 @@
         activeConfigView = configView;
         return;
       }
-      if (["planner", "shopping"].includes(key)) {
+      if (["planner", "shopping", "duty_report"].includes(key)) {
         activePanel = key;
         return;
       }
@@ -912,6 +914,7 @@
             applyFormColumnWidths(root);
             if (typeof applyDetailBlockLayout === "function") applyDetailBlockLayout(root);
             if (typeof applyShiftCodeAnalysisBlockLayout === "function") applyShiftCodeAnalysisBlockLayout(root);
+            if (typeof applyDutyBlockLayout === "function") applyDutyBlockLayout();
             autoResizeTextareas(root);
           };
           const onUp = () => {
