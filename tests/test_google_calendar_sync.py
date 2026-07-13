@@ -115,6 +115,16 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
         self.assertEqual(plan.alarm_events[0].start_at.isoformat(), "2026-07-01T22:00:00+08:00")
         self.assertEqual(plan.alarm_events[0].roster_date, date(2026, 7, 2))
 
+    def test_wake_offset_hours_is_configurable(self):
+        roster_rows = [["2026年7月 1 Lecole Event"]]
+        payroll_rows = [["更碼", "開工", "收工"], ["Lecole Event", "1000", "19:00"]]
+
+        plan = build_roster_calendar_plan(roster_rows, payroll_rows, wake_offset_hours=2.5)
+
+        self.assertEqual(plan.work_events[0].start_at.isoformat(), "2026-07-01T10:00:00+08:00")
+        # 開工 10:00 − 2.5 鐘 = 07:30（default 3 鐘會係 07:00）
+        self.assertEqual(plan.alarm_events[0].start_at.isoformat(), "2026-07-01T07:30:00+08:00")
+
     def test_overtime_rows_override_payroll_times_for_work_and_alarm_events(self):
         roster_rows = [["2026年7月 1 Lecole Event"]]
         payroll_rows = [["更碼", "開工", "收工"], ["Lecole Event", "1000", "19:00"]]

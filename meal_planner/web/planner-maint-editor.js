@@ -514,7 +514,7 @@
             }
           }
         }
-        return s;
+        return isInputEvent ? value : s;
       }
 
       if (sheetKey === "medical_appointments" && colIndex === 2) {

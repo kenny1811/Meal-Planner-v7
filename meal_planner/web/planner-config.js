@@ -1904,6 +1904,9 @@
         token_file: String((gcSync && gcSync.token_file) || ""),
         service_account_file: String((gcSync && gcSync.service_account_file) || ""),
         nonwork_calendar_id: String((gcSync && gcSync.nonwork_calendar_id) || ""),
+        work_calendar_id: String((gcSync && gcSync.work_calendar_id) || ""),
+        alarm_calendar_id: String((gcSync && gcSync.alarm_calendar_id) || ""),
+        wake_offset_hours: Number(gcSync && gcSync.wake_offset_hours) > 0 ? Number(gcSync.wake_offset_hours) : 3,
       };
       const systemFolder = document.getElementById("detail-system-folder");
       const dataFolder = document.getElementById("detail-data-folder");
@@ -1912,6 +1915,9 @@
       const gcClientSecret = document.getElementById("detail-gc-client-secret");
       const gcTokenFile = document.getElementById("detail-gc-token-file");
       const gcNonworkCalendar = document.getElementById("detail-gc-nonwork-calendar");
+      const gcWorkCalendar = document.getElementById("detail-gc-work-calendar");
+      const gcAlarmCalendar = document.getElementById("detail-gc-alarm-calendar");
+      const gcWakeOffset = document.getElementById("detail-gc-wake-offset");
       if (systemFolder) systemFolder.value = folders.system_folder ?? "";
       if (dataFolder) dataFolder.value = folders.data_folder ?? "";
       if (brown) brown.value = rice.cooked_to_raw_brown ?? "";
@@ -1919,6 +1925,9 @@
       if (gcClientSecret) gcClientSecret.value = googleCalendarSync.client_secret_file || "";
       if (gcTokenFile) gcTokenFile.value = googleCalendarSync.token_file || "";
       if (gcNonworkCalendar) gcNonworkCalendar.value = googleCalendarSync.nonwork_calendar_id || "";
+      if (gcWorkCalendar) gcWorkCalendar.value = googleCalendarSync.work_calendar_id || "";
+      if (gcAlarmCalendar) gcAlarmCalendar.value = googleCalendarSync.alarm_calendar_id || "";
+      if (gcWakeOffset) gcWakeOffset.value = googleCalendarSync.wake_offset_hours ?? 3;
       renderRosterCodeDefinitions(defs);
       const detailEditor = document.querySelector(".detail-editor");
       if (detailEditor) {
@@ -2039,6 +2048,10 @@
       const gcClientSecret = String(document.getElementById("detail-gc-client-secret")?.value || "").trim();
       const gcTokenFile = String(document.getElementById("detail-gc-token-file")?.value || "").trim();
       const gcNonworkCalendar = String(document.getElementById("detail-gc-nonwork-calendar")?.value || "").trim();
+      const gcWorkCalendar = String(document.getElementById("detail-gc-work-calendar")?.value || "").trim();
+      const gcAlarmCalendar = String(document.getElementById("detail-gc-alarm-calendar")?.value || "").trim();
+      const gcWakeOffsetRaw = Number(document.getElementById("detail-gc-wake-offset")?.value);
+      const gcWakeOffset = Number.isFinite(gcWakeOffsetRaw) && gcWakeOffsetRaw > 0 ? gcWakeOffsetRaw : 3;
       if (!systemFolder || !dataFolder) {
         setDetailStatus("");
         showDetailError("System folder and data folder are required.");
@@ -2061,6 +2074,9 @@
             token_file: gcTokenFile,
             service_account_file: "",
             nonwork_calendar_id: gcNonworkCalendar,
+            work_calendar_id: gcWorkCalendar,
+            alarm_calendar_id: gcAlarmCalendar,
+            wake_offset_hours: gcWakeOffset,
           },
           roster_code_definitions: collectRosterCodeDefinitions(),
         });

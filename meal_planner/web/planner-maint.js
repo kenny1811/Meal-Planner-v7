@@ -1149,9 +1149,14 @@
       return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
     }
 
+    function wakeOffsetMinutes() {
+      const hours = Number(googleCalendarSync && googleCalendarSync.wake_offset_hours);
+      return Number.isFinite(hours) && hours > 0 ? Math.round(hours * 60) : 180;
+    }
+
     function defaultWakeTimeForStart(start) {
       const minutes = timeMinutes(start);
-      return minutes == null ? "" : clockFromMinutes(minutes - 180);
+      return minutes == null ? "" : clockFromMinutes(minutes - wakeOffsetMinutes());
     }
 
     function holidayRowsByDate(rows) {
@@ -1254,10 +1259,12 @@
           const dateClasses = ["report-date-cell", isToday ? "report-today-cell" : "", (isSunday || holiday) ? "report-red" : ""].filter(Boolean).join(" ");
           const weekdayClasses = ["report-weekday-cell", isToday ? "report-today-cell" : "", (isSunday || holiday) ? "report-red" : ""].filter(Boolean).join(" ");
           const noteClasses = ["report-note-cell", isToday && holiday ? "report-today-cell" : ""].filter(Boolean).join(" ");
+          const wakeIsOverride = !!wake && wake !== defaultWake;
+          const wakeCellClasses = ["roster-wake-cell", wakeIsOverride ? "roster-wake-override" : ""].filter(Boolean).join(" ");
           reportRows.push(`<tr class="${isToday ? "report-today-row" : ""}">
             <td class="${dateClasses}">${esc(dateDmy(parsed.year, parsed.month, item.day))}</td>
             <td class="${weekdayClasses}">${esc(weekday)}</td>
-            <td class="roster-wake-cell" data-roster-wake-cell="1" tabindex="0"><input class="roster-wake-input" type="text" inputmode="numeric" tabindex="-1" data-roster-wake-date="${esc(key)}" data-roster-wake-default="${esc(defaultWake)}" value="${esc(wake)}" /></td>
+            <td class="${wakeCellClasses}" data-roster-wake-cell="1" tabindex="0"><input class="roster-wake-input" type="text" inputmode="numeric" tabindex="-1" data-roster-wake-date="${esc(key)}" data-roster-wake-default="${esc(defaultWake)}" value="${esc(wake)}" /></td>
             <td>${esc(item.code)}</td>
             <td>${esc(start)}</td>
             <td>${esc(end)}</td>
@@ -1777,11 +1784,21 @@
       }
     }
 
+    function updateRosterWakeOverrideClass(input) {
+      if (!input) return;
+      const cell = input.closest ? input.closest("td[data-roster-wake-cell]") : null;
+      if (!cell) return;
+      const current = normalTime(input.value) || "";
+      const def = normalTime(input.getAttribute("data-roster-wake-default") || "") || "";
+      cell.classList.toggle("roster-wake-override", !!current && current !== def);
+    }
+
     function handleRosterWakeInput(ev) {
       const input = rosterWakeInputFromEvent(ev);
       if (!input) return;
       const wasEdited = input.dataset.rosterWakeEdited === "1";
       input.dataset.rosterWakeEdited = "1";
+      updateRosterWakeOverrideClass(input);
       if (!wasEdited) setUnsavedChanges("餐單參數");
     }
 
@@ -1920,6 +1937,7 @@
       const raw = String(input.value || "").trim();
       const normal = normalTime(raw);
       if (normal) input.value = normal;
+      updateRosterWakeOverrideClass(input);
       const current = normalTime(input.value) || "";
       const last = input.dataset.rosterWakeLastSynced || "";
       if (input.dataset.rosterWakeEdited !== "1" && current === last) return true;

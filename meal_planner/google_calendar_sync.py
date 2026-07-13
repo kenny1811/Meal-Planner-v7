@@ -26,6 +26,7 @@ NONWORK_CALENDAR_ID = ""
 SYNC_SOURCE = "meal_planner_roster"
 DEFAULT_TIME_ZONE = "Asia/Hong_Kong"
 ALARM_EVENT_DURATION = timedelta(hours=1, minutes=45)
+DEFAULT_WAKE_OFFSET_HOURS = 3.0
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,7 @@ class GoogleCalendarSyncConfig:
     service_account_file: Path | None
     oauth_client_file: Path | None
     oauth_token_file: Path | None
+    wake_offset_hours: float = DEFAULT_WAKE_OFFSET_HOURS
 
 
 def _truthy(value: str | None) -> bool:
@@ -96,14 +98,23 @@ def config_from_env(settings: AppSettings) -> GoogleCalendarSyncConfig:
     ).strip()
     if nonwork_calendar_raw == OLD_LEAVE_CALENDAR_ID:
         nonwork_calendar_raw = ""
+    work_calendar_raw = str(saved.get("work_calendar_id") or "").strip()
+    alarm_calendar_raw = str(saved.get("alarm_calendar_id") or "").strip()
+    try:
+        wake_offset_hours = float(saved.get("wake_offset_hours", DEFAULT_WAKE_OFFSET_HOURS))
+    except (TypeError, ValueError):
+        wake_offset_hours = DEFAULT_WAKE_OFFSET_HOURS
+    if not (wake_offset_hours > 0):
+        wake_offset_hours = DEFAULT_WAKE_OFFSET_HOURS
     return GoogleCalendarSyncConfig(
         enabled=bool(saved.get("enabled")),
         dry_run=not bool(saved.get("write")),
         time_zone=os.environ.get("MENU_GOOGLE_CALENDAR_TIME_ZONE", DEFAULT_TIME_ZONE),
         account_email=os.environ.get("MENU_GOOGLE_CALENDAR_ACCOUNT", GC_ACCOUNT_EMAIL),
-        work_calendar_id=os.environ.get("MENU_GOOGLE_CALENDAR_WORK_ID", WORK_CALENDAR_ID),
-        alarm_calendar_id=os.environ.get("MENU_GOOGLE_CALENDAR_ALARM_ID", ALARM_CALENDAR_ID),
+        work_calendar_id=work_calendar_raw or os.environ.get("MENU_GOOGLE_CALENDAR_WORK_ID", WORK_CALENDAR_ID),
+        alarm_calendar_id=alarm_calendar_raw or os.environ.get("MENU_GOOGLE_CALENDAR_ALARM_ID", ALARM_CALENDAR_ID),
         leave_calendar_id=nonwork_calendar_raw,
+        wake_offset_hours=wake_offset_hours,
         backup_dir=backup_dir,
         service_account_file=Path(service_account_raw).expanduser() if service_account_raw else None,
         oauth_client_file=Path(oauth_client_raw).expanduser() if oauth_client_raw else None,
@@ -225,6 +236,7 @@ def build_roster_calendar_plan(
     work_calendar_id: str = WORK_CALENDAR_ID,
     alarm_calendar_id: str = ALARM_CALENDAR_ID,
     leave_calendar_id: str = NONWORK_CALENDAR_ID,
+    wake_offset_hours: float = DEFAULT_WAKE_OFFSET_HOURS,
     time_zone: str = DEFAULT_TIME_ZONE,
     from_date: date | None = None,
 ) -> RosterCalendarPlan:
@@ -312,7 +324,7 @@ def build_roster_calendar_plan(
             )
 
             wake_time = wake_alarm_by_date.get(roster_day)
-            alarm_start = _combine_alarm(roster_day, wake_time, start_time, tz) if wake_time else start_at - timedelta(hours=3)
+            alarm_start = _combine_alarm(roster_day, wake_time, start_time, tz) if wake_time else start_at - timedelta(hours=wake_offset_hours)
             alarm_events.append(
                 CalendarEventPlan(
                     kind="alarm",
@@ -867,6 +879,7 @@ def sync_roster_to_google_calendar(
         work_calendar_id=config.work_calendar_id,
         alarm_calendar_id=config.alarm_calendar_id,
         leave_calendar_id=config.leave_calendar_id,
+        wake_offset_hours=config.wake_offset_hours,
         time_zone=config.time_zone,
         from_date=datetime.now(ZoneInfo(config.time_zone)).date(),
     )
