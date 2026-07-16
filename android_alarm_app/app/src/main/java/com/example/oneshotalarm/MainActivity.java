@@ -63,6 +63,12 @@ public class MainActivity extends Activity {
     private static final int PAGE_MEAL = 0;
     private static final int PAGE_SHIFT = 1;
     private static final int PAGE_DUTY = 2;
+    private static final int PAGE_ONOFF = 3;
+    private static final int SERVER_STATUS_CHECKING = 0;
+    private static final int SERVER_STATUS_ONLINE = 1;
+    private static final int SERVER_STATUS_OFFLINE = 2;
+    private static final int SERVER_STATUS_ERROR = 3;
+    private static final long SERVER_STATUS_POLL_MS = 30000L;
     private static final String ACTION_TEST_DAILY_IMPORT = "com.example.oneshotalarm.ACTION_TEST_DAILY_IMPORT";
     private static final Pattern TIME_RE = Pattern.compile("^\\d{1,2}:\\d{2}$");
     private static final Pattern SCHEDULE_GRID_HEADER_RE = Pattern.compile(
@@ -100,9 +106,16 @@ public class MainActivity extends Activity {
     private LinearLayout shiftSection;
     private LinearLayout dutySection;
     private DutyReportView dutyReportView;
+    private LinearLayout onoffSection;
+    private OnOffDutyView onOffDutyView;
     private Button mealTabButton;
     private Button shiftTabButton;
     private Button dutyTabButton;
+    private Button onoffTabButton;
+    private TextView serverStatusView;
+    private boolean serverStatusCheckInFlight = false;
+    private final android.os.Handler serverStatusHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
     private Button importXmlButton;
     private Button shiftVariantButton;
     private Button watchAlarmToggleButton;
@@ -159,16 +172,109 @@ public class MainActivity extends Activity {
         loadDraftFromStore();
         render();
         NextAlarmWidgetProvider.updateAll(this);
+        scheduleServerStatusChecks();
         if (currentPage == PAGE_MEAL) {
             fetchMealPlanForSelectedDate();
         } else if (currentPage == PAGE_DUTY && dutyReportView != null) {
             dutyReportView.refresh();
+        } else if (currentPage == PAGE_ONOFF && onOffDutyView != null) {
+            onOffDutyView.refresh();
         }
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        serverStatusHandler.removeCallbacksAndMessages(null);
+    }
+
+    private void scheduleServerStatusChecks() {
+        serverStatusHandler.removeCallbacksAndMessages(null);
+        checkServerStatus();
+        serverStatusHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                checkServerStatus();
+                serverStatusHandler.postDelayed(this, SERVER_STATUS_POLL_MS);
+            }
+        }, SERVER_STATUS_POLL_MS);
+    }
+
+    private void checkServerStatus() {
+        if (serverStatusCheckInFlight) {
+            return;
+        }
+        serverStatusCheckInFlight = true;
+        new Thread(() -> {
+            int state = SERVER_STATUS_OFFLINE;
+            String message = "";
+            for (String baseServer : getAutoServerCandidates(AlarmStore.getAutoSyncServerUrl(this))) {
+                String server = baseServer == null ? "" : baseServer.trim();
+                if (server.isEmpty()) {
+                    continue;
+                }
+                if (server.endsWith("/")) {
+                    server = server.substring(0, server.length() - 1);
+                }
+                HttpURLConnection conn = null;
+                try {
+                    URL url = new URL(server + "/health");
+                    conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
+                    conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
+                    conn.connect();
+                    int code = conn.getResponseCode();
+                    if (code == HttpURLConnection.HTTP_OK) {
+                        state = SERVER_STATUS_ONLINE;
+                        message = "";
+                        break;
+                    }
+                    // Server 有回應但唔正常：算 error，繼續試下一個 candidate。
+                    state = SERVER_STATUS_ERROR;
+                    message = "HTTP " + code;
+                } catch (Exception e) {
+                    // 呢個 candidate 掂唔到；維持而家嘅 state（可能已有 error）。
+                } finally {
+                    if (conn != null) {
+                        conn.disconnect();
+                    }
+                }
+            }
+            int finalState = state;
+            String finalMessage = message;
+            serverStatusCheckInFlight = false;
+            runOnUiThread(() -> applyServerStatus(finalState, finalMessage));
+        }).start();
+    }
+
+    private void applyServerStatus(int state, String message) {
+        if (serverStatusView == null) {
+            return;
+        }
+        String text;
+        int color;
+        if (state == SERVER_STATUS_ONLINE) {
+            text = "Online";
+            color = 0xFF3D9960;
+        } else if (state == SERVER_STATUS_OFFLINE) {
+            text = "Offline";
+            color = 0xFFB91C1C;
+        } else if (state == SERVER_STATUS_ERROR) {
+            text = message == null || message.trim().isEmpty() ? "Error" : message.trim();
+            color = 0xFFD97706;
+        } else {
+            text = "…";
+            color = 0xFF94A3B8;
+        }
+        serverStatusView.setText(text);
+        serverStatusView.setTextColor(color);
+        serverStatusView.setBackground(roundedBg(0xFFFFFFFF, 10, color, 1));
+    }
+
+    @Override
     public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
-        if (currentPage == PAGE_MEAL || currentPage == PAGE_DUTY) {
+        if (currentPage == PAGE_MEAL || currentPage == PAGE_DUTY || currentPage == PAGE_ONOFF) {
             if (ev.getAction() == android.view.MotionEvent.ACTION_DOWN) {
                 mealSwipeDownX = ev.getX();
                 mealSwipeDownY = ev.getY();
@@ -179,7 +285,9 @@ public class MainActivity extends Activity {
                 if (Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.8f) {
                     if (currentPage == PAGE_MEAL) {
                         shiftMealDate(dx < 0 ? 1 : -1);
-                    } else if (dutyReportView != null) {
+                    } else if (currentPage == PAGE_ONOFF && onOffDutyView != null) {
+                        onOffDutyView.shiftDate(dx < 0 ? 1 : -1);
+                    } else if (currentPage == PAGE_DUTY && dutyReportView != null) {
                         dutyReportView.shiftDate(dx < 0 ? 1 : -1);
                     }
                     return true;
@@ -209,7 +317,30 @@ public class MainActivity extends Activity {
         title.setTypeface(mealBoldTypeface());
         title.setGravity(Gravity.CENTER);
         title.setPadding(dp(6), dp(0), dp(6), dp(1));
-        root.addView(title, fullWidthWrapHeight());
+
+        // 標題行用 FrameLayout：status badge 疊喺右邊，唔佔額外高度。
+        android.widget.FrameLayout titleBar = new android.widget.FrameLayout(this);
+        titleBar.addView(title, new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+        ));
+        serverStatusView = new TextView(this);
+        serverStatusView.setTextSize(9);
+        serverStatusView.setTypeface(mealBoldTypeface());
+        serverStatusView.setGravity(Gravity.CENTER);
+        serverStatusView.setIncludeFontPadding(false);
+        serverStatusView.setSingleLine(true);
+        serverStatusView.setPadding(dp(8), dp(2), dp(8), dp(2));
+        serverStatusView.setOnClickListener(v -> checkServerStatus());
+        applyServerStatus(SERVER_STATUS_CHECKING, "");
+        android.widget.FrameLayout.LayoutParams badgeParams = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.END | Gravity.CENTER_VERTICAL
+        );
+        badgeParams.setMargins(0, 0, dp(10), 0);
+        titleBar.addView(serverStatusView, badgeParams);
+        root.addView(titleBar, fullWidthWrapHeight());
 
         TextView versionTag = new TextView(this);
         versionTag.setText("");
@@ -227,13 +358,23 @@ public class MainActivity extends Activity {
 
         mealTabButton = buildTopTabButton("餐單");
         shiftTabButton = buildTopTabButton("行位表");
-        dutyTabButton = buildTopTabButton("報更");
+        dutyTabButton = buildTopTabButton("報平安更");
+        onoffTabButton = buildTopTabButton("報開/收工");
+        // 四個 tab 迫一行：呢兩個略細 + 單行先擺得落。
+        dutyTabButton.setTextSize(11);
+        onoffTabButton.setTextSize(11);
+        dutyTabButton.setMaxLines(1);
+        onoffTabButton.setMaxLines(1);
+        dutyTabButton.setPadding(dp(2), 0, dp(2), 0);
+        onoffTabButton.setPadding(dp(2), 0, dp(2), 0);
         mealTabButton.setOnClickListener(v -> switchPage(PAGE_MEAL));
         shiftTabButton.setOnClickListener(v -> switchPage(PAGE_SHIFT));
         dutyTabButton.setOnClickListener(v -> switchPage(PAGE_DUTY));
+        onoffTabButton.setOnClickListener(v -> switchPage(PAGE_ONOFF));
         tabRow.addView(mealTabButton, weightedParams(1f));
         tabRow.addView(shiftTabButton, weightedParams(1f));
         tabRow.addView(dutyTabButton, weightedParams(1f));
+        tabRow.addView(onoffTabButton, weightedParams(1f));
         root.addView(tabRow, fullWidthWrapHeight());
 
         mealSection = new LinearLayout(this);
@@ -417,6 +558,13 @@ public class MainActivity extends Activity {
         dutyReportView = new DutyReportView(this, dutySection, mealTypeface(), mealBoldTypeface());
         root.addView(dutySection, fullWidthWrapHeight());
 
+        onoffSection = new LinearLayout(this);
+        onoffSection.setOrientation(LinearLayout.VERTICAL);
+        onoffSection.setPadding(0, dp(2), 0, dp(10));
+        onoffSection.setBackgroundColor(0xFFFFFFFF);
+        onOffDutyView = new OnOffDutyView(this, onoffSection, mealTypeface(), mealBoldTypeface());
+        root.addView(onoffSection, fullWidthWrapHeight());
+
         scrollView.addView(
                 root,
                 new ScrollView.LayoutParams(
@@ -468,7 +616,11 @@ public class MainActivity extends Activity {
     private void switchPage(int page) {
         boolean wasMeal = currentPage == PAGE_MEAL;
         boolean wasDuty = currentPage == PAGE_DUTY;
-        currentPage = page == PAGE_MEAL ? PAGE_MEAL : page == PAGE_DUTY ? PAGE_DUTY : PAGE_SHIFT;
+        boolean wasOnOff = currentPage == PAGE_ONOFF;
+        currentPage = page == PAGE_MEAL ? PAGE_MEAL
+                : page == PAGE_DUTY ? PAGE_DUTY
+                : page == PAGE_ONOFF ? PAGE_ONOFF
+                : PAGE_SHIFT;
         updatePageVisibility();
         render();
         if (currentPage == PAGE_MEAL && !wasMeal) {
@@ -477,19 +629,25 @@ public class MainActivity extends Activity {
         if (currentPage == PAGE_DUTY && !wasDuty && dutyReportView != null) {
             dutyReportView.refresh();
         }
+        if (currentPage == PAGE_ONOFF && !wasOnOff && onOffDutyView != null) {
+            onOffDutyView.refresh();
+        }
     }
 
     private void updatePageVisibility() {
-        if (mealSection == null || shiftSection == null || dutySection == null
-                || mealTabButton == null || shiftTabButton == null || dutyTabButton == null) {
+        if (mealSection == null || shiftSection == null || dutySection == null || onoffSection == null
+                || mealTabButton == null || shiftTabButton == null || dutyTabButton == null
+                || onoffTabButton == null) {
             return;
         }
         boolean isMeal = currentPage == PAGE_MEAL;
         boolean isDuty = currentPage == PAGE_DUTY;
-        boolean isShift = !isMeal && !isDuty;
+        boolean isOnOff = currentPage == PAGE_ONOFF;
+        boolean isShift = !isMeal && !isDuty && !isOnOff;
         mealSection.setVisibility(isMeal ? View.VISIBLE : View.GONE);
         shiftSection.setVisibility(isShift ? View.VISIBLE : View.GONE);
         dutySection.setVisibility(isDuty ? View.VISIBLE : View.GONE);
+        onoffSection.setVisibility(isOnOff ? View.VISIBLE : View.GONE);
 
         mealTabButton.setBackgroundColor(isMeal ? 0xFF0B1026 : 0xFFDDEBF5);
         mealTabButton.setTextColor(isMeal ? 0xFFFFFFFF : 0xFF334155);
@@ -497,6 +655,8 @@ public class MainActivity extends Activity {
         shiftTabButton.setTextColor(isShift ? 0xFFFFFFFF : 0xFF334155);
         dutyTabButton.setBackgroundColor(isDuty ? 0xFF0B1026 : 0xFFDDEBF5);
         dutyTabButton.setTextColor(isDuty ? 0xFFFFFFFF : 0xFF334155);
+        onoffTabButton.setBackgroundColor(isOnOff ? 0xFF0B1026 : 0xFFDDEBF5);
+        onoffTabButton.setTextColor(isOnOff ? 0xFFFFFFFF : 0xFF334155);
     }
 
     private void launchImportScheduleGridXml() {
