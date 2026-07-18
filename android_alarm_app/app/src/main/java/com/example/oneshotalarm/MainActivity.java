@@ -1588,10 +1588,14 @@ public class MainActivity extends Activity {
         }
         mealDateView.setText(formatPlanDateWithRoster(mealSelectedDate, day));
 
+        String stalePlanCode = day.optString("stale_plan_code", "").trim();
         if (mealFetchInFlight) {
             setMealPlanStatusText("更新中...", true);
         } else if (mealFetchErrorText != null && !mealFetchErrorText.trim().isEmpty()) {
             setMealPlanStatusText(mealFetchErrorText.trim(), true);
+        } else if (!stalePlanCode.isEmpty()) {
+            setMealPlanStatusText("⚠ 更表已改，餐單內容仍按舊碼 " + stalePlanCode
+                    + " 生成——去電腦重新生成先會跟新碼", true);
         } else {
             setMealPlanStatusText("", false);
         }

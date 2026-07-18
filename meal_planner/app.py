@@ -1232,6 +1232,18 @@ def api_mobile_meal_plan(date_iso: str, meta_only: bool = False) -> dict[str, An
                 "message": "Meal plan has not been generated for this date.",
             }
         day_payload = _with_mobile_restaurant_lunch_label(day_payload)
+        # 更碼即場跟更表（權威）——snapshot 生成後更表可能改咗（例如電話現場轉更）。
+        # 有出入時用現時碼顯示，並標記餐單內容仍按舊碼生成（要重新生成先跟得切）。
+        try:
+            from meal_planner.duty_form import roster_code_for
+
+            live_code = roster_code_for(get_settings(), target_date)
+        except Exception:
+            live_code = ""
+        stored_code = str(day_payload.get("roster_code") or "").strip()
+        if live_code and live_code != stored_code:
+            day_payload["roster_code"] = live_code
+            day_payload["stale_plan_code"] = stored_code
         content_seed = {
             "date": target_date.isoformat(),
             "headers": payload.get("headers", []),
