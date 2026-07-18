@@ -264,6 +264,9 @@ class DutyReportView {
         // 全日操作（過去日唔俾改）
         if (!isPast) {
             container.addView(actionBar(mode, source));
+            container.addView(textView(
+                    "轉code只改報更行位——更表／餐單／報開工收工唔郁",
+                    9, 0xFF9AA1A9, false));
         } else {
             container.addView(textView("Past day is read-only.", 10, 0xFF9AA1A9, false));
         }

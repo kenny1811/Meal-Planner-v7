@@ -420,6 +420,9 @@ class OnOffDutyView {
                 12, 0xFF0F172A, true);
         codeLine.setOnClickListener(v -> showCodeEditDialog());
         container.addView(codeLine);
+        container.addView(textView(
+                "撳code轉更：會寫入更表——報更／餐單／日曆全部跟住變",
+                9, 0xFF9AA1A9, false));
         if (!post.isEmpty()) {
             container.addView(textView(post + " · Staff " + plan.optString("staff_number", ""),
                     11, 0xFF374151, false));
