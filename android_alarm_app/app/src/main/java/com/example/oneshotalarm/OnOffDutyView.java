@@ -7,6 +7,8 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.text.InputType;
 import android.view.Gravity;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -177,6 +179,76 @@ class OnOffDutyView {
                 .show();
     }
 
+    /** 現場轉更：改當日更碼（寫入更表）——開工/收工時間、報平安更、日曆全部即時跟住重排。 */
+    private void showCodeEditDialog() {
+        if (plan == null || loading) {
+            return;
+        }
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(16), dp(8), dp(16), 0);
+        AutoCompleteTextView codeInput = new AutoCompleteTextView(activity);
+        codeInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        codeInput.setHint("e.g. TSB / IFCA1 / SB");
+        codeInput.setText(plan.optString("roster_code", ""));
+        codeInput.setSelectAllOnFocus(true);
+        JSONArray known = plan.optJSONArray("known_codes");
+        if (known != null && known.length() > 0) {
+            String[] codes = new String[known.length()];
+            for (int i = 0; i < known.length(); i++) {
+                codes[i] = known.optString(i, "");
+            }
+            codeInput.setAdapter(new ArrayAdapter<>(
+                    activity, android.R.layout.simple_dropdown_item_1line, codes));
+            codeInput.setThreshold(1);
+        }
+        box.addView(codeInput);
+        new AlertDialog.Builder(activity)
+                .setTitle("轉更 — 改 " + plan.optString("date_iso", "") + " 更碼（寫入更表）")
+                .setMessage("開工/收工時間、報平安更、日曆會即時跟新更碼重排。")
+                .setView(box)
+                .setPositiveButton("OK", (d, w) -> {
+                    String value = codeInput.getText().toString().trim();
+                    if (value.isEmpty()) {
+                        Toast.makeText(activity, "更碼唔可以留空", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    postRosterCode(value);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void postRosterCode(String code) {
+        if (loading || plan == null) {
+            return;
+        }
+        loading = true;
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("date_iso", plan.optString("date_iso", ""));
+            payload.put("code", code);
+        } catch (Exception ignored) {
+        }
+        new Thread(() -> {
+            try {
+                String body = requestWithFailover("POST", "/api/onoffduty/roster-code", payload.toString());
+                JSONObject parsed = new JSONObject(body);
+                activity.runOnUiThread(() -> {
+                    plan = parsed;
+                    loading = false;
+                    render();
+                });
+            } catch (Exception e) {
+                activity.runOnUiThread(() -> {
+                    loading = false;
+                    lastError = "Code change failed: " + e.getMessage();
+                    render();
+                });
+            }
+        }, "onoffduty-code").start();
+    }
+
     private void postOverride(String kind, String timeValue, String note) {
         if (loading || plan == null) {
             return;
@@ -338,14 +410,16 @@ class OnOffDutyView {
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         container.addView(modeRow);
 
-        // 第三行：更碼 / form / Post
+        // 第三行：更碼 / form / Post（撳更碼可以現場轉更——寫入更表）
         String code = plan.optString("roster_code", "");
         String form = plan.optString("form", "");
         String formLabel = "vca".equals(form) ? "VCA form" : "other".equals(form) ? "其他 form" : "—";
         String post = plan.optString("post", "");
-        container.addView(textView(
-                "Code " + (code.isEmpty() ? "—" : code) + " · " + formLabel,
-                12, 0xFF0F172A, true));
+        TextView codeLine = textView(
+                "Code " + (code.isEmpty() ? "—" : code) + " · " + formLabel + "  ✎",
+                12, 0xFF0F172A, true);
+        codeLine.setOnClickListener(v -> showCodeEditDialog());
+        container.addView(codeLine);
         if (!post.isEmpty()) {
             container.addView(textView(post + " · Staff " + plan.optString("staff_number", ""),
                     11, 0xFF374151, false));

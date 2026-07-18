@@ -425,6 +425,95 @@ def set_time_override(
             clear_onoff_log_entry(settings, biz_date, str(action["kind"]))
 
 
+def _replace_code_in_cell(cell_text: str, day: int, new_code: str) -> str | None:
+    """更表單格 token 手術：只換指定日嘅更碼，其餘一 byte 不動。搵唔到該日回 None。
+
+    掃法同 roster.parse_roster_line 一致（日 token = 1–31 純數字，更碼可含空格）。
+    """
+    import re as _re
+
+    from meal_planner.roster import _MONTH_HEAD_RE
+
+    if cell_text is None:
+        return None
+    text = str(cell_text)
+    m = _MONTH_HEAD_RE.match(text.strip())
+    if not m:
+        return None
+    tokens = [(t.start(), t.end(), t.group()) for t in _re.finditer(r"\S+", text)]
+    # 跳過月份 head 佔用嘅 tokens（head 一定喺最前）。
+    head_end = text.find(m.group(0)) + len(m.group(0))
+    idx = 0
+    while idx < len(tokens) and tokens[idx][0] < head_end:
+        idx += 1
+
+    def is_day_token(value: str) -> bool:
+        return value.isdigit() and 1 <= int(value) <= 31
+
+    while idx < len(tokens):
+        d_tok = tokens[idx][2]
+        if not is_day_token(d_tok):
+            break
+        idx += 1
+        code_span: tuple[int, int] | None = None
+        while idx < len(tokens) and not is_day_token(tokens[idx][2]):
+            start_pos, end_pos, _ = tokens[idx]
+            code_span = (code_span[0] if code_span else start_pos, end_pos)
+            idx += 1
+        if code_span is None:
+            break
+        if int(d_tok) == day:
+            return text[: code_span[0]] + new_code + text[code_span[1] :]
+    return None
+
+
+def set_roster_code(settings: AppSettings, biz_date: date, code: str) -> None:
+    """現場轉更：直接改更表（權威來源）——報開工/收工、報平安更、日曆、餐單全部跟住變。
+
+    改完如果該日 action 原本標咗 missed 而新更時間重新趕得切，會清返 log 俾 scheduler 重新處理
+    （同 set_time_override 一樣嘅重新武裝邏輯）。
+    """
+    from zoneinfo import ZoneInfo
+
+    from meal_planner.duty_report import _slot_datetime
+    from meal_planner.maintenance_db import save_sheet_rows
+    from meal_planner.roster import parse_roster_line
+
+    new_code = " ".join(str(code or "").split())
+    if not new_code:
+        raise ValueError("更碼唔可以留空")
+
+    payload = load_sheet_rows("roster", settings)
+    rows = [list(r) if isinstance(r, list) else [] for r in (payload.get("rows") or [])]
+    replaced = False
+    for row in rows:
+        if not row or row[0] is None:
+            continue
+        rm = parse_roster_line(str(row[0]))
+        if rm is None or (rm.year, rm.month) != (biz_date.year, biz_date.month):
+            continue
+        new_cell = _replace_code_in_cell(str(row[0]), biz_date.day, new_code)
+        if new_cell is None:
+            raise ValueError(f"更表 {rm.year}年{rm.month}月 行搵唔到 {biz_date.day} 日")
+        row[0] = new_cell
+        replaced = True
+        break
+    if not replaced:
+        raise ValueError(f"更表搵唔到 {biz_date.year}年{biz_date.month}月")
+    save_sheet_rows("roster", rows, settings)
+
+    # missed 重新武裝：新更嘅時間仲趕得切（未過 grace）就清 log。
+    tz = ZoneInfo(settings.dates.timezone)
+    now = datetime.now(tz)
+    plan = build_day_plan(settings, biz_date=biz_date)
+    for action in plan.get("actions") or []:
+        if action.get("status") != "missed" or not action.get("time"):
+            continue
+        slot_dt = _slot_datetime(biz_date, str(action["time"]), tz)
+        if now < slot_dt + timedelta(minutes=GRACE_MINUTES):
+            clear_onoff_log_entry(settings, biz_date, str(action["kind"]))
+
+
 def submit_form(
     form: FormDef,
     post: str,
@@ -689,6 +778,7 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
         "relation": "today" if biz_date == today else ("past" if biz_date < today else "future"),
         "staff_number": STAFF_NUMBER,
         "roster_code": roster_code,
+        "known_codes": sorted(POST_MAPPING),
         "actions": [],
         "note": "",
     }

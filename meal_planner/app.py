@@ -342,6 +342,11 @@ class OnOffDutyLateOffRequest(BaseModel):
     note: str = ""
 
 
+class OnOffDutyRosterCodeRequest(BaseModel):
+    date_iso: str | None = None
+    code: str
+
+
 def _stored_meal_plan_payloads(date_isos: set[str]) -> dict[str, dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     if not date_isos:
@@ -2159,6 +2164,27 @@ def api_onoffduty_override(body: OnOffDutyOverrideRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OnOffDuty override failed: {e}") from e
+
+
+@app.post("/api/onoffduty/roster-code")
+def api_onoffduty_roster_code(body: OnOffDutyRosterCodeRequest) -> dict[str, Any]:
+    from meal_planner.duty_form import build_day_plan, set_roster_code
+    from meal_planner.duty_report import business_date
+
+    try:
+        settings = get_settings()
+        if body.date_iso:
+            biz_date = date.fromisoformat(body.date_iso)
+        else:
+            from zoneinfo import ZoneInfo
+
+            biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
+        set_roster_code(settings, biz_date, body.code)
+        return build_day_plan(settings, biz_date=biz_date)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OnOffDuty roster-code failed: {e}") from e
 
 
 @app.post("/api/onoffduty/lateoff")
