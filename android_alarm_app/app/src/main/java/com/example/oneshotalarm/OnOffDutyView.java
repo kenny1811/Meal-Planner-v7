@@ -7,9 +7,12 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.text.InputType;
 import android.view.Gravity;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -177,13 +180,11 @@ class OnOffDutyView {
                 .show();
     }
 
-    /** 現場轉更：pickup list 揀當日更碼（寫入更表）——開工/收工時間、報平安更、日曆全部即時跟住重排。 */
-    private void showCodeEditDialog() {
-        if (plan == null || loading) {
-            return;
-        }
-        java.util.List<String> codes = new java.util.ArrayList<>();
-        JSONArray known = plan.optJSONArray("known_codes");
+    /** 現場轉更：更碼本身係一個 Spinner pickup list，揀咗（確認後）即寫入更表——
+     *  開工/收工時間、報平安更、日曆全部即時跟住重排。 */
+    private Spinner buildCodeSpinner(String currentCode) {
+        final java.util.List<String> codes = new java.util.ArrayList<>();
+        JSONArray known = plan != null ? plan.optJSONArray("known_codes") : null;
         if (known != null) {
             for (int i = 0; i < known.length(); i++) {
                 String c = known.optString(i, "").trim();
@@ -195,20 +196,50 @@ class OnOffDutyView {
         if (!codes.contains("SB")) {
             codes.add("SB");
         }
+        String shown = currentCode == null || currentCode.trim().isEmpty() ? "—" : currentCode.trim();
+        if (!codes.contains(shown)) {
+            codes.add(0, shown);
+        }
         codes.add("Other code...");
-        String[] labels = codes.toArray(new String[0]);
-        new AlertDialog.Builder(activity)
-                .setTitle("轉更 — 揀 " + plan.optString("date_iso", "") + " 更碼")
-                .setItems(labels, (dialog, which) -> {
-                    String picked = labels[which];
-                    if ("Other code...".equals(picked)) {
-                        promptCode(value -> confirmRosterCode(value));
-                    } else {
-                        confirmRosterCode(picked);
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        final int currentIndex = codes.indexOf(shown);
+
+        Spinner spinner = new Spinner(activity);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+                activity, android.R.layout.simple_spinner_item, codes) {
+            @Override
+            public android.view.View getView(int position, android.view.View convertView,
+                    android.view.ViewGroup parent) {
+                TextView view = (TextView) super.getView(position, convertView, parent);
+                view.setTextSize(14);
+                view.setTypeface(boldTypeface);
+                view.setTextColor(0xFF0B3EA8);
+                return view;
+            }
+        };
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        spinner.setSelection(currentIndex, false);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, android.view.View view,
+                    int position, long id) {
+                if (position == currentIndex) {
+                    return; // 初始 render／取消還原，唔當揀嘢
+                }
+                String picked = codes.get(position);
+                spinner.setSelection(currentIndex); // 顯示先還原，等 API 成功 refresh 先變
+                if ("Other code...".equals(picked)) {
+                    promptCode(value -> confirmRosterCode(value));
+                } else {
+                    confirmRosterCode(picked);
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+        return spinner;
     }
 
     private interface CodeCallback {
@@ -438,18 +469,22 @@ class OnOffDutyView {
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         container.addView(modeRow);
 
-        // 第三行：更碼 / form / Post（撳更碼可以現場轉更——寫入更表）
+        // 第三行：更碼（Spinner pickup list，揀即轉更——寫入更表）/ form
         String code = plan.optString("roster_code", "");
         String form = plan.optString("form", "");
         String formLabel = "vca".equals(form) ? "VCA form" : "other".equals(form) ? "其他 form" : "—";
         String post = plan.optString("post", "");
-        TextView codeLine = textView(
-                "Code " + (code.isEmpty() ? "—" : code) + " · " + formLabel + "  ✎",
-                12, 0xFF0F172A, true);
-        codeLine.setOnClickListener(v -> showCodeEditDialog());
-        container.addView(codeLine);
+        LinearLayout codeRow = row();
+        TextView codeLabel = textView("Code", 12, 0xFF0F172A, true);
+        codeRow.addView(codeLabel, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        codeRow.addView(buildCodeSpinner(code), new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        TextView formView = textView("· " + formLabel, 12, 0xFF0F172A, true);
+        codeRow.addView(formView, weighted(1f));
+        container.addView(codeRow);
         container.addView(textView(
-                "撳code轉更：會寫入更表——報更／餐單／日曆全部跟住變",
+                "揀code轉更：會寫入更表——報更／餐單／日曆全部跟住變",
                 10, 0xFF9A5B00, true));
         if (!post.isEmpty()) {
             container.addView(textView(post + " · Staff " + plan.optString("staff_number", ""),
