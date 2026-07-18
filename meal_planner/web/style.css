@@ -554,6 +554,16 @@
       border: 1px solid var(--grid);
       background: #fff;
     }
+    /* 更表 sheet：title bar 高度不定（GC sync 掣／紅色警告），
+       用 flex 俾 split 填淨低空間，唔可以寫死 title 高度。 */
+    .maint-editor.maint-editor--roster {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .maint-editor.maint-editor--roster > .maint-sheet-title {
+      flex: 0 0 auto;
+    }
     .maint-sheet-title {
       position: sticky;
       top: 0;
@@ -875,7 +885,8 @@
     .maint-roster-split {
       display: grid;
       grid-template-rows: 42% 6px 1fr;
-      height: calc(100% - 24px);
+      flex: 1 1 auto;
+      min-height: 0;
     }
     .maint-roster-report-resizer {
       cursor: row-resize;

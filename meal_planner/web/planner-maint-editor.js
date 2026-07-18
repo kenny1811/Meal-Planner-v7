@@ -622,6 +622,7 @@
     function renderMaintEditor() {
       const editor = document.getElementById("maint-editor");
       if (!editor) return;
+      editor.classList.toggle("maint-editor--roster", maintSheetPayload.sheet_key === "roster");
       if (maintSheetPayload.sheet_key === "roster") {
         currentMaintFilter = "";
         currentMaintEffectiveFilter = "";
