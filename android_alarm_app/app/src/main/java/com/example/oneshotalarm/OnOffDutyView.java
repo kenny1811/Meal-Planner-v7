@@ -422,7 +422,7 @@ class OnOffDutyView {
         container.addView(codeLine);
         container.addView(textView(
                 "撳code轉更：會寫入更表——報更／餐單／日曆全部跟住變",
-                9, 0xFF9AA1A9, false));
+                10, 0xFF9A5B00, true));
         if (!post.isEmpty()) {
             container.addView(textView(post + " · Staff " + plan.optString("staff_number", ""),
                     11, 0xFF374151, false));
@@ -431,7 +431,10 @@ class OnOffDutyView {
         String note = plan.optString("note", "");
         JSONArray actions = plan.optJSONArray("actions");
         if (actions == null || actions.length() == 0) {
-            container.addView(textView(note.isEmpty() ? "No report this day" : note, 12, 0xFF64748B, false));
+            TextView emptyView = textView(note.isEmpty() ? "No report this day" : note, 13, 0xFF64748B, true);
+            emptyView.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyView.setPadding(dp(8), dp(16), dp(8), dp(16));
+            container.addView(emptyView, fullWidth());
             return;
         }
         if (!note.isEmpty()) {
