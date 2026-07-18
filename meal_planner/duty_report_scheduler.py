@@ -34,11 +34,18 @@ def last_error() -> str:
 def _loop() -> None:
     global _LAST_ERROR
     while True:
+        errors: list[str] = []
         try:
             from meal_planner.duty_report import process_due_slots
 
             process_due_slots()
-            _LAST_ERROR = ""
         except Exception:  # noqa: BLE001 - scheduler must survive any tick error
-            _LAST_ERROR = traceback.format_exc(limit=3)
+            errors.append(traceback.format_exc(limit=3))
+        try:
+            from meal_planner.duty_form import process_due_actions
+
+            process_due_actions()
+        except Exception:  # noqa: BLE001 - 一邊死唔可以拖冧另一邊
+            errors.append(traceback.format_exc(limit=3))
+        _LAST_ERROR = "\n".join(errors)
         time.sleep(TICK_SECONDS)

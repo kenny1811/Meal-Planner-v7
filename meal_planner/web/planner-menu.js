@@ -72,7 +72,8 @@
       if (key === "catalog") return "Catalog";
       if (key === "details") return "Detail Settings";
       if (key === "shift_code_analysis") return "更碼分析";
-      if (key === "duty_report") return "報更";
+      if (key === "duty_report") return "ReportNormal";
+      if (key === "onoffduty") return "OnOffDuty";
       const sheet = (maintSheets || []).find((item) => item && item.sheet_key === key);
       if (sheet) return MAINT_SHEET_LABELS[key] || sheet.display_name || key;
       return String(menuLabels[key] || key);

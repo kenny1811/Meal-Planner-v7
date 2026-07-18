@@ -34,7 +34,7 @@ import java.util.Map;
  */
 class DutyReportView {
 
-    private static final int HTTP_CONNECT_TIMEOUT_MS = 5000;
+    private static final int HTTP_CONNECT_TIMEOUT_MS = 2500;
     private static final int HTTP_READ_TIMEOUT_MS = 90000;
 
     private final Activity activity;
@@ -187,7 +187,7 @@ class DutyReportView {
         LinearLayout dateRow = row();
         String relationLabel = isToday ? "Today" : isPast ? "Past" : "Future";
         TextView dateLabel = textView(
-                plan.optString("date_iso", "") + " (" + relationLabel + ")  \u2039swipe L/R\u203a",
+                plan.optString("date_iso", "") + " (" + relationLabel + ")",
                 13, 0xFF0F172A, true);
         dateLabel.setGravity(Gravity.CENTER_VERTICAL);
         dateRow.addView(dateLabel, weighted(1f));
@@ -400,10 +400,11 @@ class DutyReportView {
                 rowLayout.addView(sendButton("Resend", slotId, true), buttonParams());
             }
         } else if ("skipped".equals(status)) {
-            Button unskip = actionButton("Unskip");
-            unskip.setOnClickListener(v -> postSlotPatch(slotId, "skip", Boolean.FALSE));
-            rowLayout.addView(unskip, buttonParams());
-            // skip 咗都可以手動即發（延遲收工，真係收工先報）。
+            // skipped：Skip 掣變 Skipped（dim，撳一下取消 skip）；Send 照常可用（收工先報）。
+            Button skipped = actionButton("Skipped");
+            skipped.setAlpha(0.45f);
+            skipped.setOnClickListener(v -> postSlotPatch(slotId, "skip", Boolean.FALSE));
+            rowLayout.addView(skipped, buttonParams());
             if (isToday) {
                 rowLayout.addView(sendButton("Send", slotId, false), buttonParams());
             }

@@ -196,6 +196,8 @@ def load_config(settings: AppSettings) -> dict[str, Any]:
     mapping = stored.get("mapping")
     if not isinstance(mapping, dict) or not mapping:
         mapping = dict(DEFAULT_GROUP_MAPPING)
+    # 固定按更碼排序：唔理邊個 client（電話 JSONObject 唔保次序）點儲，顯示一律穩定。
+    mapping = dict(sorted(mapping.items(), key=lambda kv: str(kv[0]).casefold()))
     template = stored.get("message_template")
     if not isinstance(template, str) or "{code}" not in template:
         template = DEFAULT_MESSAGE_TEMPLATE
@@ -391,6 +393,8 @@ def compute_slots(
             if _parse_hhmm(effective_time) < 0:
                 effective_time = hhmm
             group = str(override.get("group") or mapping.get(code, ""))
+            default_message = template.replace("{code}", code)
+            message = str(override.get("message") or default_message)
             slots.append(
                 {
                     "id": slot_id,
@@ -399,7 +403,8 @@ def compute_slots(
                     "time": effective_time,
                     "content": content,
                     "group": group,
-                    "message": template.replace("{code}", code),
+                    "message": message,
+                    "default_message": default_message,
                     "skipped": bool(override.get("skip")),
                 }
             )
@@ -607,6 +612,14 @@ def apply_override(
             else:
                 entry.pop("group", None)
                 parts.append("group→預設")
+        if "message" in slot_patch and slot_patch["message"] is not None:
+            message_text = str(slot_patch["message"]).strip()
+            if message_text:
+                entry["message"] = message_text
+                parts.append("message changed")
+            else:
+                entry.pop("message", None)
+                parts.append("message→預設")
         entry = {k: v for k, v in entry.items() if v not in (False, "", None)} if not entry.get("skip") else entry
         if entry:
             slots_overlay[slot_id] = entry

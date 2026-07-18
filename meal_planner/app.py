@@ -319,6 +319,29 @@ class DutyReportConfigRequest(BaseModel):
     auto_send: bool | None = None
 
 
+class OnOffDutyLogRequest(BaseModel):
+    kind: str
+    status: str = "opened"
+    source: str = "web"
+    date_iso: str | None = None
+
+
+class OnOffDutyConfigRequest(BaseModel):
+    auto_send: bool | None = None
+
+
+class OnOffDutyOverrideRequest(BaseModel):
+    date_iso: str | None = None
+    start: str | None = None
+    end: str | None = None
+    note: str | None = None
+
+
+class OnOffDutyLateOffRequest(BaseModel):
+    action: str  # hold | release | send_now
+    note: str = ""
+
+
 def _stored_meal_plan_payloads(date_isos: set[str]) -> dict[str, dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     if not date_isos:
@@ -1119,6 +1142,7 @@ def web_asset(asset_name: str) -> FileResponse:
         "planner-render.js",
         "planner-events.js",
         "planner-duty.js",
+        "planner-onoffduty.js",
         "favicon.svg",
     }:
         raise HTTPException(status_code=404, detail="Cannot find web asset")
@@ -2062,6 +2086,112 @@ def api_duty_report_config(body: DutyReportConfigRequest) -> dict[str, Any]:
         return plan
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Duty report config failed: {e}") from e
+
+
+@app.get("/api/onoffduty/plan")
+def api_onoffduty_plan(date_iso: str | None = None) -> dict[str, Any]:
+    from meal_planner.duty_form import build_day_plan
+
+    biz_date: date | None = None
+    if date_iso:
+        try:
+            biz_date = date.fromisoformat(date_iso)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date_iso: {date_iso}") from e
+    try:
+        return build_day_plan(get_settings(), biz_date=biz_date)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OnOffDuty plan failed: {e}") from e
+
+
+@app.post("/api/onoffduty/log")
+def api_onoffduty_log(body: OnOffDutyLogRequest) -> dict[str, Any]:
+    from meal_planner.duty_form import build_day_plan, record_onoff_log
+    from meal_planner.duty_report import business_date
+
+    if body.kind not in {"start", "end"}:
+        raise HTTPException(status_code=400, detail=f"Invalid kind: {body.kind}")
+    if body.status not in {"opened", "sent", "failed"}:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {body.status}")
+    try:
+        settings = get_settings()
+        if body.date_iso:
+            biz_date = date.fromisoformat(body.date_iso)
+        else:
+            from zoneinfo import ZoneInfo
+
+            biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
+        plan = build_day_plan(settings, biz_date=biz_date)
+        action = next((a for a in plan.get("actions", []) if a.get("kind") == body.kind), None)
+        record_onoff_log(
+            settings,
+            biz_date,
+            body.kind,
+            body.status,
+            time_text=str(action.get("time") if action else ""),
+            source=body.source,
+        )
+        return build_day_plan(settings, biz_date=biz_date)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OnOffDuty log failed: {e}") from e
+
+
+@app.post("/api/onoffduty/override")
+def api_onoffduty_override(body: OnOffDutyOverrideRequest) -> dict[str, Any]:
+    from meal_planner.duty_form import build_day_plan, set_time_override
+    from meal_planner.duty_report import business_date
+
+    try:
+        settings = get_settings()
+        if body.date_iso:
+            biz_date = date.fromisoformat(body.date_iso)
+        else:
+            from zoneinfo import ZoneInfo
+
+            biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
+        set_time_override(settings, biz_date, start=body.start, end=body.end, note=body.note)
+        return build_day_plan(settings, biz_date=biz_date)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OnOffDuty override failed: {e}") from e
+
+
+@app.post("/api/onoffduty/lateoff")
+def api_onoffduty_lateoff(body: OnOffDutyLateOffRequest) -> dict[str, Any]:
+    from meal_planner.duty_form import late_off_hold, late_off_send_now
+
+    try:
+        settings = get_settings()
+        if body.action == "hold":
+            return late_off_hold(settings, True)
+        if body.action == "release":
+            return late_off_hold(settings, False)
+        if body.action == "send_now":
+            return late_off_send_now(settings, note=body.note)
+        raise HTTPException(status_code=400, detail=f"Invalid action: {body.action}")
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OnOffDuty lateoff failed: {e}") from e
+
+
+@app.post("/api/onoffduty/config")
+def api_onoffduty_config(body: OnOffDutyConfigRequest) -> dict[str, Any]:
+    from meal_planner.duty_form import build_day_plan, save_onoff_config
+
+    try:
+        settings = get_settings()
+        save_onoff_config(settings, {"auto_send": body.auto_send})
+        return build_day_plan(settings)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OnOffDuty config failed: {e}") from e
 
 
 def main() -> None:

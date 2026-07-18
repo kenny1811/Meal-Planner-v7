@@ -2340,15 +2340,17 @@
       menu.style.top = `${top}px`;
     }
 
+    // Container-agnostic：跟 input 自己張 table（tbody）嘅行/格導航，
+    // 令營養清單、報更等 sheet 共用同一套 cell edit 引擎（唔各自 duplicate）。
     function catalogCellInputFrom(input, rowDelta, colDelta) {
-      const row = input && input.closest ? input.closest("tr[data-catalog-index]") : null;
-      const cell = input && input.closest ? input.closest("td") : null;
-      if (!row || !cell) return null;
-      const rows = Array.from(document.querySelectorAll("#catalog-editor tr[data-catalog-index]"))
-        .filter((item) => item.style.display !== "none");
+      const cell = input && input.closest ? input.closest("td, th") : null;
+      const row = input && input.closest ? input.closest("tr") : null;
+      const body = row && row.parentElement;
+      if (!cell || !row || !body) return null;
+      const rows = Array.from(body.rows).filter((item) => item.style.display !== "none");
       const rowPos = rows.indexOf(row);
-      const targetRow = rows[rowPos + rowDelta];
-      const targetCell = (targetRow || row).cells[cell.cellIndex + colDelta];
+      const targetRow = rows[rowPos + rowDelta] || row;
+      const targetCell = targetRow.cells[cell.cellIndex + colDelta];
       return targetCell ? targetCell.querySelector("input") : null;
     }
 

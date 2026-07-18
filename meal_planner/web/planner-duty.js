@@ -2,6 +2,7 @@
     let dutyReportLoading = false;
     let dutyReportDate = "";
     let dutyBlockDragging = false;
+    let dutyMapPendingFocus = null;
 
     async function dutyShiftDate(deltaDays) {
       const base = dutyReportPlan ? dutyReportPlan.date_iso : "";
@@ -92,17 +93,15 @@
       const btn = (action, label, cls = "") =>
         `<button type="button" class="duty-btn ${cls}" data-duty-action="${action}" data-duty-slot="${dutyEsc(slot.id)}">${label}</button>`;
       if (slot.status === "sent") return relation === "today" ? btn("send", "Resend") : "";
-      if (slot.status === "skipped") {
-        const parts = [btn("unskip", "Unskip")];
-        // skip 咗都可以手動即發（例如延遲收工，收工先報）——唔會取消 skip 狀態。
-        if (relation === "today") parts.push(btn("send", "Send now", "duty-btn-primary"));
-        return parts.join("");
-      }
       if (slot.status === "stopped") return "";
       const parts = [];
       if (slot.status === "failed" || slot.status === "missed") {
-        parts.push(btn("send", "Retry", "duty-btn-primary"));
         parts.push(btn("skip", "Skip"));
+        parts.push(btn("send", "Retry", "duty-btn-primary"));
+      } else if (slot.status === "skipped") {
+        // skipped：Skip 掣變 Skipped（dim，撳一下取消 skip）；Send 照常可用（收工先報）。
+        parts.push(btn("unskip", "Skipped", "duty-btn-dim"));
+        if (relation === "today") parts.push(btn("send", "Send now", "duty-btn-primary"));
       } else {
         parts.push(btn("skip", "Skip"));
         if (relation === "today") parts.push(btn("send", "Send now", "duty-btn-primary"));
@@ -138,24 +137,27 @@
       const dayLabel = relation === "today" ? "今日" : "當日";
 
       const slotRows = plan.slots
-        .map((slot) => {
+        .map((slot, index) => {
           const rowClass = slot.status === "due" ? "duty-row-due" : slot.status === "skipped" || slot.status === "stopped" ? "duty-row-muted" : "";
           const timeMark = slot.time !== slot.original_time ? ` <span class="duty-status-muted" title="原定 ${dutyEsc(slot.original_time)}">*</span>` : "";
           const groupEditable = dutyGroupCellEditable(plan, slot);
           const groupHtml = dutyEsc(slot.group) || '<span class="duty-status-bad">未設定 group</span>';
           const groupCell = groupEditable
-            ? `<td class="duty-group-cell" data-duty-group-slot="${dutyEsc(slot.id)}" title="Click to pick group">${groupHtml}<span class="duty-caret">▾</span></td>`
-            : `<td>${groupHtml}</td>`;
+            ? `<td class="duty-plain duty-group-cell" tabindex="0" data-duty-group-slot="${dutyEsc(slot.id)}" title="Click / Enter to pick group">${groupHtml}<span class="duty-caret">▾</span></td>`
+            : `<td class="duty-plain">${groupHtml}</td>`;
           const timeEditable = groupEditable;
           const timeCell = timeEditable
-            ? `<td class="duty-td-time"><input type="text" class="duty-time-input" data-duty-time-slot="${dutyEsc(slot.id)}" value="${dutyEsc(slot.time)}" title="09:16 / 0916 / 2416；留空還原原定 ${dutyEsc(slot.original_time)}" />${timeMark}</td>`
-            : `<td class="duty-td-time">${dutyEsc(slot.time)}${timeMark}</td>`;
+            ? `<td class="duty-td-time"><input type="text" readonly class="duty-time-input" data-duty-time-slot="${dutyEsc(slot.id)}" value="${dutyEsc(slot.time)}" title="F2 / 雙擊改：09:16 / 0916 / 2416；留空還原原定 ${dutyEsc(slot.original_time)}" />${timeMark}</td>`
+            : `<td class="duty-td-time duty-plain">${dutyEsc(slot.time)}${timeMark}</td>`;
+          const messageCell = timeEditable
+            ? `<td><input type="text" readonly class="duty-msg-input" data-duty-msg-slot="${dutyEsc(slot.id)}" value="${dutyEsc(slot.message)}" title="F2 / 雙擊改；留空還原預設：${dutyEsc(slot.default_message || "")}" /></td>`
+            : `<td class="duty-plain">${dutyEsc(slot.message)}</td>`;
           return `<tr class="${rowClass}">
             ${timeCell}
-            <td>${dutyEsc(slot.message)}</td>
+            ${messageCell}
             ${groupCell}
-            <td>${dutyStatusCell(plan, slot)}</td>
-            <td class="duty-td-actions">${dutySlotButtons(plan, slot)}</td>
+            <td class="duty-plain">${dutyStatusCell(plan, slot)}</td>
+            <td class="duty-plain duty-td-actions">${dutySlotButtons(plan, slot)}</td>
           </tr>`;
         })
         .join("");
@@ -171,8 +173,8 @@
       const mappingRows = Object.entries(plan.mapping)
         .map(
           ([code, group]) =>
-            `<tr><td><input type="text" class="duty-map-code" value="${dutyEsc(code)}" /></td>` +
-            `<td><input type="text" class="duty-map-group" value="${dutyEsc(group)}" /></td></tr>`
+            `<tr><td><input type="text" readonly class="duty-map-cell duty-map-code" data-duty-map-orig="${dutyEsc(code)}" value="${dutyEsc(code)}" /></td>` +
+            `<td><input type="text" readonly class="duty-map-cell duty-map-group" data-duty-map-orig="${dutyEsc(code)}" value="${dutyEsc(group)}" /></td></tr>`
         )
         .join("");
 
@@ -204,7 +206,7 @@
           </div>
           <div class="duty-block" data-duty-block="sheet">
             <div class="duty-block-title" title="Drag to move · double-click to reset">Schedule</div>
-            <table class="duty-table" data-form-table>
+            <table class="maint-table duty-table" data-form-table>
               <colgroup>
                 <col data-form-col-key="duty_col_time" data-form-col-default="56" />
                 <col data-form-col-key="duty_col_message" data-form-col-default="206" />
@@ -217,9 +219,9 @@
                 <th data-form-col-key="duty_col_message">Message</th>
                 <th data-form-col-key="duty_col_group">Group</th>
                 <th data-form-col-key="duty_col_status">Status</th>
-                <th data-form-col-key="duty_col_actions" class="duty-td-actions">Action</th>
+                <th data-form-col-key="duty_col_actions">Action</th>
               </tr></thead>
-              <tbody>${slotRows || '<tr><td colspan="5" class="duty-status-muted">當日冇報平安更</td></tr>'}</tbody>
+              <tbody>${slotRows || '<tr><td colspan="5" class="duty-plain duty-status-muted">當日冇報平安更</td></tr>'}</tbody>
             </table>
           </div>
           <div class="duty-block duty-block-card" data-duty-block="override">
@@ -241,7 +243,7 @@
           </div>
           <div class="duty-block" data-duty-block="mapping">
             <div class="duty-block-title" title="Drag to move · double-click to reset">Code → group mapping</div>
-            <table class="duty-map-table" data-form-table>
+            <table class="maint-table duty-map-table" data-form-table>
               <colgroup>
                 <col data-form-col-key="duty_map_code" data-form-col-default="90" />
                 <col data-form-col-key="duty_map_group" data-form-col-default="300" />
@@ -250,10 +252,12 @@
               <tbody id="duty-map-body">${mappingRows}</tbody>
             </table>
             <div class="duty-card-actions">
-              <button type="button" class="duty-btn" data-duty-action="map-add-row">+ Add</button>
-              <button type="button" class="duty-btn duty-btn-primary" data-duty-action="map-save">Save mapping</button>
+              <button type="button" class="duty-btn" data-duty-action="map-add-row">+ Add row</button>
+              <span class="duty-status-muted">改一格即存 · 更碼清空＝刪行</span>
+            </div>
+            <div class="duty-card-actions">
               <span class="duty-status-muted">Template:</span>
-              <input type="text" id="duty-template-input" class="duty-template-input" value="${dutyEsc(plan.message_template)}" />
+              <input type="text" id="duty-template-input" class="duty-template-input" value="${dutyEsc(plan.message_template)}" title="改完 Enter / 點走即存；必須含 {code}" />
             </div>
           </div>
         </div>`;
@@ -262,6 +266,27 @@
       if (typeof attachFormColumnResizers === "function") attachFormColumnResizers(out);
       applyDutyBlockLayout();
       attachDutyBlockHandles(out);
+      dutyRestorePendingFocus();
+      dutyRestoreMapFocus();
+    }
+
+    function dutyMapCells() {
+      const body = document.getElementById("duty-map-body");
+      if (!body) return [];
+      return Array.from(body.querySelectorAll("tr")).map((tr) => ({
+        code: tr.querySelector(".duty-map-code"),
+        group: tr.querySelector(".duty-map-group"),
+      }));
+    }
+
+    function dutyRestoreMapFocus() {
+      if (!dutyMapPendingFocus) return;
+      const pf = dutyMapPendingFocus;
+      dutyMapPendingFocus = null;
+      const rows = dutyMapCells();
+      const row = rows[Math.max(0, Math.min(rows.length - 1, pf.row))];
+      const el = row && row[pf.col];
+      if (el) el.focus();
     }
 
     function dutyBlockWidthPx(block, key) {
@@ -279,11 +304,16 @@
       }
       const saved = Number(formColumnWidths[`duty_block_${key}_w`]);
       if (Number.isFinite(saved) && saved >= 120) return saved;
-      return 400;
+      return key === "onoff" ? 600 : 400; // onoff：要放得落兩張 action 卡
     }
 
     function applyDutyBlockLayout() {
-      const container = document.getElementById("duty-layout");
+      // duty_report 同 onoffduty 兩個 panel 共用同一套 block 拖放／位置記憶。
+      ["duty-layout", "onoff-layout"].forEach((id) => applyDutyBlockLayoutFor(id));
+    }
+
+    function applyDutyBlockLayoutFor(containerId) {
+      const container = document.getElementById(containerId);
       if (!container) return;
       const blocks = Array.from(container.querySelectorAll("[data-duty-block]"));
       let defaultY = 0;
@@ -467,11 +497,18 @@
         });
         menu.appendChild(item);
       };
-      groups.forEach((g) => addItem(g, () => dutyApply({ slot: { id: slotId, group: g } })));
-      addItem("（預設：跟對照表）", () => dutyApply({ slot: { id: slotId, group: "" } }), true);
+      const rowIndex = dutyGridRows().findIndex(
+        (r) => r.group && r.group.getAttribute("data-duty-group-slot") === slotId
+      );
+      const applyGroup = (value) => {
+        if (rowIndex >= 0) dutyPendingFocus = { row: rowIndex, col: "group" };
+        dutyApply({ slot: { id: slotId, group: value } });
+      };
+      groups.forEach((g) => addItem(g, () => applyGroup(g)));
+      addItem("（預設：跟對照表）", () => applyGroup(""), true);
       addItem("自訂…", () => {
         const next = window.prompt("輸入 WhatsApp group 名", slot ? slot.group : "");
-        if (next && next.trim()) dutyApply({ slot: { id: slotId, group: next.trim() } });
+        if (next && next.trim()) applyGroup(next.trim());
       }, true);
       document.body.appendChild(menu);
       const rect = anchor.getBoundingClientRect();
@@ -496,6 +533,47 @@
         renderDutyReport();
       } catch (e) {
         dutyShowError(e && e.message ? e.message : String(e));
+      }
+    }
+
+    // 由 mapping 表 DOM 砌返成個 mapping，即打即存。
+    let dutyMapSaving = false;
+    async function dutySaveMappingFromDom(focusHint) {
+      if (dutyMapSaving) return;
+      dutyMapSaving = true;
+      const mapping = {};
+      document.querySelectorAll("#duty-map-body tr").forEach((tr) => {
+        const code = ((tr.querySelector(".duty-map-code") || {}).value || "").trim();
+        const group = ((tr.querySelector(".duty-map-group") || {}).value || "").trim();
+        if (code) mapping[code] = group;
+      });
+      if (focusHint) dutyMapPendingFocus = focusHint;
+      try {
+        dutyReportPlan = await postDutyReportConfig({ mapping });
+        dutyShowError("");
+        renderDutyReport();
+      } catch (e) {
+        dutyShowError(e.message || String(e));
+      } finally {
+        dutyMapSaving = false;
+      }
+    }
+
+    async function dutySaveTemplateFromDom() {
+      const input = document.getElementById("duty-template-input");
+      if (!input) return;
+      const value = input.value;
+      if (!value.includes("{code}")) {
+        dutyShowError("Template 必須包含 {code}");
+        return;
+      }
+      if (dutyReportPlan && value === dutyReportPlan.message_template) return;
+      try {
+        dutyReportPlan = await postDutyReportConfig({ message_template: value });
+        dutyShowError("");
+        renderDutyReport();
+      } catch (e) {
+        dutyShowError(e.message || String(e));
       }
     }
 
@@ -542,27 +620,10 @@
         const body = document.getElementById("duty-map-body");
         if (body) {
           const tr = document.createElement("tr");
-          tr.innerHTML = '<td><input type="text" class="duty-map-code" value="" /></td><td><input type="text" class="duty-map-group" value="" /></td>';
+          tr.innerHTML = `<td><input type="text" readonly class="duty-map-cell duty-map-code" data-duty-map-orig="" value="" /></td><td><input type="text" readonly class="duty-map-cell duty-map-group" data-duty-map-orig="" value="" /></td>`;
           body.appendChild(tr);
-        }
-        return;
-      }
-      if (action === "map-save") {
-        const mapping = {};
-        document.querySelectorAll("#duty-map-body tr").forEach((tr) => {
-          const code = (tr.querySelector(".duty-map-code") || {}).value || "";
-          const group = (tr.querySelector(".duty-map-group") || {}).value || "";
-          if (code.trim()) mapping[code.trim()] = group.trim();
-        });
-        const templateInput = document.getElementById("duty-template-input");
-        const payload = { mapping };
-        if (templateInput && templateInput.value.includes("{code}")) payload.message_template = templateInput.value;
-        try {
-          dutyReportPlan = await postDutyReportConfig(payload);
-          dutyShowError("");
-          renderDutyReport();
-        } catch (e) {
-          dutyShowError(e.message || String(e));
+          const codeInput = tr.querySelector(".duty-map-code");
+          if (codeInput) beginCatalogCellEdit(codeInput);
         }
         return;
       }
@@ -582,6 +643,85 @@
       }
     }
 
+    let dutyPendingFocus = null;
+
+    // 報更 sheet 直接用返營養清單（catalog）嘅 cell edit 引擎：
+    //   beginCatalogCellEdit / endCatalogCellEdit / catalogCellInputFrom / focusCatalogCell
+    // （見 planner-config.js）。呢度淨係保留報更獨有嘅嘢：group picker 格、
+    // 即打即存 commit、re-render 之後還原 focus。
+
+    function dutyGridRows() {
+      const out = document.getElementById("duty-report-out");
+      if (!out) return [];
+      return Array.from(out.querySelectorAll("table.duty-table tbody tr")).map((tr) => ({
+        time: tr.querySelector("input[data-duty-time-slot]"),
+        msg: tr.querySelector("input[data-duty-msg-slot]"),
+        group: tr.querySelector("[data-duty-group-slot]"),
+      }));
+    }
+
+    function dutyFocusCell(rowIndex, col) {
+      const rows = dutyGridRows();
+      for (let r = Math.max(0, rowIndex); r < rows.length; r += 1) {
+        const el = rows[r][col];
+        if (el) {
+          el.focus();
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function dutyRestorePendingFocus() {
+      if (!dutyPendingFocus) return;
+      const pf = dutyPendingFocus;
+      dutyPendingFocus = null;
+      dutyFocusCell(pf.row, pf.col);
+    }
+
+    // 由某格（input 或 group td）按方向鍵移 focus；跨越 group picker 欄。用 catalog 嘅 focusCatalogCell。
+    function dutyMoveFocus(el, key) {
+      const dr = key === "ArrowUp" ? -1 : (key === "ArrowDown" || key === "Enter") ? 1 : 0;
+      const dc = key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0;
+      const cell = el.closest("td, th");
+      const row = el.closest("tr");
+      const body = row && row.parentElement;
+      if (!cell || !row || !body) return;
+      const rows = Array.from(body.rows);
+      const pos = rows.indexOf(row);
+      const targetRow = rows[pos + dr] || row;
+      const targetCell = targetRow.cells[cell.cellIndex + dc];
+      if (!targetCell) return;
+      const focusable = targetCell.querySelector("input")
+        || (targetCell.matches && targetCell.matches("[data-duty-group-slot]") ? targetCell : null);
+      if (focusable) focusCatalogCell(focusable);
+    }
+
+    // 即打即存一個 cell；moveKey 有值就記低下一格位置，re-render 後還原 focus。
+    function dutyCommitCell(el, moveKey) {
+      const dr = moveKey === "ArrowUp" ? -1 : moveKey ? 1 : 0;
+      if (el.matches("input[data-duty-time-slot]")) {
+        const slotId = el.getAttribute("data-duty-time-slot");
+        if (moveKey) {
+          const rows = dutyGridRows();
+          dutyPendingFocus = { row: rows.findIndex((r) => r.time === el) + dr, col: "time" };
+        }
+        dutyApply({ slot: { id: slotId, time: el.value.trim() } });
+      } else if (el.matches("input[data-duty-msg-slot]")) {
+        const slotId = el.getAttribute("data-duty-msg-slot");
+        if (moveKey) {
+          const rows = dutyGridRows();
+          dutyPendingFocus = { row: rows.findIndex((r) => r.msg === el) + dr, col: "msg" };
+        }
+        dutyApply({ slot: { id: slotId, message: el.value.trim() } });
+      } else if (el.classList.contains("duty-map-cell")) {
+        const cells = dutyMapCells();
+        const col = el.classList.contains("duty-map-code") ? "code" : "group";
+        dutyMapPendingFocus = { row: cells.findIndex((r) => r.code === el || r.group === el) + dr, col };
+        dutySaveMappingFromDom();
+      }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
       const out = document.getElementById("duty-report-out");
       if (out) {
@@ -596,37 +736,76 @@
           if (!button) return;
           dutyHandleAction(button.dataset.dutyAction, button.dataset.dutySlot || "", button);
         });
+        // Cell 嘅即存由 keydown(Enter/↑↓) 同 focusout 統一做（dutyCommitCell）；
+        // change 淨係處理 Template 輸入框。
         out.addEventListener("change", (ev) => {
-          const input = ev.target.closest("input[data-duty-time-slot]");
-          if (!input) return;
-          const slotId = input.getAttribute("data-duty-time-slot");
-          const slot = dutyReportPlan && (dutyReportPlan.slots || []).find((s) => s.id === slotId);
-          const value = input.value.trim();
-          if (slot && value === slot.time) return;
-          dutyApply({ slot: { id: slotId, time: value } });
+          if (ev.target.id === "duty-template-input") dutySaveTemplateFromDom();
         });
+        // Sheet 鍵盤：全部用返 catalog 引擎（beginCatalogCellEdit / endCatalogCellEdit /
+        // focusCatalogCell）。Group 格係 picker，Enter/F2/打字開 pickup、箭咀導航。
         out.addEventListener("keydown", (ev) => {
-          if (ev.key === "Enter" && ev.target.closest("input[data-duty-time-slot]")) {
+          const el = ev.target;
+          const isGroup = el.matches && el.matches("[data-duty-group-slot]");
+          const isCell = el.matches && el.matches(
+            "input[data-duty-time-slot], input[data-duty-msg-slot], .duty-map-cell"
+          );
+          if (!isGroup && !isCell) return;
+
+          if (isGroup) {
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(ev.key)) {
+              ev.preventDefault();
+              dutyMoveFocus(el, ev.key);
+            } else if (ev.key === "Enter" || ev.key === "F2" || ev.key === " "
+                || (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey)) {
+              ev.preventDefault();
+              dutyShowGroupPicker(el.getAttribute("data-duty-group-slot"), el);
+            }
+            return;
+          }
+
+          if (el.dataset.catalogEditing === "1") {
+            if (["Escape", "Enter", "ArrowUp", "ArrowDown"].includes(ev.key)) {
+              ev.preventDefault();
+              if (ev.key === "Escape") { endCatalogCellEdit(el, { cancel: true }); return; }
+              const moveKey = ev.key === "ArrowUp" ? "ArrowUp" : "ArrowDown"; // Enter＝落下一行
+              const changed = el.value !== el.dataset.catalogOriginalValue;
+              endCatalogCellEdit(el);
+              if (changed) {
+                dutyCommitCell(el, moveKey);      // 即存 → re-render → 還原 focus
+              } else {
+                dutyMoveFocus(el, moveKey);
+              }
+            }
+            return;
+          }
+
+          // view mode
+          if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(ev.key)) {
             ev.preventDefault();
-            ev.target.blur();
+            dutyMoveFocus(el, ev.key === "Enter" ? "ArrowDown" : ev.key);
+            return;
+          }
+          if (ev.key === "F2") { ev.preventDefault(); beginCatalogCellEdit(el); return; }
+          if (ev.key === "Process") { beginCatalogCellEdit(el, true); return; }
+          if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+            beginCatalogCellEdit(el, true); // 打字即入 edit + 取代（唔 preventDefault）
           }
         });
-        // 時間格：第一下 click 即全選（mousedown 截住，防止 mouseup 收起全選），
-        // 已 focus 之後再 click 先係正常擺游標。
-        out.addEventListener("mousedown", (ev) => {
-          const input = ev.target.closest("input[data-duty-time-slot]");
-          if (input && document.activeElement !== input) {
-            ev.preventDefault();
-            input.focus();
-            input.select();
-          }
+        out.addEventListener("dblclick", (ev) => {
+          const input = ev.target.closest("input[data-duty-time-slot], input[data-duty-msg-slot], .duty-map-cell");
+          if (input) { ev.preventDefault(); beginCatalogCellEdit(input); }
         });
-        // 鍵盤 Tab 入嚟都全選。
-        out.addEventListener("focusin", (ev) => {
-          const input = ev.target.closest("input[data-duty-time-slot]");
-          if (input) setTimeout(() => {
-            if (document.activeElement === input && input.selectionStart === input.selectionEnd) input.select();
-          }, 0);
+        out.addEventListener("compositionstart", (ev) => {
+          const input = ev.target.closest("input[data-duty-time-slot], input[data-duty-msg-slot], .duty-map-cell");
+          if (input && input.readOnly) beginCatalogCellEdit(input, true);
+        });
+        // 離開個格：endCatalogCellEdit 還原 readonly；若值有改就即存。
+        out.addEventListener("focusout", (ev) => {
+          const input = ev.target.closest("input[data-duty-time-slot], input[data-duty-msg-slot], .duty-map-cell");
+          if (!input || input.dataset.catalogEditing !== "1") return;
+          const changed = input.value !== input.dataset.catalogOriginalValue;
+          endCatalogCellEdit(input);
+          if (changed) dutyCommitCell(input, null);
         });
       }
       setInterval(() => {

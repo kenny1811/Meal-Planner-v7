@@ -369,6 +369,55 @@
       return data || {};
     }
 
+    async function loadOnOffDutyPlan(dateIso) {
+      const url = dateIso ? `/api/onoffduty/plan?date_iso=${encodeURIComponent(dateIso)}` : "/api/onoffduty/plan";
+      const r = await fetch(url);
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Load OnOffDuty plan failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function postOnOffDutyLog(kind, dateIso, status) {
+      const r = await fetch("/api/onoffduty/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, status: status || "opened", source: "web", date_iso: dateIso || null }),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "OnOffDuty log failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function postOnOffDutyLateOff(action, note) {
+      const r = await fetch("/api/onoffduty/lateoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, note: note || "" }),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "OnOffDuty late-off failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function postOnOffDutyConfig(payload) {
+      const r = await fetch("/api/onoffduty/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "OnOffDuty config failed.", r.status));
+      }
+      return data || {};
+    }
+
     async function postDutyReportOverride(payload) {
       const r = await fetch("/api/duty-report/override", {
         method: "POST",

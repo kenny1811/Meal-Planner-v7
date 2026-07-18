@@ -1,0 +1,1055 @@
+{
+  "account_email": "kenny1811@gmail.com",
+  "time_min": "2026-07-14T00:00:00+08:00",
+  "time_max": "2026-08-02T00:00:00+08:00",
+  "calendars": {
+    "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com": [
+      {
+        "kind": "calendar#event",
+        "etag": "\"3566385758628190\"",
+        "id": "cko66o9j61gj8bb465gj2b9kcgr66bb170sj2bb668r3cc9mcks64dppcg",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=Y2tvNjZvOWo2MWdqOGJiNDY1Z2oyYjlrY2dyNjZiYjE3MHNqMmJiNjY4cjNjYzltY2tzNjRkcHBjZyBvbTJqcHIybTNnMXFmYjRxNTR2OTJsMjFnNEBn",
+        "created": "2026-06-26T17:04:05.000Z",
+        "updated": "2026-07-04T19:21:19.314Z",
+        "summary": "EleB",
+        "location": "4-2 5-1",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com",
+          "displayName": "更表",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-14T10:45:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-14T21:00:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "cko66o9j61gj8bb465gj2b9kcgr66bb170sj2bb668r3cc9mcks64dppcg@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "source": "meal_planner_roster",
+            "roster_code": "EleB",
+            "kind": "work",
+            "roster_date": "2026-07-14"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3566385760073406\"",
+        "id": "6os64p9mccqm4bb36cr62b9kclhm4bb1ckp34b9n70o38d1n6go66cb564",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=Nm9zNjRwOW1jY3FtNGJiMzZjcjYyYjlrY2xobTRiYjFja3AzNGI5bjcwbzM4ZDFuNmdvNjZjYjU2NCBvbTJqcHIybTNnMXFmYjRxNTR2OTJsMjFnNEBn",
+        "created": "2026-06-26T17:04:06.000Z",
+        "updated": "2026-07-04T19:21:20.036Z",
+        "summary": "VOC",
+        "location": "2-3",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com",
+          "displayName": "更表",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-15T09:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-15T21:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "6os64p9mccqm4bb36cr62b9kclhm4bb1ckp34b9n70o38d1n6go66cb564@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "source": "meal_planner_roster",
+            "roster_code": "VOC",
+            "kind": "work",
+            "roster_date": "2026-07-15"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568084895834846\"",
+        "id": "n1puc5vdqgt42t1mo4m8g843ss",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=bjFwdWM1dmRxZ3Q0MnQxbW80bThnODQzc3Mgb20yanByMm0zZzFxZmI0cTU0djkybDIxZzRAZw",
+        "created": "2026-07-14T15:20:47.000Z",
+        "updated": "2026-07-14T15:20:47.917Z",
+        "summary": "EleC1",
+        "location": "4-2 5-1",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com",
+          "displayName": "更表",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-16T10:45:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-16T21:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "n1puc5vdqgt42t1mo4m8g843ss@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "work",
+            "source": "meal_planner_roster",
+            "roster_code": "EleC1",
+            "roster_date": "2026-07-16"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568084897162878\"",
+        "id": "16rjm4k2815o8ms3i4p3in15m4",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=MTZyam00azI4MTVvOG1zM2k0cDNpbjE1bTQgb20yanByMm0zZzFxZmI0cTU0djkybDIxZzRAZw",
+        "created": "2026-07-14T15:20:48.000Z",
+        "updated": "2026-07-14T15:20:48.581Z",
+        "summary": "EleC1",
+        "location": "4-2 5-1",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com",
+          "displayName": "更表",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-19T10:45:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-19T21:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "16rjm4k2815o8ms3i4p3in15m4@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "work",
+            "source": "meal_planner_roster",
+            "roster_code": "EleC1",
+            "roster_date": "2026-07-19"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082628576990\"",
+        "id": "4q2e0f2ugl86obhhn61m0nf5d8",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=NHEyZTBmMnVnbDg2b2JoaG42MW0wbmY1ZDggb20yanByMm0zZzFxZmI0cTU0djkybDIxZzRAZw",
+        "created": "2026-07-14T15:01:53.000Z",
+        "updated": "2026-07-14T15:01:54.288Z",
+        "summary": "PenB",
+        "location": "2-3",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com",
+          "displayName": "更表",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-20T10:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-20T20:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "4q2e0f2ugl86obhhn61m0nf5d8@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "work",
+            "source": "meal_planner_roster",
+            "roster_code": "PenB",
+            "roster_date": "2026-07-20"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082630075166\"",
+        "id": "fstkl8oqfhr92erfrqatf2u06s",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=ZnN0a2w4b3FmaHI5MmVyZnJxYXRmMnUwNnMgb20yanByMm0zZzFxZmI0cTU0djkybDIxZzRAZw",
+        "created": "2026-07-14T15:01:54.000Z",
+        "updated": "2026-07-14T15:01:55.037Z",
+        "summary": "VOC",
+        "location": "2-3",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com",
+          "displayName": "更表",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-22T09:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-22T21:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "fstkl8oqfhr92erfrqatf2u06s@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "work",
+            "source": "meal_planner_roster",
+            "roster_code": "VOC",
+            "roster_date": "2026-07-22"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082631658142\"",
+        "id": "qd2a9h9n1vfpnkc2t2df0q1jfk",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=cWQyYTloOW4xdmZwbmtjMnQyZGYwcTFqZmsgb20yanByMm0zZzFxZmI0cTU0djkybDIxZzRAZw",
+        "created": "2026-07-14T15:01:55.000Z",
+        "updated": "2026-07-14T15:01:55.829Z",
+        "summary": "PenB",
+        "location": "2-3",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com",
+          "displayName": "更表",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-26T10:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-26T20:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "qd2a9h9n1vfpnkc2t2df0q1jfk@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "work",
+            "source": "meal_planner_roster",
+            "roster_code": "PenB",
+            "roster_date": "2026-07-26"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082633215774\"",
+        "id": "db6qsqmkf4791r2tuvnmgt3qqc",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=ZGI2cXNxbWtmNDc5MXIydHV2bm1ndDNxcWMgb20yanByMm0zZzFxZmI0cTU0djkybDIxZzRAZw",
+        "created": "2026-07-14T15:01:56.000Z",
+        "updated": "2026-07-14T15:01:56.607Z",
+        "summary": "VOC",
+        "location": "2-3",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com",
+          "displayName": "更表",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-29T09:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-29T21:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "db6qsqmkf4791r2tuvnmgt3qqc@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "work",
+            "source": "meal_planner_roster",
+            "roster_code": "VOC",
+            "roster_date": "2026-07-29"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082634912574\"",
+        "id": "h1ptc60pk9bp5sndige09uskn8",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=aDFwdGM2MHBrOWJwNXNuZGlnZTA5dXNrbjggb20yanByMm0zZzFxZmI0cTU0djkybDIxZzRAZw",
+        "created": "2026-07-14T15:01:57.000Z",
+        "updated": "2026-07-14T15:01:57.456Z",
+        "summary": "VOC",
+        "location": "2-3",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com",
+          "displayName": "更表",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-30T09:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-30T21:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "h1ptc60pk9bp5sndige09uskn8@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "work",
+            "source": "meal_planner_roster",
+            "roster_code": "VOC",
+            "roster_date": "2026-07-30"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      }
+    ],
+    "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com": [
+      {
+        "kind": "calendar#event",
+        "etag": "\"3565646150047406\"",
+        "id": "64pjac1l75hjcb9kc4rjeb9k70sj4b9ocksj2b9h60pm2p1k61gm2phk6k",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=NjRwamFjMWw3NWhqY2I5a2M0cmplYjlrNzBzajRiOW9ja3NqMmI5aDYwcG0ycDFrNjFnbTJwaGs2ayB2YXVvNGVsNmY0dmgyMGZqdm03Zmpsc2ZjMEBn",
+        "created": "2026-06-26T17:04:00.000Z",
+        "updated": "2026-06-30T13:25:20.294Z",
+        "summary": "起身",
+        "description": "起身",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com",
+          "displayName": "Alarm",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-14T07:45:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-14T09:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "64pjac1l75hjcb9kc4rjeb9k70sj4b9ocksj2b9h60pm2p1k61gm2phk6k@google.com",
+        "sequence": 1,
+        "extendedProperties": {
+          "private": {
+            "source": "meal_planner_roster",
+            "roster_code": "EleB",
+            "kind": "alarm",
+            "roster_date": "2026-07-14"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3565646151253886\"",
+        "id": "c4qjgdb3c8p6ab9h6hi34b9k6thj2bb269gj6bb4c5gjap1oclij6c9jcc",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=YzRxamdkYjNjOHA2YWI5aDZoaTM0YjlrNnRoajJiYjI2OWdqNmJiNGM1Z2phcDFvY2xpajZjOWpjYyB2YXVvNGVsNmY0dmgyMGZqdm03Zmpsc2ZjMEBn",
+        "created": "2026-06-26T17:28:38.000Z",
+        "updated": "2026-06-30T13:25:20.934Z",
+        "summary": "起身",
+        "description": "起身",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com",
+          "displayName": "Alarm",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-15T06:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-15T08:00:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "c4qjgdb3c8p6ab9h6hi34b9k6thj2bb269gj6bb4c5gjap1oclij6c9jcc@google.com",
+        "sequence": 1,
+        "extendedProperties": {
+          "private": {
+            "source": "meal_planner_roster",
+            "roster_code": "VOC",
+            "kind": "alarm",
+            "roster_date": "2026-07-15"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568084898422366\"",
+        "id": "k6cuhbg71lqn80rkpv4kdtrsa8",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=azZjdWhiZzcxbHFuODBya3B2NGtkdHJzYTggdmF1bzRlbDZmNHZoMjBmanZtN2ZqbHNmYzBAZw",
+        "created": "2026-07-14T15:20:49.000Z",
+        "updated": "2026-07-14T15:20:49.211Z",
+        "summary": "起身",
+        "description": "起身",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com",
+          "displayName": "Alarm",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-16T07:45:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-16T09:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "k6cuhbg71lqn80rkpv4kdtrsa8@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "alarm",
+            "source": "meal_planner_roster",
+            "roster_code": "EleC1",
+            "roster_date": "2026-07-16"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568084899881086\"",
+        "id": "5ep8gvdh04l50sld8v29ngrf94",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=NWVwOGd2ZGgwNGw1MHNsZDh2MjluZ3JmOTQgdmF1bzRlbDZmNHZoMjBmanZtN2ZqbHNmYzBAZw",
+        "created": "2026-07-14T15:20:49.000Z",
+        "updated": "2026-07-14T15:20:49.940Z",
+        "summary": "起身",
+        "description": "起身",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com",
+          "displayName": "Alarm",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-19T07:45:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-19T09:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "5ep8gvdh04l50sld8v29ngrf94@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "alarm",
+            "source": "meal_planner_roster",
+            "roster_code": "EleC1",
+            "roster_date": "2026-07-19"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082636044254\"",
+        "id": "qaa9s2btd8i5e7fql9o1212p24",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=cWFhOXMyYnRkOGk1ZTdmcWw5bzEyMTJwMjQgdmF1bzRlbDZmNHZoMjBmanZtN2ZqbHNmYzBAZw",
+        "created": "2026-07-14T15:01:57.000Z",
+        "updated": "2026-07-14T15:01:58.022Z",
+        "summary": "起身",
+        "description": "起身",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com",
+          "displayName": "Alarm",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-20T07:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-20T09:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "qaa9s2btd8i5e7fql9o1212p24@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "alarm",
+            "source": "meal_planner_roster",
+            "roster_code": "PenB",
+            "roster_date": "2026-07-20"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082637318494\"",
+        "id": "ecdgsi5jejietm54a0s3ncvlts",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=ZWNkZ3NpNWplamlldG01NGEwczNuY3ZsdHMgdmF1bzRlbDZmNHZoMjBmanZtN2ZqbHNmYzBAZw",
+        "created": "2026-07-14T15:01:58.000Z",
+        "updated": "2026-07-14T15:01:58.659Z",
+        "summary": "起身",
+        "description": "起身",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com",
+          "displayName": "Alarm",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-22T06:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-22T08:00:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "ecdgsi5jejietm54a0s3ncvlts@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "alarm",
+            "source": "meal_planner_roster",
+            "roster_code": "VOC",
+            "roster_date": "2026-07-22"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082638997310\"",
+        "id": "c66m9b7cbgde400u4hj3n5ad4o",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=YzY2bTliN2NiZ2RlNDAwdTRoajNuNWFkNG8gdmF1bzRlbDZmNHZoMjBmanZtN2ZqbHNmYzBAZw",
+        "created": "2026-07-14T15:01:59.000Z",
+        "updated": "2026-07-14T15:01:59.498Z",
+        "summary": "起身",
+        "description": "起身",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com",
+          "displayName": "Alarm",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-26T07:30:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-26T09:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "c66m9b7cbgde400u4hj3n5ad4o@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "alarm",
+            "source": "meal_planner_roster",
+            "roster_code": "PenB",
+            "roster_date": "2026-07-26"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082640725598\"",
+        "id": "ool3cbsbi0l1egscbtv0bek25o",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=b29sM2Nic2JpMGwxZWdzY2J0djBiZWsyNW8gdmF1bzRlbDZmNHZoMjBmanZtN2ZqbHNmYzBAZw",
+        "created": "2026-07-14T15:02:00.000Z",
+        "updated": "2026-07-14T15:02:00.362Z",
+        "summary": "起身",
+        "description": "起身",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com",
+          "displayName": "Alarm",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-29T06:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-29T08:00:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "ool3cbsbi0l1egscbtv0bek25o@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "alarm",
+            "source": "meal_planner_roster",
+            "roster_code": "VOC",
+            "roster_date": "2026-07-29"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082642585150\"",
+        "id": "gdjaosk8n4rfl9dobtrme7b5pk",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=Z2RqYW9zazhuNHJmbDlkb2J0cm1lN2I1cGsgdmF1bzRlbDZmNHZoMjBmanZtN2ZqbHNmYzBAZw",
+        "created": "2026-07-14T15:02:01.000Z",
+        "updated": "2026-07-14T15:02:01.292Z",
+        "summary": "起身",
+        "description": "起身",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com",
+          "displayName": "Alarm",
+          "self": true
+        },
+        "start": {
+          "dateTime": "2026-07-30T06:15:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "end": {
+          "dateTime": "2026-07-30T08:00:00+08:00",
+          "timeZone": "Asia/Hong_Kong"
+        },
+        "iCalUID": "gdjaosk8n4rfl9dobtrme7b5pk@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "alarm",
+            "source": "meal_planner_roster",
+            "roster_code": "VOC",
+            "roster_date": "2026-07-30"
+          }
+        },
+        "reminders": {
+          "useDefault": true
+        },
+        "eventType": "default"
+      }
+    ],
+    "648475fca32bd4f300afc48b6f5cd8a34e788b6f1c12da3e9829a27e128bbf21@group.calendar.google.com": [
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082643785150\"",
+        "id": "2dnddfsi9h40hhd9qapngf3lpk",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=MmRuZGRmc2k5aDQwaGhkOXFhcG5nZjNscGsgNjQ4NDc1ZmNhMzJiZDRmMzAwYWZjNDhiNmY1Y2Q4YTM0ZTc4OGI2ZjFjMTJkYTNlOTgyOWEyN2UxMjhiYmYyMUBn",
+        "created": "2026-07-14T15:02:01.000Z",
+        "updated": "2026-07-14T15:02:01.892Z",
+        "summary": "WL28",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "648475fca32bd4f300afc48b6f5cd8a34e788b6f1c12da3e9829a27e128bbf21@group.calendar.google.com",
+          "displayName": "非返工日",
+          "self": true
+        },
+        "start": {
+          "date": "2026-07-17"
+        },
+        "end": {
+          "date": "2026-07-18"
+        },
+        "iCalUID": "2dnddfsi9h40hhd9qapngf3lpk@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "leave",
+            "source": "meal_planner_roster",
+            "roster_code": "WL28",
+            "roster_date": "2026-07-17"
+          }
+        },
+        "reminders": {
+          "useDefault": false
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082645689246\"",
+        "id": "71qmenbgiv8n8dou9ir3sk7a2s",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=NzFxbWVuYmdpdjhuOGRvdTlpcjNzazdhMnMgNjQ4NDc1ZmNhMzJiZDRmMzAwYWZjNDhiNmY1Y2Q4YTM0ZTc4OGI2ZjFjMTJkYTNlOTgyOWEyN2UxMjhiYmYyMUBn",
+        "created": "2026-07-14T15:02:02.000Z",
+        "updated": "2026-07-14T15:02:02.844Z",
+        "summary": "SB",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "648475fca32bd4f300afc48b6f5cd8a34e788b6f1c12da3e9829a27e128bbf21@group.calendar.google.com",
+          "displayName": "非返工日",
+          "self": true
+        },
+        "start": {
+          "date": "2026-07-18"
+        },
+        "end": {
+          "date": "2026-07-19"
+        },
+        "iCalUID": "71qmenbgiv8n8dou9ir3sk7a2s@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "leave",
+            "source": "meal_planner_roster",
+            "roster_code": "SB",
+            "roster_date": "2026-07-18"
+          }
+        },
+        "reminders": {
+          "useDefault": false
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082646890270\"",
+        "id": "rf94bbi8q80i0gugi2a9fls8e8",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=cmY5NGJiaThxODBpMGd1Z2kyYTlmbHM4ZTggNjQ4NDc1ZmNhMzJiZDRmMzAwYWZjNDhiNmY1Y2Q4YTM0ZTc4OGI2ZjFjMTJkYTNlOTgyOWEyN2UxMjhiYmYyMUBn",
+        "created": "2026-07-14T15:02:03.000Z",
+        "updated": "2026-07-14T15:02:03.445Z",
+        "summary": "SB",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "648475fca32bd4f300afc48b6f5cd8a34e788b6f1c12da3e9829a27e128bbf21@group.calendar.google.com",
+          "displayName": "非返工日",
+          "self": true
+        },
+        "start": {
+          "date": "2026-07-21"
+        },
+        "end": {
+          "date": "2026-07-22"
+        },
+        "iCalUID": "rf94bbi8q80i0gugi2a9fls8e8@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "leave",
+            "source": "meal_planner_roster",
+            "roster_code": "SB",
+            "roster_date": "2026-07-21"
+          }
+        },
+        "reminders": {
+          "useDefault": false
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082648004926\"",
+        "id": "ojbm2aebu9gjj7gqgr8e81bfv0",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=b2pibTJhZWJ1OWdqajdncWdyOGU4MWJmdjAgNjQ4NDc1ZmNhMzJiZDRmMzAwYWZjNDhiNmY1Y2Q4YTM0ZTc4OGI2ZjFjMTJkYTNlOTgyOWEyN2UxMjhiYmYyMUBn",
+        "created": "2026-07-14T15:02:03.000Z",
+        "updated": "2026-07-14T15:02:04.002Z",
+        "summary": "SB",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "648475fca32bd4f300afc48b6f5cd8a34e788b6f1c12da3e9829a27e128bbf21@group.calendar.google.com",
+          "displayName": "非返工日",
+          "self": true
+        },
+        "start": {
+          "date": "2026-07-23"
+        },
+        "end": {
+          "date": "2026-07-24"
+        },
+        "iCalUID": "ojbm2aebu9gjj7gqgr8e81bfv0@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "leave",
+            "source": "meal_planner_roster",
+            "roster_code": "SB",
+            "roster_date": "2026-07-23"
+          }
+        },
+        "reminders": {
+          "useDefault": false
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082649296446\"",
+        "id": "8p5v6locr2f1u95eoaj0e84tls",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=OHA1djZsb2NyMmYxdTk1ZW9hajBlODR0bHMgNjQ4NDc1ZmNhMzJiZDRmMzAwYWZjNDhiNmY1Y2Q4YTM0ZTc4OGI2ZjFjMTJkYTNlOTgyOWEyN2UxMjhiYmYyMUBn",
+        "created": "2026-07-14T15:02:04.000Z",
+        "updated": "2026-07-14T15:02:04.648Z",
+        "summary": "WL29",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "648475fca32bd4f300afc48b6f5cd8a34e788b6f1c12da3e9829a27e128bbf21@group.calendar.google.com",
+          "displayName": "非返工日",
+          "self": true
+        },
+        "start": {
+          "date": "2026-07-24"
+        },
+        "end": {
+          "date": "2026-07-25"
+        },
+        "iCalUID": "8p5v6locr2f1u95eoaj0e84tls@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "leave",
+            "source": "meal_planner_roster",
+            "roster_code": "WL29",
+            "roster_date": "2026-07-24"
+          }
+        },
+        "reminders": {
+          "useDefault": false
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082650482462\"",
+        "id": "0lcrvbg44bcsegbs54olbgropk",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=MGxjcnZiZzQ0YmNzZWdiczU0b2xiZ3JvcGsgNjQ4NDc1ZmNhMzJiZDRmMzAwYWZjNDhiNmY1Y2Q4YTM0ZTc4OGI2ZjFjMTJkYTNlOTgyOWEyN2UxMjhiYmYyMUBn",
+        "created": "2026-07-14T15:02:05.000Z",
+        "updated": "2026-07-14T15:02:05.241Z",
+        "summary": "SB",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "648475fca32bd4f300afc48b6f5cd8a34e788b6f1c12da3e9829a27e128bbf21@group.calendar.google.com",
+          "displayName": "非返工日",
+          "self": true
+        },
+        "start": {
+          "date": "2026-07-25"
+        },
+        "end": {
+          "date": "2026-07-26"
+        },
+        "iCalUID": "0lcrvbg44bcsegbs54olbgropk@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "leave",
+            "source": "meal_planner_roster",
+            "roster_code": "SB",
+            "roster_date": "2026-07-25"
+          }
+        },
+        "reminders": {
+          "useDefault": false
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082651576702\"",
+        "id": "sern5ig73etm7pt78qq0afjtos",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=c2VybjVpZzczZXRtN3B0NzhxcTBhZmp0b3MgNjQ4NDc1ZmNhMzJiZDRmMzAwYWZjNDhiNmY1Y2Q4YTM0ZTc4OGI2ZjFjMTJkYTNlOTgyOWEyN2UxMjhiYmYyMUBn",
+        "created": "2026-07-14T15:02:05.000Z",
+        "updated": "2026-07-14T15:02:05.788Z",
+        "summary": "SB",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "648475fca32bd4f300afc48b6f5cd8a34e788b6f1c12da3e9829a27e128bbf21@group.calendar.google.com",
+          "displayName": "非返工日",
+          "self": true
+        },
+        "start": {
+          "date": "2026-07-28"
+        },
+        "end": {
+          "date": "2026-07-29"
+        },
+        "iCalUID": "sern5ig73etm7pt78qq0afjtos@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "leave",
+            "source": "meal_planner_roster",
+            "roster_code": "SB",
+            "roster_date": "2026-07-28"
+          }
+        },
+        "reminders": {
+          "useDefault": false
+        },
+        "eventType": "default"
+      },
+      {
+        "kind": "calendar#event",
+        "etag": "\"3568082653373598\"",
+        "id": "g711fq0ipirr16kmc51nqsacss",
+        "status": "confirmed",
+        "htmlLink": "https://www.google.com/calendar/event?eid=ZzcxMWZxMGlwaXJyMTZrbWM1MW5xc2Fjc3MgNjQ4NDc1ZmNhMzJiZDRmMzAwYWZjNDhiNmY1Y2Q4YTM0ZTc4OGI2ZjFjMTJkYTNlOTgyOWEyN2UxMjhiYmYyMUBn",
+        "created": "2026-07-14T15:02:06.000Z",
+        "updated": "2026-07-14T15:02:06.686Z",
+        "summary": "WL30",
+        "creator": {
+          "email": "kenny1811@gmail.com"
+        },
+        "organizer": {
+          "email": "648475fca32bd4f300afc48b6f5cd8a34e788b6f1c12da3e9829a27e128bbf21@group.calendar.google.com",
+          "displayName": "非返工日",
+          "self": true
+        },
+        "start": {
+          "date": "2026-07-31"
+        },
+        "end": {
+          "date": "2026-08-01"
+        },
+        "iCalUID": "g711fq0ipirr16kmc51nqsacss@google.com",
+        "sequence": 0,
+        "extendedProperties": {
+          "private": {
+            "kind": "leave",
+            "source": "meal_planner_roster",
+            "roster_code": "WL30",
+            "roster_date": "2026-07-31"
+          }
+        },
+        "reminders": {
+          "useDefault": false
+        },
+        "eventType": "default"
+      }
+    ]
+  }
+}

@@ -489,6 +489,15 @@
         return normalTime(s) || s;
       }
 
+      if (sheetKey === "payroll_times") {
+        const header = Array.isArray(maintSheetPayload.rows && maintSheetPayload.rows[0]) ? maintSheetPayload.rows[0] : [];
+        const name = String(header[colIndex] || "").trim();
+        if (name === "開始時間" || name === "結束時間") {
+          if (isInputEvent) return value;
+          return normalTime(s) || s;
+        }
+      }
+
       if (sheetKey === "overtime") {
         if (colIndex === 0) {
           if (isInputEvent) return value;

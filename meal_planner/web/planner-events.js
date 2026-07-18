@@ -286,6 +286,10 @@
       if (!(await resolveUnsavedBeforeLeaving())) return;
       await openDutyReportPanel();
     });
+    document.getElementById("menu-onoffduty").addEventListener("click", async () => {
+      if (!(await resolveUnsavedBeforeLeaving())) return;
+      await openOnOffDutyPanel();
+    });
     document.getElementById("menu-shopping").addEventListener("click", async () => {
       if (!(await resolveUnsavedBeforeLeaving())) return;
       setActiveMenuPathForKey("shopping");

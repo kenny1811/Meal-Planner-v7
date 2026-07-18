@@ -2081,6 +2081,41 @@
     .duty-stat-value { font-size: 14px; font-weight: 700; }
     .duty-stat-group { font-size: 12px; }
     .duty-stat-sub { color: var(--muted); font-size: 10px; }
+    .onoff-switch {
+      appearance: none;
+      border: none;
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      background: #94a3b8;
+      position: relative;
+      cursor: pointer;
+      padding: 0;
+      transition: background 0.15s ease;
+      flex: 0 0 auto;
+    }
+    .onoff-switch-on { background: #2b4ff2; }
+    .onoff-knob {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: left 0.15s ease;
+    }
+    .onoff-switch-on .onoff-knob { left: 23px; }
+    .onoff-mode { color: var(--muted); font-size: 11px; }
+    .onoff-mode-active { color: #2b4ff2; font-weight: 700; }
+    .duty-block .onoff-toolbar { margin: 4px 8px 2px; }
+    .onoff-meta { padding: 0 10px 4px; font-size: 12px; font-weight: 600; }
+    .onoff-stats { gap: 12px; }
+    .onoff-card { min-width: 180px; padding: 10px 12px; }
+    .onoff-card .duty-stat-value { font-size: 22px; }
+    .onoff-card .duty-card-actions { margin-top: 10px; }
+    .onoff-open { text-decoration: none; }
+    .onoff-note { padding: 8px; }
     .duty-sheet {
       background: #fff;
       border: 1px solid var(--grid);
@@ -2091,13 +2126,10 @@
       max-width: 100%;
       overflow-x: auto;
     }
-    table.duty-table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; }
-    table.duty-table th,
-    table.duty-table td { border: 1px solid var(--grid); padding: 2px 6px; text-align: left; }
-    table.duty-table thead th { background: #eef2f7; color: var(--muted); font-weight: 600; }
+    table.duty-table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
     .duty-td-time { font-weight: 700; }
-    .duty-td-actions { text-align: right; white-space: nowrap; }
-    .duty-td-actions .duty-btn { height: 20px; padding: 1px 7px; margin-left: 3px; }
+    .duty-td-actions { text-align: left; white-space: nowrap; }
+    .duty-td-actions .duty-btn { height: 20px; padding: 1px 7px; margin-right: 3px; }
     .duty-row-due { background: #eef4ff; }
     .duty-row-muted td { color: #9aa1a9; }
     .duty-status-sent { color: #166534; }
@@ -2119,12 +2151,6 @@
     .duty-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; }
     .duty-events { line-height: 1.7; font-variant-numeric: tabular-nums; }
     table.duty-map-table { border-collapse: collapse; }
-    table.duty-map-table th,
-    table.duty-map-table td { border: 1px solid var(--grid); padding: 1px 4px; }
-    table.duty-map-table thead th { background: #eef2f7; color: var(--muted); font-weight: 600; text-align: left; }
-    table.duty-map-table input[type="text"] { border: 0; padding: 2px 4px; font: inherit; width: 100%; box-sizing: border-box; }
-    .duty-map-code { width: 90px; }
-    .duty-map-group { min-width: 240px; }
     .duty-template-input { flex: 1; min-width: 220px; height: 20px; border: 1px solid var(--grid); border-radius: 3px; padding: 1px 5px; font: inherit; }
     .duty-pop-menu {
       position: fixed;
@@ -2212,3 +2238,60 @@
       font-variant-numeric: tabular-nums;
     }
     input.duty-time-input:focus { outline: 0; background: #eef4ff; }
+    /* 報更兩張表用系統 maint-table sheet 外觀；喺 block 內唔 sticky（relative 保住 resize 手柄定位）。 */
+    .duty-block table.maint-table thead th { position: relative; top: auto; }
+    .duty-block table.maint-table th:first-child { position: relative; left: auto; }
+    .duty-block table.maint-table td.duty-plain { padding: 2px 4px; vertical-align: middle; }
+    .duty-block table.maint-table tbody th { vertical-align: middle; }
+    .duty-block table.maint-table td.duty-td-time input.duty-time-input { padding: 2px 4px; }
+    input.duty-msg-input {
+      width: 100%;
+      border: 0;
+      padding: 2px 4px;
+      font: inherit;
+      background: transparent;
+      box-sizing: border-box;
+    }
+    input.duty-msg-input:focus { outline: 0; background: #eef4ff; }
+    .duty-group-cell:focus { outline: 0; background: #eef4ff; }
+    .duty-btn-dim { opacity: 0.45; }
+    input.duty-map-cell:focus { outline: 0; background: #eef4ff; }
+    /* 報更 sheet cell：view mode（readonly）指針、edit mode（可打）黃底藍框。 */
+    input.duty-time-input[readonly],
+    input.duty-msg-input[readonly],
+    input.duty-map-cell[readonly] { cursor: pointer; }
+    input.duty-time-input:not([readonly]),
+    input.duty-msg-input:not([readonly]),
+    input.duty-map-cell:not([readonly]) {
+      background: #fffbe6;
+      outline: 1px solid #4169d8;
+      outline-offset: -1px;
+    }
+    /* 報更 sheet cell 視覺：view mode（readonly）= 淺藍 highlight 冇框；edit mode = 黃底藍框。 */
+    .duty-block input.duty-time-input[readonly],
+    .duty-block input.duty-msg-input[readonly],
+    .duty-block input.duty-map-cell[readonly] {
+      cursor: pointer;
+      background: transparent;
+      outline: none;
+    }
+    .duty-block table.maint-table input.duty-time-input[readonly]:focus,
+    .duty-block table.maint-table input.duty-msg-input[readonly]:focus,
+    .duty-block table.maint-table input.duty-map-cell[readonly]:focus {
+      outline: none;
+      background: #dbeafe;
+    }
+    .duty-block input.duty-time-input:not([readonly]),
+    .duty-block input.duty-msg-input:not([readonly]),
+    .duty-block input.duty-map-cell:not([readonly]) {
+      background: #fffbe6;
+      outline: 2px solid #4169d8;
+      outline-offset: -2px;
+    }
+    /* 報更 Schedule 行高收緊，貼近系統 maint sheet。 */
+    .duty-block table.duty-table td { vertical-align: middle; line-height: 1.1; }
+    .duty-block table.duty-table input.duty-time-input,
+    .duty-block table.duty-table input.duty-msg-input { padding: 1px 4px; }
+    .duty-block table.duty-table td.duty-td-actions .duty-btn { height: 18px; line-height: 15px; padding: 0 7px; margin: 0; }
+    .duty-block table.duty-table td.duty-plain { padding: 1px 4px; line-height: 1.1; }
+    .duty-block table.duty-table tbody th { padding: 1px 4px; }
