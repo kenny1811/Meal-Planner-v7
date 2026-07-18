@@ -19,17 +19,22 @@ public class PhoneWearListenerService extends WearableListenerService {
     private static final String DISMISS_PATH = "/oneshotalarm/dismiss";
     private static final String DISMISS_DATA_PATH = "/oneshotalarm/dismiss-data";
     private static final String TILE_STATE_REQUEST_PATH = "/oneshotalarm/tile-state-request";
+    private static final long DISMISS_FRESH_MS = 30 * 1000L;
 
     @Override
     public void onDataChanged(DataEventBuffer dataEvents) {
         for (DataEvent event : dataEvents) {
             if (event != null
+                    && event.getType() == DataEvent.TYPE_CHANGED
                     && event.getDataItem() != null
                     && event.getDataItem().getUri() != null
                     && DISMISS_DATA_PATH.equals(event.getDataItem().getUri().getPath())) {
                 Log.d(TAG, "Received watch dismiss data");
                 DataMap map = DataMapItem.fromDataItem(event.getDataItem()).getDataMap();
-                dispatchWatchDismiss(map.getString("alarm_id", ""));
+                dispatchWatchDismiss(
+                        map.getString("alarm_id", ""),
+                        map.getLong("ts", map.getLong("dismiss_id", 0L))
+                );
                 return;
             }
         }
@@ -49,28 +54,46 @@ public class PhoneWearListenerService extends WearableListenerService {
             return;
         }
         Log.d(TAG, "Received watch dismiss message");
-        dispatchWatchDismiss(alarmIdFromPayload(messageEvent.getData()));
+        JSONObject payload = dismissPayload(messageEvent.getData());
+        dispatchWatchDismiss(
+                payload.optString("alarm_id", ""),
+                payload.optLong("ts", payload.optLong("dismiss_id", 0L))
+        );
     }
 
-    private void dispatchWatchDismiss(String alarmId) {
-        if (alarmId != null && !alarmId.trim().isEmpty()) {
-            AlarmScheduler.cancelAlarm(this, alarmId.trim(), "");
-            AlarmStore.markAlarmFired(this, alarmId.trim());
-            NextAlarmWidgetProvider.updateAll(this);
+    private void dispatchWatchDismiss(String alarmId, long sentAtMillis) {
+        // Data-layer dismiss items can be delivered long after the watch sent them
+        // (Doze / disconnect deferral) — a stale dismiss must not touch alarm state;
+        // it may only close a ringing AlarmActivity whose alarm id matches.
+        String id = alarmId == null ? "" : alarmId.trim();
+        long now = System.currentTimeMillis();
+        boolean fresh = sentAtMillis > 0L && Math.abs(now - sentAtMillis) < DISMISS_FRESH_MS;
+        if (!fresh && id.isEmpty()) {
+            Log.d(TAG, "Ignored stale watch dismiss without alarm id");
+            return;
         }
-        AlarmActivity.markWatchDismiss(this);
-        WatchBridge.sendTileState(this);
+        if (fresh) {
+            if (!id.isEmpty()) {
+                AlarmScheduler.cancelAlarm(this, id, "");
+                AlarmStore.markAlarmFired(this, id);
+                NextAlarmWidgetProvider.updateAll(this);
+            }
+            AlarmActivity.markWatchDismiss(this, id);
+            WatchBridge.sendTileState(this);
+        }
         Intent intent = new Intent(AlarmActivity.ACTION_WATCH_DISMISS);
         intent.setPackage(getPackageName());
+        intent.putExtra(AlarmActivity.EXTRA_DISMISS_ALARM_ID, id);
+        intent.putExtra(AlarmActivity.EXTRA_DISMISS_TS, sentAtMillis);
         sendBroadcast(intent);
     }
 
-    private String alarmIdFromPayload(byte[] data) {
+    private JSONObject dismissPayload(byte[] data) {
         String raw = new String(data == null ? new byte[0] : data, StandardCharsets.UTF_8);
         try {
-            return new JSONObject(raw).optString("alarm_id", "");
+            return new JSONObject(raw);
         } catch (Exception ignored) {
-            return "";
+            return new JSONObject();
         }
     }
 }

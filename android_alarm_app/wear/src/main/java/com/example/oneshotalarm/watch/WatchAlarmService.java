@@ -64,6 +64,16 @@ public class WatchAlarmService extends Service {
         context.stopService(intent);
     }
 
+    static String activeAlarmId(Context context) {
+        SharedPreferences preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (!preferences.getBoolean(KEY_ACTIVE, false)) {
+            return null;
+        }
+        String key = preferences.getString(KEY_LAST_ALARM_KEY, "");
+        int newline = key.indexOf('\n');
+        return (newline >= 0 ? key.substring(0, newline) : key).trim();
+    }
+
     static void setStrength(Context context, String strength) {
         Intent intent = new Intent(context, WatchAlarmService.class);
         intent.setAction(ACTION_SET_STRENGTH);

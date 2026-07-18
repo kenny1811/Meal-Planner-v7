@@ -27,23 +27,24 @@ public class WearAlarmListenerService extends WearableListenerService {
     private static final String KEY_LAST_ALARM_KEY = "last_alarm_key";
     private static final String KEY_LAST_ALARM_AT = "last_alarm_at";
     private static final long DUPLICATE_ALARM_MS = 2 * 60 * 1000L;
+    private static final long DISMISS_FRESH_MS = 30 * 1000L;
 
     @Override
     public void onDataChanged(DataEventBuffer dataEvents) {
         for (DataEvent event : dataEvents) {
-            if (event != null
-                    && event.getDataItem() != null
-                    && event.getDataItem().getUri() != null
-                    && WATCH_DISMISS_DATA_PATH.equals(event.getDataItem().getUri().getPath())) {
+            if (event == null
+                    || event.getType() != DataEvent.TYPE_CHANGED
+                    || event.getDataItem() == null
+                    || event.getDataItem().getUri() == null) {
+                continue;
+            }
+            if (WATCH_DISMISS_DATA_PATH.equals(event.getDataItem().getUri().getPath())) {
                 DataMap map = DataMapItem.fromDataItem(event.getDataItem()).getDataMap();
                 Log.d(TAG, "Received phone dismiss data: " + map.getString("alarm_id", ""));
-                dismissWatchAlarm(map.getString("alarm_id", ""));
+                dismissWatchAlarm(map.getString("alarm_id", ""), map.getLong("ts", 0L));
                 return;
             }
-            if (event != null
-                    && event.getDataItem() != null
-                    && event.getDataItem().getUri() != null
-                    && TILE_STATE_PATH.equals(event.getDataItem().getUri().getPath())) {
+            if (TILE_STATE_PATH.equals(event.getDataItem().getUri().getPath())) {
                 saveTileState(DataMapItem.fromDataItem(event.getDataItem()).getDataMap());
             }
         }
@@ -55,9 +56,10 @@ public class WearAlarmListenerService extends WearableListenerService {
             return;
         }
         if (WATCH_DISMISS_PATH.equals(messageEvent.getPath())) {
-            String alarmId = alarmIdFromPayload(messageEvent.getData());
+            JSONObject payload = dismissPayload(messageEvent.getData());
+            String alarmId = payload.optString("alarm_id", "");
             Log.d(TAG, "Received phone dismiss message: " + alarmId);
-            dismissWatchAlarm(alarmId);
+            dismissWatchAlarm(alarmId, payload.optLong("ts", payload.optLong("dismiss_id", 0L)));
             return;
         }
         if (TILE_STATE_PATH.equals(messageEvent.getPath())) {
@@ -86,15 +88,29 @@ public class WearAlarmListenerService extends WearableListenerService {
         WatchLocalAlarmScheduler.scheduleImmediate(this, alarmId, time, label);
     }
 
-    private void dismissWatchAlarm(String alarmId) {
-        Log.d(TAG, "Dismiss watch alarm from phone: " + (alarmId == null ? "" : alarmId));
-        if (alarmId != null && !alarmId.trim().isEmpty()) {
-            WatchLocalAlarmScheduler.cancelAlarm(this, alarmId.trim());
+    private void dismissWatchAlarm(String alarmId, long sentAtMillis) {
+        // Data-layer dismiss items can arrive long after they were sent (Doze /
+        // disconnect deferral), right when the NEXT alarm wakes the watch — so a
+        // dismiss may only stop ringing if it names the ringing alarm, or is fresh.
+        String id = alarmId == null ? "" : alarmId.trim();
+        long now = System.currentTimeMillis();
+        boolean fresh = sentAtMillis > 0L && Math.abs(now - sentAtMillis) < DISMISS_FRESH_MS;
+        String ringingId = WatchAlarmService.activeAlarmId(this);
+        boolean matchesRinging = ringingId != null && !id.isEmpty() && id.equals(ringingId);
+        if (!fresh && !matchesRinging) {
+            Log.d(TAG, "Ignored stale phone dismiss: " + id);
+            return;
         }
-        WatchAlarmService.stop(this);
-        Intent intent = new Intent(WatchAlarmActivity.ACTION_DISMISS_LOCAL);
-        intent.setPackage(getPackageName());
-        sendBroadcast(intent);
+        Log.d(TAG, "Dismiss watch alarm from phone: " + id);
+        if (!id.isEmpty()) {
+            WatchLocalAlarmScheduler.cancelAlarm(this, id);
+        }
+        if (matchesRinging || id.isEmpty()) {
+            WatchAlarmService.stop(this);
+            Intent intent = new Intent(WatchAlarmActivity.ACTION_DISMISS_LOCAL);
+            intent.setPackage(getPackageName());
+            sendBroadcast(intent);
+        }
         WatchScheduleDisplayState.refreshFromCacheAndRequest(this);
     }
 
@@ -173,12 +189,12 @@ public class WearAlarmListenerService extends WearableListenerService {
         }
     }
 
-    private String alarmIdFromPayload(byte[] data) {
+    private JSONObject dismissPayload(byte[] data) {
         String raw = new String(data == null ? new byte[0] : data, StandardCharsets.UTF_8);
         try {
-            return new JSONObject(raw).optString("alarm_id", "");
+            return new JSONObject(raw);
         } catch (Exception ignored) {
-            return "";
+            return new JSONObject();
         }
     }
 

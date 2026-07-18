@@ -25,8 +25,11 @@ import java.util.Locale;
 
 public class AlarmActivity extends Activity {
     static final String ACTION_WATCH_DISMISS = "com.example.oneshotalarm.ACTION_WATCH_DISMISS";
+    static final String EXTRA_DISMISS_ALARM_ID = "dismiss_alarm_id";
+    static final String EXTRA_DISMISS_TS = "dismiss_ts";
     private static final String PREFS = "alarm_activity";
     private static final String KEY_WATCH_DISMISS_AT = "watch_dismiss_at";
+    private static final String KEY_WATCH_DISMISS_ID = "watch_dismiss_id";
     private static final long WATCH_DISMISS_VALID_MS = 30 * 1000L;
     private boolean stopped = false;
     private PowerManager.WakeLock wakeLock;
@@ -34,7 +37,11 @@ public class AlarmActivity extends Activity {
     private final BroadcastReceiver watchDismissReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent != null && ACTION_WATCH_DISMISS.equals(intent.getAction())) {
+            if (intent != null
+                    && ACTION_WATCH_DISMISS.equals(intent.getAction())
+                    && shouldDismissFor(
+                            intent.getStringExtra(EXTRA_DISMISS_ALARM_ID),
+                            intent.getLongExtra(EXTRA_DISMISS_TS, 0L))) {
                 dismissAlarm();
             }
         }
@@ -133,16 +140,37 @@ public class AlarmActivity extends Activity {
         }
     }
 
-    static void markWatchDismiss(Context context) {
+    static void markWatchDismiss(Context context, String alarmId) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putLong(KEY_WATCH_DISMISS_AT, System.currentTimeMillis())
+                .putString(KEY_WATCH_DISMISS_ID, alarmId == null ? "" : alarmId.trim())
                 .apply();
+    }
+
+    private boolean shouldDismissFor(String dismissAlarmId, long sentAtMillis) {
+        String id = dismissAlarmId == null ? "" : dismissAlarmId.trim();
+        String myId = myAlarmId();
+        if (!id.isEmpty() && !myId.isEmpty()) {
+            return id.equals(myId);
+        }
+        long now = System.currentTimeMillis();
+        return sentAtMillis > 0L && Math.abs(now - sentAtMillis) < WATCH_DISMISS_VALID_MS;
+    }
+
+    private String myAlarmId() {
+        String id = getIntent().getStringExtra(AlarmScheduler.EXTRA_ALARM_ID);
+        return id == null ? "" : id.trim();
     }
 
     private boolean hasRecentWatchDismiss() {
         long at = getSharedPreferences(PREFS, MODE_PRIVATE).getLong(KEY_WATCH_DISMISS_AT, 0L);
         long now = System.currentTimeMillis();
-        return at > 0L && now - at >= 0L && now - at < WATCH_DISMISS_VALID_MS;
+        if (at <= 0L || now - at < 0L || now - at >= WATCH_DISMISS_VALID_MS) {
+            return false;
+        }
+        String dismissedId = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_WATCH_DISMISS_ID, "");
+        String myId = myAlarmId();
+        return dismissedId.isEmpty() || myId.isEmpty() || dismissedId.equals(myId);
     }
 
     private LinearLayout.LayoutParams weightedHeight(float weight) {
