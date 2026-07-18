@@ -251,7 +251,11 @@ class DutyReportView {
         // slot 列表
         JSONArray slots = plan.optJSONArray("slots");
         if (slots == null || slots.length() == 0) {
-            container.addView(textView("No safety reports this day", 12, 0xFF64748B, false));
+            TextView emptyView = textView("No safety reports this day", 13, 0xFF64748B, true);
+            emptyView.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyView.setPadding(dp(8), dp(16), dp(8), dp(16));
+            container.addView(emptyView, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         } else {
             for (int i = 0; i < slots.length(); i++) {
                 JSONObject slot = slots.optJSONObject(i);
@@ -266,7 +270,7 @@ class DutyReportView {
             container.addView(actionBar(mode, source));
             container.addView(textView(
                     "轉code只改報更行位——更表／餐單／報開工收工唔郁",
-                    9, 0xFF9AA1A9, false));
+                    10, 0xFF9A5B00, true));
         } else {
             container.addView(textView("Past day is read-only.", 10, 0xFF9AA1A9, false));
         }
