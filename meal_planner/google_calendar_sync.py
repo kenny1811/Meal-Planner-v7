@@ -579,7 +579,8 @@ def _last_prefixed_calendar_event(events: list[dict[str, Any]], prefix: str) -> 
 def _same_calendar_marker(a: dict[str, str] | None, b: dict[str, str] | None) -> bool:
     if a is None or b is None:
         return a is None and b is None
-    return a.get("date") == b.get("date") and a.get("code") == b.get("code")
+    # 只比較當月最後一個同 prefix 嘅更碼，日期唔使一致。
+    return a.get("code") == b.get("code")
 
 
 def check_nonwork_calendar_consistency(
@@ -629,6 +630,20 @@ def check_nonwork_calendar_consistency(
     service = service or build_google_calendar_service(config)
     old_events = _list_events(service, OLD_LEAVE_CALENDAR_ID, time_min, time_max)
     nonwork_events = _list_events(service, config.leave_calendar_id, time_min, time_max)
+
+    # 「大假」日曆全月冇 SH/WL 內容（已遷移／清空）→ 冇嘢好對，直接當通過，唔出不一致。
+    if (
+        _last_prefixed_calendar_event(old_events, "SH") is None
+        and _last_prefixed_calendar_event(old_events, "WL") is None
+    ):
+        return {
+            "status": "ok",
+            "complete": True,
+            "year": month.year,
+            "month": month.month,
+            "items": {},
+            "warnings": [],
+        }
 
     items: dict[str, dict[str, Any]] = {}
     warnings: list[str] = []

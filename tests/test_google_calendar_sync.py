@@ -367,6 +367,87 @@ class GoogleCalendarSyncRuntimeTests(unittest.TestCase):
         self.assertIn("最後WL不一致", result["warnings"][0])
         self.assertNotIn("更表", result["warnings"][0])
 
+    def test_nonwork_consistency_ignores_date_when_code_matches(self):
+        settings = get_settings()
+        config = GoogleCalendarSyncConfig(
+            enabled=True,
+            dry_run=False,
+            time_zone="Asia/Hong_Kong",
+            account_email="kenny1811@gmail.com",
+            work_calendar_id="work-calendar",
+            alarm_calendar_id="alarm-calendar",
+            leave_calendar_id="nonwork-calendar",
+            backup_dir=settings.data_folder / "backup",
+            service_account_file=None,
+            oauth_client_file=settings.data_folder / "client.json",
+            oauth_token_file=settings.data_folder / "token.json",
+        )
+        roster_text = "2099年6月 " + " ".join(
+            f"{day} {'SH01' if day == 28 else ('WL30' if day == 30 else 'EleB')}"
+            for day in range(1, 31)
+        )
+
+        def fake_list_events(service, calendar_id, time_min, time_max):
+            if calendar_id == OLD_LEAVE_CALENDAR_ID:
+                return [
+                    {"summary": "SH01", "start": {"date": "2099-06-24"}, "end": {"date": "2099-06-25"}},
+                    {"summary": "WL30", "start": {"date": "2099-06-24"}, "end": {"date": "2099-06-25"}},
+                ]
+            if calendar_id == "nonwork-calendar":
+                return [
+                    {"summary": "SH01", "start": {"date": "2099-06-28"}, "end": {"date": "2099-06-29"}},
+                    {"summary": "WL30", "start": {"date": "2099-06-30"}, "end": {"date": "2099-07-01"}},
+                ]
+            return []
+
+        with patch("meal_planner.google_calendar_sync.google_calendar_auth_status", return_value={"authenticated": True}), \
+             patch("meal_planner.google_calendar_sync.build_google_calendar_service", return_value=object()), \
+             patch("meal_planner.google_calendar_sync._list_events", side_effect=fake_list_events):
+            result = check_nonwork_calendar_consistency(roster_text, settings, config=config)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["items"]["SH"]["consistent"])
+        self.assertTrue(result["items"]["WL"]["consistent"])
+        self.assertEqual(result["warnings"], [])
+
+    def test_nonwork_consistency_ok_when_old_leave_calendar_empty(self):
+        settings = get_settings()
+        config = GoogleCalendarSyncConfig(
+            enabled=True,
+            dry_run=False,
+            time_zone="Asia/Hong_Kong",
+            account_email="kenny1811@gmail.com",
+            work_calendar_id="work-calendar",
+            alarm_calendar_id="alarm-calendar",
+            leave_calendar_id="nonwork-calendar",
+            backup_dir=settings.data_folder / "backup",
+            service_account_file=None,
+            oauth_client_file=settings.data_folder / "client.json",
+            oauth_token_file=settings.data_folder / "token.json",
+        )
+        roster_text = "2099年6月 " + " ".join(
+            f"{day} {'SH01' if day == 28 else ('WL30' if day == 30 else 'EleB')}"
+            for day in range(1, 31)
+        )
+
+        def fake_list_events(service, calendar_id, time_min, time_max):
+            if calendar_id == OLD_LEAVE_CALENDAR_ID:
+                return []
+            if calendar_id == "nonwork-calendar":
+                return [
+                    {"summary": "SH01", "start": {"date": "2099-06-28"}, "end": {"date": "2099-06-29"}},
+                    {"summary": "WL30", "start": {"date": "2099-06-30"}, "end": {"date": "2099-07-01"}},
+                ]
+            return []
+
+        with patch("meal_planner.google_calendar_sync.google_calendar_auth_status", return_value={"authenticated": True}), \
+             patch("meal_planner.google_calendar_sync.build_google_calendar_service", return_value=object()), \
+             patch("meal_planner.google_calendar_sync._list_events", side_effect=fake_list_events):
+            result = check_nonwork_calendar_consistency(roster_text, settings, config=config)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["warnings"], [])
+
     def test_roster_save_endpoint_returns_calendar_sync_status(self):
         client = TestClient(app)
 
