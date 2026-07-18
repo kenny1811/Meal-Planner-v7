@@ -171,8 +171,41 @@ final class AlarmStore {
         return DEFAULT_AUTO_SYNC_SERVER;
     }
 
+    // 屋企 LAN 網段：淨係喺自己屋企個 router 先會派呢啲 IP（唔靠 Wi-Fi 名，唔使 location 權限）。
+    private static final String HOME_LAN_PREFIX = "192.168.15.";
+
     static String[] getAutoSyncServerCandidates(Context context) {
-        return new String[]{DEFAULT_AUTO_SYNC_SERVER, MESHNET_AUTO_SYNC_SERVER};
+        // 部機有 192.168.15.x 呢個 IP＝真係喺屋企個網 → LAN 行先；
+        // 否則（mobile data／街外 Wi-Fi）→ meshnet 行先，慳咗 LAN connect timeout 白等。
+        return isOnHomeLan(context)
+                ? new String[]{DEFAULT_AUTO_SYNC_SERVER, MESHNET_AUTO_SYNC_SERVER}
+                : new String[]{MESHNET_AUTO_SYNC_SERVER, DEFAULT_AUTO_SYNC_SERVER};
+    }
+
+    private static boolean isOnHomeLan(Context context) {
+        try {
+            android.net.ConnectivityManager cm =
+                    (android.net.ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) {
+                return false;
+            }
+            for (android.net.Network network : cm.getAllNetworks()) {
+                android.net.LinkProperties lp = cm.getLinkProperties(network);
+                if (lp == null) {
+                    continue;
+                }
+                for (android.net.LinkAddress la : lp.getLinkAddresses()) {
+                    java.net.InetAddress address = la.getAddress();
+                    if (address instanceof java.net.Inet4Address
+                            && address.getHostAddress() != null
+                            && address.getHostAddress().startsWith(HOME_LAN_PREFIX)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     static String getAutoSyncServerUrl(Context context, boolean fallbackToLoopback) {

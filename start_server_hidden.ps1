@@ -1,13 +1,15 @@
-$ErrorActionPreference = "SilentlyContinue"
+﻿$ErrorActionPreference = "SilentlyContinue"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$env:MENU_API_HOST = "192.168.15.125"
+# bind 0.0.0.0：LAN + Meshnet 一齊聽（電話出街經 meshnet 先叫得通）；health check 照用 LAN IP。
+$LanIp = "192.168.15.125"
+$env:MENU_API_HOST = "0.0.0.0"
 $env:MENU_PROJECT_ROOT = $Root
 if (-not $env:MENU_API_PORT) {
     $env:MENU_API_PORT = "8765"
 }
 
-$HostIp = $env:MENU_API_HOST
+$HostIp = $LanIp
 $Port = [int]$env:MENU_API_PORT
 $HealthUrl = "http://${HostIp}:$Port/api/health"
 $PythonExe = "C:\Users\Kenny\AppData\Local\Programs\Python\Python313\python.exe"
@@ -40,7 +42,7 @@ function Test-MealPlannerHealth {
 function Test-ExpectedListener {
     $listeners = @(
         Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
-            Where-Object { $_.LocalAddress -eq $HostIp }
+            Where-Object { $_.LocalAddress -eq $HostIp -or $_.LocalAddress -eq '0.0.0.0' }
     )
     return $listeners.Count -gt 0
 }
