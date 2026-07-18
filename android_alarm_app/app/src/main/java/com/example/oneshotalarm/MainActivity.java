@@ -58,7 +58,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 public class MainActivity extends Activity {
     private static final String TAG = "OneShotAlarm";
     private static final String EXPORT_FILE_NAME = "export.xml";
-    private static final int HTTP_CONNECT_TIMEOUT_MS = 4000;
+    private static final int HTTP_CONNECT_TIMEOUT_MS = 2500;
     private static final int HTTP_READ_TIMEOUT_MS = 7000;
     private static final int PAGE_MEAL = 0;
     private static final int PAGE_SHIFT = 1;

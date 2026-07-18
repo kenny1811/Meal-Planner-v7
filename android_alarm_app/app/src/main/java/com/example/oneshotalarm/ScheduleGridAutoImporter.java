@@ -24,7 +24,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 
 final class ScheduleGridAutoImporter {
     private static final String TAG = "ScheduleGridAutoImport";
-    private static final int HTTP_CONNECT_TIMEOUT_MS = 4000;
+    private static final int HTTP_CONNECT_TIMEOUT_MS = 2500;
     private static final int HTTP_READ_TIMEOUT_MS = 12000;
 
     private ScheduleGridAutoImporter() {
