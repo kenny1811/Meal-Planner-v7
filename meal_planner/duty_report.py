@@ -520,7 +520,10 @@ def build_plan(
     sent_count = sum(1 for s in slots if s["status"] == "sent")
     next_slot = next((s for s in slots if s["status"] in {"pending", "due"}), None)
 
+    from meal_planner.duty_form import POST_MAPPING  # 全套已知更碼（電話 Change code pickup list 用）
+
     return {
+        "known_codes": sorted(POST_MAPPING),
         "ok": True,
         "date_iso": biz_date.isoformat(),
         "today_iso": today.isoformat(),

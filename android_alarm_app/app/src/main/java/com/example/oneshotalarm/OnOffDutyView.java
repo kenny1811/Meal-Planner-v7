@@ -7,8 +7,6 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.text.InputType;
 import android.view.Gravity;
-import android.widget.ArrayAdapter;
-import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -179,42 +177,72 @@ class OnOffDutyView {
                 .show();
     }
 
-    /** 現場轉更：改當日更碼（寫入更表）——開工/收工時間、報平安更、日曆全部即時跟住重排。 */
+    /** 現場轉更：pickup list 揀當日更碼（寫入更表）——開工/收工時間、報平安更、日曆全部即時跟住重排。 */
     private void showCodeEditDialog() {
         if (plan == null || loading) {
             return;
         }
+        java.util.List<String> codes = new java.util.ArrayList<>();
+        JSONArray known = plan.optJSONArray("known_codes");
+        if (known != null) {
+            for (int i = 0; i < known.length(); i++) {
+                String c = known.optString(i, "").trim();
+                if (!c.isEmpty()) {
+                    codes.add(c);
+                }
+            }
+        }
+        if (!codes.contains("SB")) {
+            codes.add("SB");
+        }
+        codes.add("Other code...");
+        String[] labels = codes.toArray(new String[0]);
+        new AlertDialog.Builder(activity)
+                .setTitle("轉更 — 揀 " + plan.optString("date_iso", "") + " 更碼")
+                .setItems(labels, (dialog, which) -> {
+                    String picked = labels[which];
+                    if ("Other code...".equals(picked)) {
+                        promptCode(value -> confirmRosterCode(value));
+                    } else {
+                        confirmRosterCode(picked);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private interface CodeCallback {
+        void run(String code);
+    }
+
+    private void promptCode(CodeCallback callback) {
         LinearLayout box = new LinearLayout(activity);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(16), dp(8), dp(16), 0);
-        AutoCompleteTextView codeInput = new AutoCompleteTextView(activity);
-        codeInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        codeInput.setHint("e.g. TSB / IFCA1 / SB");
-        codeInput.setText(plan.optString("roster_code", ""));
-        codeInput.setSelectAllOnFocus(true);
-        JSONArray known = plan.optJSONArray("known_codes");
-        if (known != null && known.length() > 0) {
-            String[] codes = new String[known.length()];
-            for (int i = 0; i < known.length(); i++) {
-                codes[i] = known.optString(i, "");
-            }
-            codeInput.setAdapter(new ArrayAdapter<>(
-                    activity, android.R.layout.simple_dropdown_item_1line, codes));
-            codeInput.setThreshold(1);
-        }
-        box.addView(codeInput);
+        EditText input = new EditText(activity);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setHint("e.g. WL01 / SH02 / AL03");
+        box.addView(input);
         new AlertDialog.Builder(activity)
-                .setTitle("轉更 — 改 " + plan.optString("date_iso", "") + " 更碼（寫入更表）")
-                .setMessage("開工/收工時間、報平安更、日曆會即時跟新更碼重排。")
+                .setTitle("Enter code")
                 .setView(box)
                 .setPositiveButton("OK", (d, w) -> {
-                    String value = codeInput.getText().toString().trim();
+                    String value = input.getText().toString().trim();
                     if (value.isEmpty()) {
                         Toast.makeText(activity, "更碼唔可以留空", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    postRosterCode(value);
+                    callback.run(value);
                 })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void confirmRosterCode(String code) {
+        new AlertDialog.Builder(activity)
+                .setTitle("轉更 → " + code)
+                .setMessage("寫入更表：開工/收工時間、報平安更、日曆全部跟住變。")
+                .setPositiveButton("OK", (d, w) -> postRosterCode(code))
                 .setNegativeButton("Cancel", null)
                 .show();
     }

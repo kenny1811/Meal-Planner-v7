@@ -750,15 +750,24 @@ class DutyReportView {
     }
 
     private void showChangeCodeDialog(boolean midDay) {
-        List<String> codes = new ArrayList<>();
+        java.util.TreeSet<String> merged = new java.util.TreeSet<>();
         JSONObject mapping = plan != null ? plan.optJSONObject("mapping") : null;
         if (mapping != null) {
             Iterator<String> it = mapping.keys();
             while (it.hasNext()) {
-                codes.add(it.next());
+                merged.add(it.next());
             }
         }
-        java.util.Collections.sort(codes);
+        JSONArray known = plan != null ? plan.optJSONArray("known_codes") : null;
+        if (known != null) {
+            for (int i = 0; i < known.length(); i++) {
+                String c = known.optString(i, "").trim();
+                if (!c.isEmpty()) {
+                    merged.add(c);
+                }
+            }
+        }
+        List<String> codes = new ArrayList<>(merged);
         codes.add("Other code...");
         String[] labels = codes.toArray(new String[0]);
         new AlertDialog.Builder(activity)
