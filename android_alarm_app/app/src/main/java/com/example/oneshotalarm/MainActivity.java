@@ -700,11 +700,19 @@ public class MainActivity extends Activity {
         }
         statusView.setText("推送行位表到電腦中...");
         new Thread(() -> {
-            PushResult result;
-            try {
-                result = postCurrentScheduleGrid(server.trim());
-            } catch (Exception e) {
-                result = new PushResult(false, 0, 0, e.getMessage());
+            PushResult result = new PushResult(false, 0, 0, "");
+            for (String baseServer : getAutoServerCandidates(server)) {
+                if (baseServer == null || baseServer.trim().isEmpty()) {
+                    continue;
+                }
+                try {
+                    result = postCurrentScheduleGrid(baseServer.trim());
+                } catch (Exception e) {
+                    result = new PushResult(false, 0, 0, e.getMessage());
+                }
+                if (result.ok) {
+                    break;
+                }
             }
             PushResult finalResult = result;
             runOnUiThread(() -> {
