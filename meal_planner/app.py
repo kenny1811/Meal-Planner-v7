@@ -1148,67 +1148,6 @@ def phone_apk() -> FileResponse:
     )
 
 
-_WAKE_PROJECTS = {
-    "餐單生成v7": r"D:\Projects\餐單生成v7",
-    "財務管家v4": r"D:\Projects\財務管家v4",
-    "MyPhoto": r"D:\Projects\MyPhoto",
-    "Gemini Folder": r"D:\Projects\Gemini Folder",
-}
-
-
-@app.get("/wake")
-def wake_page() -> Response:
-    # 手機遙距叫 PC 開一個新 Claude session（desktop app 未支援 resume 舊 session，
-    # 見 github anthropics/claude-code#50345；有得 resume 嗰日就改呢度）。
-    buttons = "".join(
-        f'<button onclick="wake(this,\'{name}\')">{name}</button>' for name in _WAKE_PROJECTS
-    )
-    html = """<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wake Claude session</title>
-<style>body{font-family:sans-serif;margin:24px;background:#111;color:#eee}
-button{display:block;width:100%;font-size:18px;padding:14px;margin:10px 0;border-radius:10px;border:0;background:#3b82f6;color:#fff}
-button:disabled{background:#475569}
-#status{color:#94a3b8;margin-top:14px}</style></head><body>
-<h3>Wake a new Claude session on PC</h3>
-""" + buttons + """
-<div id="status"></div>
-<script>
-async function wake(btn, name) {
-  btn.disabled = true;
-  const st = document.getElementById("status");
-  st.textContent = "Waking " + name + "...";
-  try {
-    const r = await fetch("/api/wake", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({project:name})});
-    const j = await r.json();
-    st.textContent = j.ok ? name + ": session opening on PC - check the Code list in ~10s" : "Failed: " + JSON.stringify(j);
-  } catch (e) {
-    st.textContent = "Failed: " + e.message;
-  }
-  btn.disabled = false;
-}
-</script></body></html>"""
-    return Response(content=html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
-
-
-class WakeRequest(BaseModel):
-    project: str
-
-
-@app.post("/api/wake")
-def api_wake(body: WakeRequest) -> dict[str, Any]:
-    folder = _WAKE_PROJECTS.get(body.project)
-    if not folder:
-        raise HTTPException(status_code=404, detail=f"Unknown project: {body.project}")
-    from urllib.parse import quote
-
-    # q 唔可以慳：冇初始 prompt 只會開個空白草稿，session 唔會正式成立，手機見唔到。
-    prompt = "遙距喚醒：唔使做任何嘢，應一句「喺度」就停，等用戶喺手機接手。"
-    url = "claude://code/new?folder=" + quote(folder, safe="") + "&q=" + quote(prompt, safe="")
-    os.startfile(url)  # noqa: S606 - deliberate: hand the deep link to Windows
-    return {"ok": True, "project": body.project}
-
-
 @app.get("/apkdl")
 def phone_apk_chunked_page() -> Response:
     # 斬件下載頁：meshnet 條線每 ~30 秒閃一次，成個 26MB 一炮過拉極都斷尾；
