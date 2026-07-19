@@ -774,8 +774,12 @@ public class MainActivity extends Activity {
         if (preferred.endsWith("/")) {
             preferred = preferred.substring(0, preferred.length() - 1);
         }
+        // 只有「用戶自訂咗一個唔同於預設」嘅 URL 先至獨用佢；
+        // 預設 URL 一律行 LAN/meshnet candidates（getAutoSyncServerUrl 永遠回傳預設，
+        // 如果照舊 short-circuit，meshnet fallback 會變死碼，出街就假 Offline）。
         if (!preferred.isEmpty()
-                && (preferred.startsWith("http://") || preferred.startsWith("https://"))) {
+                && (preferred.startsWith("http://") || preferred.startsWith("https://"))
+                && !preferred.equals(AlarmStore.DEFAULT_AUTO_SYNC_SERVER)) {
             return new String[]{preferred};
         }
 
