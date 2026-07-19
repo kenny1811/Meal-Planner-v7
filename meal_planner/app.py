@@ -1148,6 +1148,79 @@ def phone_apk() -> FileResponse:
     )
 
 
+@app.get("/apkdl")
+def phone_apk_chunked_page() -> Response:
+    # 斬件下載頁：meshnet 條線每 ~30 秒閃一次，成個 26MB 一炮過拉極都斷尾；
+    # 呢頁用 JS 每次 Range 拉 1MB、逐塊重試，齊件先喺電話本地砌返個 APK 儲存。
+    html = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APK chunked download</title>
+<style>body{font-family:sans-serif;margin:24px;background:#111;color:#eee}
+#bar{height:14px;background:#333;border-radius:7px;overflow:hidden;margin:12px 0}
+#fill{height:100%;width:0%;background:#3b82f6}
+button{font-size:18px;padding:10px 22px;border-radius:8px;border:0;background:#3b82f6;color:#fff}
+#log{font-size:12px;color:#999;white-space:pre-wrap}</style></head><body>
+<h3>oneshotalarm.apk</h3>
+<div id="bar"><div id="fill"></div></div>
+<div id="status">Ready</div><br>
+<button id="btn">Start download</button>
+<p id="log"></p>
+<script>
+const CHUNK = 1024*1024, URL_APK = "/apk";
+const st = document.getElementById("status"), fill = document.getElementById("fill");
+const log = (m) => { document.getElementById("log").textContent += m + "\\n"; };
+async function fetchRange(start, end) {
+  for (let attempt = 1; attempt <= 12; attempt++) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 25000);
+    try {
+      const r = await fetch(URL_APK, {headers: {Range: "bytes=" + start + "-" + end}, cache: "no-store", signal: ctl.signal});
+      if (r.status !== 206) throw new Error("HTTP " + r.status);
+      const buf = await r.arrayBuffer();
+      clearTimeout(timer);
+      return {buf, total: parseInt((r.headers.get("Content-Range") || "").split("/")[1] || "0", 10)};
+    } catch (e) {
+      clearTimeout(timer);
+      log("chunk " + start + " attempt " + attempt + ": " + e.message + " — retrying");
+      await new Promise(res => setTimeout(res, 1500));
+    }
+  }
+  throw new Error("chunk " + start + " failed after 12 attempts");
+}
+async function run() {
+  document.getElementById("btn").disabled = true;
+  try {
+    st.textContent = "Fetching size...";
+    const first = await fetchRange(0, CHUNK - 1);
+    const total = first.total;
+    const parts = [first.buf];
+    let got = first.buf.byteLength;
+    while (got < total) {
+      st.textContent = "Downloading " + (got/1048576).toFixed(1) + " / " + (total/1048576).toFixed(1) + " MB";
+      fill.style.width = (got*100/total).toFixed(1) + "%";
+      const part = await fetchRange(got, Math.min(got + CHUNK, total) - 1);
+      parts.push(part.buf);
+      got += part.buf.byteLength;
+    }
+    fill.style.width = "100%";
+    st.textContent = "Assembling...";
+    const blob = new Blob(parts, {type: "application/vnd.android.package-archive"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "oneshotalarm.apk";
+    document.body.appendChild(a);
+    a.click();
+    st.textContent = "Done - check Downloads, tap the APK to install";
+  } catch (e) {
+    st.textContent = "Failed: " + e.message + " (tap Start to retry)";
+    document.getElementById("btn").disabled = false;
+  }
+}
+document.getElementById("btn").addEventListener("click", run);
+</script></body></html>"""
+    return Response(content=html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/{asset_name}")
 def web_asset(asset_name: str) -> FileResponse:
     if asset_name not in {
