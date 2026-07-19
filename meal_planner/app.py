@@ -1133,6 +1133,21 @@ def index_page() -> FileResponse:
     )
 
 
+@app.get("/apk")
+def phone_apk() -> FileResponse:
+    # 電話出街經 meshnet 用瀏覽器下載最新 build（adb 條線太飄時嘅後備安裝路徑）。
+    # 必須排喺 /{asset_name} catch-all 之前，否則會被佢截咗。
+    path = _WEB_DIR.parent.parent / "android_alarm_app" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Cannot find app-debug.apk (build first)")
+    return FileResponse(
+        path,
+        media_type="application/vnd.android.package-archive",
+        filename="oneshotalarm.apk",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/{asset_name}")
 def web_asset(asset_name: str) -> FileResponse:
     if asset_name not in {
