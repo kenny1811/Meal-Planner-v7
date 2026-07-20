@@ -60,7 +60,6 @@
     async function checkRosterLineOnLeave(input) {
       if (!input || rosterCodeCheckBusy) return;
       const text = String(input.value || "");
-      if (text.trim() === String(input.dataset.maintCodeCheckedValue || "").trim()) return;
       rosterCodeCheckBusy = true;
       let issues = [];
       try {
@@ -71,7 +70,6 @@
       } finally {
         rosterCodeCheckBusy = false;
       }
-      input.dataset.maintCodeCheckedValue = text;
       if (!issues.length) return;
       if (!window.confirm(`${rosterCodeIssuesText(issues)}\n\n要唔要返去更正？`)) return;
       const rowIdx = Number(input.getAttribute("data-maint-roster-row"));
@@ -97,7 +95,8 @@
       if (timer) clearTimeout(timer);
       rosterDirectKeyTimers.delete(input);
       autoResizeTextarea(input);
-      if (editedValue !== null && editedValue.trim() !== beforeEdit.trim()) {
+      // 郁過就查（連加個 space 都算），有錯就即刻彈。
+      if (editedValue !== null && editedValue !== beforeEdit) {
         checkRosterLineOnLeave(input);
       }
     }
