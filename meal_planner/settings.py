@@ -11,6 +11,8 @@ from typing import Any, Mapping
 
 import yaml
 
+from meal_planner.atomic_io import write_text_atomic
+
 
 def _default_project_root() -> Path:
     return Path(__file__).resolve().parent.parent
@@ -373,7 +375,7 @@ def save_rice_detail_settings(
 
     text = replace_key(text, "cooked_to_raw_brown", cooked_to_raw_brown)
     text = replace_key(text, "cooked_to_raw_other", cooked_to_raw_other)
-    cfg_path.write_text(text, encoding="utf-8", newline="\n")
+    write_text_atomic(cfg_path, text, encoding="utf-8", newline="\n")
     clear_settings_cache()
     return get_settings()
 
@@ -425,6 +427,6 @@ def save_folder_settings(
 
     text = replace_key(text, "system_folder", system_raw)
     text = replace_key(text, "data_folder", data_raw)
-    cfg_path.write_text(text, encoding="utf-8", newline="\n")
+    write_text_atomic(cfg_path, text, encoding="utf-8", newline="\n")
     clear_settings_cache()
     return get_settings()

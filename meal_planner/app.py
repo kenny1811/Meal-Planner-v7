@@ -21,6 +21,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
+from meal_planner.atomic_io import write_bytes_atomic
 from meal_planner.dates_input import DateValidationError, parse_date_expression
 from meal_planner.excel_io import WorkbookValidationError, load_workbook_data
 from meal_planner.free_port import free_tcp_port
@@ -1788,7 +1789,7 @@ def api_export_schedule_grid_to_file() -> dict[str, Any]:
     target_path = settings.data_folder / _SCHEDULE_GRID_EXPORT_FILE_NAME
     try:
         settings.data_folder.mkdir(parents=True, exist_ok=True)
-        target_path.write_bytes(xml_data)
+        write_bytes_atomic(target_path, xml_data)
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Save schedule_grid.xml to data folder failed: {e}") from e
     return {

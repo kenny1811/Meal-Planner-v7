@@ -15,6 +15,7 @@ from meal_planner.maintenance_db import load_sheet_rows
 from meal_planner.meal_schedule import roster_matches_rule
 from meal_planner.roster import is_work_day, last_day_of_month, parse_roster_line, roster_for_month
 from meal_planner.schedule_grid import load_overtime_overrides_from_rows, load_wake_alarm_overrides_from_rows
+from meal_planner.atomic_io import write_text_atomic
 from meal_planner.settings import AppSettings
 
 
@@ -420,7 +421,7 @@ def _load_oauth_credentials(client_file: Path, token_file: Path | None) -> Any:
         creds = flow.run_local_server(port=0, prompt="consent")
         if token_file:
             token_file.parent.mkdir(parents=True, exist_ok=True)
-            token_file.write_text(creds.to_json(), encoding="utf-8")
+            write_text_atomic(token_file, creds.to_json(), encoding="utf-8")
     return creds
 
 
@@ -480,7 +481,7 @@ def google_calendar_auth_status(settings: AppSettings, config: GoogleCalendarSyn
         elif creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
-                config.oauth_token_file.write_text(creds.to_json(), encoding="utf-8")
+                write_text_atomic(config.oauth_token_file, creds.to_json(), encoding="utf-8")
                 authed, status = True, "connected"
             except Exception:
                 status = "revoked"
@@ -766,7 +767,8 @@ def _backup_events(
     config.backup_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(ZoneInfo(config.time_zone)).strftime("%Y%m%d_%H%M%S")
     path = config.backup_dir / f"google-calendar-roster-sync-{stamp}.json"
-    path.write_text(
+    write_text_atomic(
+        path,
         json.dumps(
             {
                 "account_email": config.account_email,
