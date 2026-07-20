@@ -1,4 +1,4 @@
-param([string]$Variant = "wear:assembleDebug", [string]$DeviceSerial = "", [switch]$NoBuild)
+﻿param([string]$Variant = "wear:assembleDebug", [string]$DeviceSerial = "", [switch]$NoBuild)
 $ErrorActionPreference = "Stop"
 $pkg = "com.example.oneshotalarm"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition

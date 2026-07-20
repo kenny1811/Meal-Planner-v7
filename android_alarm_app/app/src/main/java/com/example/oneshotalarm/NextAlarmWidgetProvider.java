@@ -133,12 +133,13 @@ public class NextAlarmWidgetProvider extends AppWidgetProvider {
 
     private static int displayLength(String text) {
         int length = 0;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (Character.isWhitespace(c)) {
-                continue;
+        int i = 0;
+        while (i < text.length()) {
+            int cp = text.codePointAt(i);
+            if (!Character.isWhitespace(cp)) {
+                length++;
             }
-            length++;
+            i += Character.charCount(cp);
         }
         return length;
     }
@@ -167,7 +168,18 @@ public class NextAlarmWidgetProvider extends AppWidgetProvider {
         if (best > 0) {
             return best;
         }
-        return target;
+        return snapToCodePointBoundary(text, target);
+    }
+
+    /** 中間切時避開 surrogate pair（emoji／擴展漢字），否則兩截都變 tofu。 */
+    private static int snapToCodePointBoundary(String text, int index) {
+        if (index > 0
+                && index < text.length()
+                && Character.isHighSurrogate(text.charAt(index - 1))
+                && Character.isLowSurrogate(text.charAt(index))) {
+            return index + 1;
+        }
+        return index;
     }
 
     private static final class WidgetAlarm {
