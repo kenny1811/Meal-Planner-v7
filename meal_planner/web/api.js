@@ -360,10 +360,18 @@
     }
 
     async function checkRosterLine(text) {
+      return checkRosterCodes({ text: String(text || "") });
+    }
+
+    async function checkRosterRows(rows) {
+      return checkRosterCodes({ rows: rows || [] });
+    }
+
+    async function checkRosterCodes(payload) {
       const r = await fetch("/api/maint/roster/check-line", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: String(text || "") }),
+        body: JSON.stringify(payload),
       });
       const data = await parseJsonSafe(r);
       if (!r.ok) {

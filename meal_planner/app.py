@@ -1625,13 +1625,15 @@ def api_save_maint_sheet(sheet_key: str, body: MaintenanceSheetRequest) -> dict[
 
 class RosterLineCheckRequest(BaseModel):
     text: str = ""
+    rows: list[Any] | None = None
 
 
 @app.post("/api/maint/roster/check-line")
 def api_check_roster_line(body: RosterLineCheckRequest) -> dict[str, Any]:
-    # 前端喺離開一行更表時叫；只查嗰行，快到可以逐次 blur 都叫。
+    # 離開一行時淨係傳嗰行（text）；儲存前會傳成張表（rows）。
     try:
-        return _check_roster_codes_against_schedule_grid([[body.text]])
+        rows = body.rows if body.rows is not None else [[body.text]]
+        return _check_roster_codes_against_schedule_grid(rows)
     except Exception as e:
         return {"status": "error", "detail": str(e), "issues": []}
 

@@ -51,7 +51,7 @@
           : "當日冇已生效嘅行位表版本";
         return `${code}：${why}（${shown}${more}）`;
       });
-      return `呢行有更碼攞唔到行位表 ——\n${parts.join("\n")}`;
+      return `有更碼攞唔到行位表 ——\n${parts.join("\n")}`;
     }
 
     let rosterCodeCheckBusy = false;
@@ -79,18 +79,40 @@
     }
 
     /**
-     * Ctrl+S／Save 掣：仲留喺編輯中嗰行未經 blur 查過，喺度補做。
-     * 回傳 false = 用戶話要留低更正，唔好儲存住。
+     * Ctrl+S／Save 掣：每次都查成張更表（唔止編輯緊嗰行，亦唔壓抑重覆提問），
+     * 確保冇問題更碼可以靜靜雞寫入。回傳 false = 用戶要留低更正，唔好儲存。
      */
-    async function checkEditingRosterLineBeforeSave() {
+    async function checkRosterCodesBeforeSave(rows) {
       if (activeMaintSheetKey !== "roster") return true;
-      const input = document.querySelector('#maint-editor textarea[data-maint-roster-row][data-maint-editing="1"]');
-      if (!input) return true;
-      if (String(input.value || "") === String(input.dataset.maintOriginalValue || "")) return true;
-      if (await checkRosterLineOnLeave(input)) return false;
-      // 已經問過呢段文字，唔好離開嗰行時再問多次。
-      input.dataset.maintOriginalValue = String(input.value || "");
-      return true;
+      let issues = [];
+      try {
+        const result = await checkRosterRows(rows);
+        issues = Array.isArray(result && result.issues) ? result.issues : [];
+      } catch (_) {
+        issues = [];
+      }
+      if (!issues.length) return true;
+      if (!window.confirm(`${rosterCodeIssuesText(issues)}\n\n要唔要返去更正？（撳「取消」= 照樣儲存）`)) return true;
+      focusRosterRowForIssue(issues[0]);
+      return false;
+    }
+
+    /** 跳返去出事嗰行：先按日期嘅年月配對，配唔到就搵含住嗰個更碼嘅行。 */
+    function focusRosterRowForIssue(issue) {
+      const inputs = Array.from(document.querySelectorAll("#maint-editor textarea[data-maint-roster-row]"));
+      if (!inputs.length) return;
+      const firstDate = Array.isArray(issue && issue.dates) ? String(issue.dates[0] || "") : "";
+      const label = firstDate.slice(0, 7);
+      const code = String((issue && issue.roster_code) || "").trim();
+      const target = inputs.find((input) => {
+        const parsed = parseRosterMaintLine(input.value);
+        return parsed && label && parsed.label === label;
+      }) || inputs.find((input) => code && String(input.value || "").includes(code));
+      if (!target) return;
+      const rowIdx = Number(target.getAttribute("data-maint-roster-row"));
+      if (Number.isInteger(rowIdx)) setActiveRosterMonthIndex(rowIdx);
+      target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      beginRosterCellEdit(target);
     }
 
     function endRosterCellEdit(input, options = {}) {
@@ -1231,11 +1253,14 @@
 
     async function saveMaintEditor() {
       if (!activeMaintSheetKey) return;
-      if (!(await checkEditingRosterLineBeforeSave())) return;
       showMaintError("");
       setMaintStatus("Saving...");
       try {
         const rows = rowsForMaintSave(collectMaintRows());
+        if (!(await checkRosterCodesBeforeSave(rows))) {
+          setMaintStatus("");
+          return;
+        }
         if (activeMaintSheetKey === "roster") {
           const wakeRows = collectWakeAlarmRowsForRosterSave();
           await persistMaintSheet("wake_alarms", wakeRows);
