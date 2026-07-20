@@ -70,11 +70,27 @@
       } finally {
         rosterCodeCheckBusy = false;
       }
-      if (!issues.length) return;
-      if (!window.confirm(`${rosterCodeIssuesText(issues)}\n\n要唔要返去更正？`)) return;
+      if (!issues.length) return false;
+      if (!window.confirm(`${rosterCodeIssuesText(issues)}\n\n要唔要返去更正？`)) return false;
       const rowIdx = Number(input.getAttribute("data-maint-roster-row"));
       if (Number.isInteger(rowIdx)) setActiveRosterMonthIndex(rowIdx);
       beginRosterCellEdit(input);
+      return true;
+    }
+
+    /**
+     * Ctrl+S／Save 掣：仲留喺編輯中嗰行未經 blur 查過，喺度補做。
+     * 回傳 false = 用戶話要留低更正，唔好儲存住。
+     */
+    async function checkEditingRosterLineBeforeSave() {
+      if (activeMaintSheetKey !== "roster") return true;
+      const input = document.querySelector('#maint-editor textarea[data-maint-roster-row][data-maint-editing="1"]');
+      if (!input) return true;
+      if (String(input.value || "") === String(input.dataset.maintOriginalValue || "")) return true;
+      if (await checkRosterLineOnLeave(input)) return false;
+      // 已經問過呢段文字，唔好離開嗰行時再問多次。
+      input.dataset.maintOriginalValue = String(input.value || "");
+      return true;
     }
 
     function endRosterCellEdit(input, options = {}) {
@@ -1215,6 +1231,7 @@
 
     async function saveMaintEditor() {
       if (!activeMaintSheetKey) return;
+      if (!(await checkEditingRosterLineBeforeSave())) return;
       showMaintError("");
       setMaintStatus("Saving...");
       try {
