@@ -60,7 +60,11 @@ from meal_planner.settings import (
     save_rice_detail_settings,
 )
 from meal_planner.roster import code_for_date, is_work_day, roster_for_month
-from meal_planner.schedule_grid import load_schedule_rows_from_rows, rows_for_roster
+from meal_planner.schedule_grid import (
+    grid_row_matches_roster,
+    load_schedule_rows_from_rows,
+    rows_for_roster,
+)
 from meal_planner.storage import (
     load_active_panel,
     load_active_config_view,
@@ -580,6 +584,66 @@ def _roster_workday_code_map(sheet_rows: list[Any]) -> dict[tuple[int, int], Any
     return roster_for_month(_collect_roster_cell_texts(row_lists))
 
 
+def _check_roster_codes_against_schedule_grid(roster_rows: list[Any]) -> dict[str, Any]:
+    """
+    更表儲存時檢查：今日及之後每個返工日，行位表有冇當日可用嘅版本。
+
+    分兩類問題：
+      unknown_code        — 行位表根本冇呢個更碼（例如打錯字）
+      no_effective_version — 更碼存在，但當日冇任何已生效版本（生效日期全部遲過嗰日）
+
+    過去嘅日子唔檢查（改唔到亦冇影響）。呢個檢查只作警告，唔會阻止儲存。
+    """
+    settings = get_settings()
+    try:
+        grid_sheet = load_sheet_rows("schedule_grid", settings)
+    except (MaintenanceDatabaseError, OSError):
+        return {"status": "skipped", "issues": []}
+
+    grid_rows = grid_sheet.get("rows", []) if isinstance(grid_sheet, dict) else []
+    parsed_rows = load_schedule_rows_from_rows(grid_rows if isinstance(grid_rows, list) else [])
+    if not parsed_rows:
+        return {"status": "skipped", "issues": []}
+
+    known_codes = {str(getattr(row, "code", "") or "").strip() for row in parsed_rows}
+    known_codes.discard("")
+
+    today = datetime.now(ZoneInfo(settings.dates.timezone)).date()
+    grouped: dict[tuple[str, str], list[str]] = {}
+    for (year, month), month_map in sorted(_roster_workday_code_map(roster_rows).items()):
+        for day, raw_code in sorted(month_map.day_to_code.items()):
+            code = str(raw_code or "").strip()
+            if not code or not is_work_day(code):
+                continue
+            try:
+                day_date = date(year, month, day)
+            except ValueError:
+                continue
+            if day_date < today or rows_for_roster(parsed_rows, code, day_date):
+                continue
+            reason = (
+                "no_effective_version"
+                if any(grid_row_matches_roster(known, code) for known in known_codes)
+                else "unknown_code"
+            )
+            grouped.setdefault((code, reason), []).append(day_date.isoformat())
+
+    issues = [
+        {
+            "roster_code": code,
+            "reason": reason,
+            "day_count": len(days),
+            "dates": sorted(days),
+        }
+        for (code, reason), days in sorted(grouped.items())
+    ]
+    return {
+        "status": "warning" if issues else "ok",
+        "checked_from": today.isoformat(),
+        "issues": issues,
+    }
+
+
 def _next_workday_from(
     start: date,
     roster_map: dict[tuple[int, int], Any],
@@ -687,12 +751,11 @@ def _choose_schedule_grid_export_target(
     if not roster_map:
         return None
 
-    candidate_date, code, candidate_rows = _next_workday_schedule_from(
-        now.date(),
-        roster_map,
-        parsed_rows,
-    )
-    if candidate_date is None or not code or not candidate_rows:
+    # 唔可以跳過「有更但行位表冇對應更碼」嗰日：寧願俾上層報「搵唔到 X 行位表」，
+    # 都好過靜靜雞攞咗第二日嘅行位表落手機。所以呢度淨係按更表揀日子，
+    # 行位表配唔到就照返個空 rows 上去。
+    candidate_date, code = _next_workday_from(now.date(), roster_map)
+    if candidate_date is None or not code:
         candidate_date, code, candidate_rows = _latest_workday_schedule_before(
             now.date() - timedelta(days=1),
             roster_map,
@@ -700,23 +763,18 @@ def _choose_schedule_grid_export_target(
         )
         if candidate_date is None or not code or not candidate_rows:
             return None
+        return candidate_date.isoformat(), str(code), _schedule_grid_effective_iso(candidate_rows), candidate_rows
 
-    if candidate_date == now.date():
+    candidate_rows = rows_for_roster(parsed_rows, code, candidate_date)
+    if candidate_date == now.date() and candidate_rows:
         _, max_time = _schedule_day_minutes(candidate_rows)
         if max_time >= 0 and now_minutes > max_time:
-            next_date, next_code, next_rows = _next_workday_schedule_from(
-                candidate_date + timedelta(days=1),
-                roster_map,
-                parsed_rows,
-            )
-            if next_date is None or not next_code or not next_rows:
+            next_date, next_code = _next_workday_from(candidate_date + timedelta(days=1), roster_map)
+            if next_date is None or not next_code:
                 return None
             candidate_date = next_date
             code = next_code
-            candidate_rows = next_rows
-
-    if not candidate_rows:
-        return None
+            candidate_rows = rows_for_roster(parsed_rows, code, candidate_date)
 
     return candidate_date.isoformat(), str(code), _schedule_grid_effective_iso(candidate_rows), candidate_rows
 
@@ -1012,7 +1070,7 @@ def _build_current_schedule_grid_xml_export() -> tuple[str, bytes]:
     if export_target is None:
         raise HTTPException(status_code=404, detail="更表之後冇返工日記錄")
     target_date, roster_code, export_version, target_schedule_rows = export_target
-    if not any(str(getattr(row, "code", "") or "").strip() == roster_code for row in target_schedule_rows):
+    if not any(grid_row_matches_roster(getattr(row, "code", ""), roster_code) for row in target_schedule_rows):
         raise HTTPException(status_code=404, detail=f"搵唔到 {roster_code} 行位表")
     global _LAST_SCHEDULE_GRID_EXPORT_VERSION
     _LAST_SCHEDULE_GRID_EXPORT_VERSION = export_version
@@ -1035,7 +1093,7 @@ def _exact_schedule_rows_for_code_on_day(
     code = str(roster_code or "").strip()
     if not code:
         return []
-    matched = [row for row in parsed_rows if str(getattr(row, "code", "") or "").strip() == code]
+    matched = [row for row in parsed_rows if grid_row_matches_roster(getattr(row, "code", ""), code)]
     dated = [
         row for row in matched
         if getattr(row, "effective_from", None) is not None
@@ -1103,7 +1161,7 @@ def _build_schedule_grid_all_variants_export() -> dict[str, Any]:
                 "target_date": target_date,
                 "effective_date": variant_version,
                 "alarm_count": len(exported_rows),
-                "is_current": code == roster_code,
+                "is_current": grid_row_matches_roster(code, roster_code),
                 "xml": xml_data.decode("utf-8"),
             }
         )
@@ -1552,6 +1610,10 @@ def api_save_maint_sheet(sheet_key: str, body: MaintenanceSheetRequest) -> dict[
         settings = get_settings()
         response = {"ok": True, **save_sheet_rows(sheet_key, body.rows, settings)}
         if sheet_key == "roster":
+            try:
+                response["roster_code_check"] = _check_roster_codes_against_schedule_grid(body.rows)
+            except Exception as e:
+                response["roster_code_check"] = {"status": "error", "detail": str(e), "issues": []}
             try:
                 response["google_calendar_sync"] = sync_roster_to_google_calendar(body.rows, settings)
             except Exception as e:

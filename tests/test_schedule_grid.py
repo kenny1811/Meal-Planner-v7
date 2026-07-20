@@ -1,7 +1,7 @@
 import unittest
 import os
 import tempfile
-from datetime import date, time
+from datetime import date, time, timedelta
 
 from fastapi import HTTPException
 
@@ -47,7 +47,17 @@ class ScheduleGridTests(unittest.TestCase):
     def test_grid_row_matches_roster_ignores_case_for_multi_word_codes(self):
         self.assertTrue(grid_row_matches_roster("Lecole Event", "Lecole event"))
 
+    def test_grid_row_matches_roster_rejects_bracket_and_prefix_variants(self):
+        # 括號唔係版本後綴：PenB(頂位) / FBPA(單人) 各自係獨立更碼，版本靠生效日期分。
+        self.assertFalse(grid_row_matches_roster("PenB(頂位)", "PenB"))
+        self.assertFalse(grid_row_matches_roster("FBPA(單人)", "FBPA"))
+        self.assertFalse(grid_row_matches_roster("PenC頂位", "PenC"))
+        self.assertFalse(grid_row_matches_roster("PenBM", "PenB"))
+
     def test_all_variants_requires_exact_current_roster_code(self):
+        # 更表寫 PenB，行位表淨係有 PenB(頂位)：括號係另一個更碼，要報錯而唔係當佢係 PenB。
+        target_day = date.today() + timedelta(days=30)
+        roster_cell = f"{target_day.year}年{target_day.month}月 {target_day.day} PenB"
         with tempfile.TemporaryDirectory() as tmp:
             old_root = os.environ.get("MENU_PROJECT_ROOT")
             os.environ["MENU_PROJECT_ROOT"] = tmp
@@ -56,7 +66,7 @@ class ScheduleGridTests(unittest.TestCase):
                 settings = get_settings()
                 save_sheet_rows(
                     "roster",
-                    [["2026年6月 18 Lecole Event"]],
+                    [[roster_cell]],
                     settings,
                 )
                 save_sheet_rows(
@@ -64,7 +74,7 @@ class ScheduleGridTests(unittest.TestCase):
                     [
                         ["更碼", "時間", "內容", "時長", "生效日期"],
                         ["EleA", "09:00", "報開工", "60", "2026-06-01"],
-                        ["Lecole event", "09:50", "報開工", "10", "2026-06-17"],
+                        ["PenB(頂位)", "09:50", "報開工", "10", "2026-06-17"],
                     ],
                     settings,
                 )
@@ -79,7 +89,7 @@ class ScheduleGridTests(unittest.TestCase):
                 clear_settings_cache()
 
         self.assertEqual(ctx.exception.status_code, 404)
-        self.assertEqual(ctx.exception.detail, "搵唔到 Lecole Event 行位表")
+        self.assertEqual(ctx.exception.detail, "搵唔到 PenB 行位表")
 
     def test_phone_import_replaces_only_imported_code_for_effective_date(self):
         existing = [

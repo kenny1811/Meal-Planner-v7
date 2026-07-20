@@ -76,18 +76,16 @@ def _fmt_clock(t: time) -> str:
 
 
 def grid_row_matches_roster(cell_code: str | None, roster_code: str) -> bool:
-    """行位更碼：與更表字串一致；唔匹配「PenC頂位」當「PenC」。"""
+    """
+    行位更碼：必須與更表更碼完全一致（只忽略大小寫同前後空格）。
+
+    括號**唔係**版本後綴：`PenB(頂位)`、`FBPA(單人)`、`FBPA(雙人)` 各自係獨立更碼，
+    唔可以當成 `PenB` / `FBPA` 嘅變體（同 `PenC頂位` 唔當 `PenC` 一樣道理）。
+    同一個更碼嘅新舊版本，一律靠「生效日期」欄分辨。
+    """
     if not cell_code or not roster_code:
         return False
-    c = str(cell_code).strip()
-    r = str(roster_code).strip()
-    c_cmp = c.casefold()
-    r_cmp = r.casefold()
-    if c_cmp == r_cmp:
-        return True
-    if c_cmp.startswith(r_cmp + "(") or c_cmp.startswith(r_cmp + "（"):
-        return True
-    return False
+    return str(cell_code).strip().casefold() == str(roster_code).strip().casefold()
 
 
 def _header_col_map(

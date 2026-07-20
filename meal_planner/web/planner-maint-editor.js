@@ -1168,6 +1168,28 @@
       return googleCalendarSyncSummary(gc) || "GC no changes";
     }
 
+    function rosterCodeCheckIssues(saveResult) {
+      const check = saveResult && saveResult.roster_code_check;
+      if (!check || typeof check !== "object") return [];
+      return Array.isArray(check.issues) ? check.issues : [];
+    }
+
+    function rosterCodeCheckMessage(saveResult) {
+      const issues = rosterCodeCheckIssues(saveResult);
+      if (!issues.length) return "";
+      const parts = issues.map((issue) => {
+        const code = String((issue && issue.roster_code) || "").trim() || "(空白)";
+        const dates = Array.isArray(issue && issue.dates) ? issue.dates : [];
+        const shown = dates.slice(0, 4).join("、");
+        const more = dates.length > 4 ? ` 等 ${dates.length} 日` : "";
+        const why = issue && issue.reason === "unknown_code"
+          ? "行位表冇呢個更碼"
+          : "當日冇已生效嘅行位表版本";
+        return `${code}：${why}（${shown}${more}）`;
+      });
+      return `更表已儲存，但有更碼攞唔到行位表 —— ${parts.join("；")}`;
+    }
+
     async function saveMaintEditor() {
       if (!activeMaintSheetKey) return;
       showMaintError("");
@@ -1195,6 +1217,8 @@
         let gcStatus = "";
         if (activeMaintSheetKey === "roster") {
           gcStatus = googleCalendarSyncStatus(result);
+          const codeWarning = rosterCodeCheckMessage(result);
+          if (codeWarning) showMaintError(codeWarning);
         }
         setMaintStatus(`Save ${menuLabel(activeMaintSheetKey)} ${new Date().toLocaleTimeString("en-GB")}${gcStatus ? `; ${gcStatus}` : ""}`);
         await refreshMaintSheets();
