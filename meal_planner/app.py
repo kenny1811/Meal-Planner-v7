@@ -586,13 +586,14 @@ def _roster_workday_code_map(sheet_rows: list[Any]) -> dict[tuple[int, int], Any
 
 def _check_roster_codes_against_schedule_grid(roster_rows: list[Any]) -> dict[str, Any]:
     """
-    更表儲存時檢查：今日及之後每個返工日，行位表有冇當日可用嘅版本。
+    更表檢查：今日及之後每個返工日，行位表有冇當日可用嘅版本。
 
     分兩類問題：
       unknown_code        — 行位表根本冇呢個更碼（例如打錯字）
       no_effective_version — 更碼存在，但當日冇任何已生效版本（生效日期全部遲過嗰日）
 
-    過去嘅日子唔檢查（改唔到亦冇影響）。呢個檢查只作警告，唔會阻止儲存。
+    過去嘅日子唔檢查（改唔到亦冇影響）。喺前端離開更表行嗰陣逐行叫，
+    俾用戶即刻更正；儲存時唔再重覆檢查。
     """
     settings = get_settings()
     try:
@@ -1610,10 +1611,7 @@ def api_save_maint_sheet(sheet_key: str, body: MaintenanceSheetRequest) -> dict[
         settings = get_settings()
         response = {"ok": True, **save_sheet_rows(sheet_key, body.rows, settings)}
         if sheet_key == "roster":
-            try:
-                response["roster_code_check"] = _check_roster_codes_against_schedule_grid(body.rows)
-            except Exception as e:
-                response["roster_code_check"] = {"status": "error", "detail": str(e), "issues": []}
+            # 更碼檢查唔喺度做：前端離開每行更表時已經逐行問過（/api/maint/roster/check-line）。
             try:
                 response["google_calendar_sync"] = sync_roster_to_google_calendar(body.rows, settings)
             except Exception as e:
@@ -1623,6 +1621,19 @@ def api_save_maint_sheet(sheet_key: str, body: MaintenanceSheetRequest) -> dict[
         raise HTTPException(status_code=404, detail=f"Unknown maintenance sheet: {sheet_key}") from e
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Save maintenance sheet failed: {e}") from e
+
+
+class RosterLineCheckRequest(BaseModel):
+    text: str = ""
+
+
+@app.post("/api/maint/roster/check-line")
+def api_check_roster_line(body: RosterLineCheckRequest) -> dict[str, Any]:
+    # 前端喺離開一行更表時叫；只查嗰行，快到可以逐次 blur 都叫。
+    try:
+        return _check_roster_codes_against_schedule_grid([[body.text]])
+    except Exception as e:
+        return {"status": "error", "detail": str(e), "issues": []}
 
 
 @app.post("/api/google-calendar/roster-sync")

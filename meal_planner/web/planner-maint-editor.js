@@ -40,11 +40,54 @@
       });
     }
 
+    function rosterCodeIssuesText(issues) {
+      const parts = issues.map((issue) => {
+        const code = String((issue && issue.roster_code) || "").trim() || "(空白)";
+        const dates = Array.isArray(issue && issue.dates) ? issue.dates : [];
+        const shown = dates.slice(0, 4).join("、");
+        const more = dates.length > 4 ? ` 等 ${dates.length} 日` : "";
+        const why = issue && issue.reason === "unknown_code"
+          ? "行位表冇呢個更碼"
+          : "當日冇已生效嘅行位表版本";
+        return `${code}：${why}（${shown}${more}）`;
+      });
+      return `呢行有更碼攞唔到行位表 ——\n${parts.join("\n")}`;
+    }
+
+    let rosterCodeCheckBusy = false;
+
+    /** 離開一行更表時查嗰行嘅更碼；有問題就問要唔要留低更正。 */
+    async function checkRosterLineOnLeave(input) {
+      if (!input || rosterCodeCheckBusy) return;
+      const text = String(input.value || "");
+      if (text.trim() === String(input.dataset.maintCodeCheckedValue || "").trim()) return;
+      rosterCodeCheckBusy = true;
+      let issues = [];
+      try {
+        const result = await checkRosterLine(text);
+        issues = Array.isArray(result && result.issues) ? result.issues : [];
+      } catch (_) {
+        issues = [];
+      } finally {
+        rosterCodeCheckBusy = false;
+      }
+      input.dataset.maintCodeCheckedValue = text;
+      if (!issues.length) return;
+      if (!window.confirm(`${rosterCodeIssuesText(issues)}\n\n要唔要返去更正？`)) return;
+      const rowIdx = Number(input.getAttribute("data-maint-roster-row"));
+      if (Number.isInteger(rowIdx)) setActiveRosterMonthIndex(rowIdx);
+      beginRosterCellEdit(input);
+    }
+
     function endRosterCellEdit(input, options = {}) {
       if (!input) return;
       if (options.cancel) {
         input.value = input.dataset.maintOriginalValue || "";
       }
+      const editedValue = input.dataset.maintEditing === "1" && !options.cancel
+        ? String(input.value || "")
+        : null;
+      const beforeEdit = String(input.dataset.maintOriginalValue || "");
       input.readOnly = true;
       delete input.dataset.maintEditing;
       delete input.dataset.maintOriginalValue;
@@ -54,6 +97,9 @@
       if (timer) clearTimeout(timer);
       rosterDirectKeyTimers.delete(input);
       autoResizeTextarea(input);
+      if (editedValue !== null && editedValue.trim() !== beforeEdit.trim()) {
+        checkRosterLineOnLeave(input);
+      }
     }
 
     function focusRosterCell(rowIdx) {
@@ -1168,28 +1214,6 @@
       return googleCalendarSyncSummary(gc) || "GC no changes";
     }
 
-    function rosterCodeCheckIssues(saveResult) {
-      const check = saveResult && saveResult.roster_code_check;
-      if (!check || typeof check !== "object") return [];
-      return Array.isArray(check.issues) ? check.issues : [];
-    }
-
-    function rosterCodeCheckMessage(saveResult) {
-      const issues = rosterCodeCheckIssues(saveResult);
-      if (!issues.length) return "";
-      const parts = issues.map((issue) => {
-        const code = String((issue && issue.roster_code) || "").trim() || "(空白)";
-        const dates = Array.isArray(issue && issue.dates) ? issue.dates : [];
-        const shown = dates.slice(0, 4).join("、");
-        const more = dates.length > 4 ? ` 等 ${dates.length} 日` : "";
-        const why = issue && issue.reason === "unknown_code"
-          ? "行位表冇呢個更碼"
-          : "當日冇已生效嘅行位表版本";
-        return `${code}：${why}（${shown}${more}）`;
-      });
-      return `更表已儲存，但有更碼攞唔到行位表 —— ${parts.join("；")}`;
-    }
-
     async function saveMaintEditor() {
       if (!activeMaintSheetKey) return;
       showMaintError("");
@@ -1217,8 +1241,6 @@
         let gcStatus = "";
         if (activeMaintSheetKey === "roster") {
           gcStatus = googleCalendarSyncStatus(result);
-          const codeWarning = rosterCodeCheckMessage(result);
-          if (codeWarning) showMaintError(codeWarning);
         }
         setMaintStatus(`Save ${menuLabel(activeMaintSheetKey)} ${new Date().toLocaleTimeString("en-GB")}${gcStatus ? `; ${gcStatus}` : ""}`);
         await refreshMaintSheets();

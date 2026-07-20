@@ -359,6 +359,19 @@
       return data || {};
     }
 
+    async function checkRosterLine(text) {
+      const r = await fetch("/api/maint/roster/check-line", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: String(text || "") }),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Check roster line failed.", r.status));
+      }
+      return data || {};
+    }
+
     async function loadDutyReportPlan(dateIso) {
       const url = dateIso ? `/api/duty-report/plan?date_iso=${encodeURIComponent(dateIso)}` : "/api/duty-report/plan";
       const r = await fetch(url);
