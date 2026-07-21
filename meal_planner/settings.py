@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping
@@ -78,15 +78,6 @@ class PatternConfig:
 
 
 @dataclass(frozen=True)
-class MealTimesStackConfig:
-    """更碼以某前綴開頭時，四餐 Pattern 分別取自飯時指定「更碼」列（與 xlsm 2–5 行對齊）。"""
-
-    enabled: bool
-    roster_prefix: str
-    pattern_rules: tuple[str, str, str, str]
-
-
-@dataclass(frozen=True)
 class MealBusinessRulesConfig:
     fixed_meals: tuple[str, ...]
     restaurant_lunch_workday_only: bool
@@ -145,7 +136,6 @@ class AppSettings:
     rice: RiceConfig
     dates: DatesConfig
     pattern: PatternConfig
-    meal_times_stack: MealTimesStackConfig
     meal_business_rules: MealBusinessRulesConfig
     optimizer: OptimizerConfig
 
@@ -241,16 +231,6 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
         item_alt_separator=str(pc.get("item_alt_separator", "/")),
     )
 
-    mts = data.get("meal_times_stack", {}) or {}
-    prules = mts.get("pattern_rules") or ["EleM", "IFCM*", "PenC*", "PenM"]
-    if not isinstance(prules, list) or len(prules) != 4:
-        prules = ["EleM", "IFCM*", "PenC*", "PenM"]
-    meal_times_stack = MealTimesStackConfig(
-        enabled=bool(mts.get("enabled", True)),
-        roster_prefix=str(mts.get("roster_prefix", "Pen")),
-        pattern_rules=tuple(str(x) for x in prules),
-    )
-
     mbr = data.get("meal_business_rules", {}) or {}
     fixed_meals_raw = mbr.get("fixed_meals")
     fixed_meals = fixed_meals_raw if isinstance(fixed_meals_raw, list) else ["小食"]
@@ -300,7 +280,6 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
         rice=rice,
         dates=dates,
         pattern=pattern,
-        meal_times_stack=meal_times_stack,
         meal_business_rules=meal_business_rules,
         optimizer=optimizer,
     )
@@ -333,7 +312,6 @@ def get_settings() -> AppSettings:
             rice=settings.rice,
             dates=settings.dates,
             pattern=settings.pattern,
-            meal_times_stack=settings.meal_times_stack,
             meal_business_rules=settings.meal_business_rules,
             optimizer=settings.optimizer,
         )

@@ -116,15 +116,6 @@ final class WatchLocalAlarmScheduler {
         manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pendingIntent);
     }
 
-    static void scheduleImmediate(Context context, String id, String time, String label) {
-        String alarmId = id == null || id.trim().isEmpty()
-                ? "watch-immediate-" + System.currentTimeMillis()
-                : id.trim();
-        String alarmTime = time == null || time.trim().isEmpty() ? "--:--" : time;
-        String alarmLabel = label == null || label.trim().isEmpty() ? "鬧鐘" : label;
-        scheduleOne(context, alarmId, alarmTime, alarmLabel, System.currentTimeMillis() + 1000L);
-    }
-
     private static PendingIntent alarmPendingIntent(
             Context context,
             String id,

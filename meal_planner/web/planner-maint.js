@@ -375,26 +375,6 @@
       }
     }
 
-    function queueMaintDirectKey(input, key) {
-      if (!input || !key) return;
-      const oldTimer = maintDirectKeyTimers.get(input);
-      if (oldTimer) clearTimeout(oldTimer);
-      input.dataset.maintPendingDirectKey = key;
-      const timer = setTimeout(() => {
-        maintDirectKeyTimers.delete(input);
-        if (input.dataset.maintEditing !== "1" || input.dataset.maintPendingDirectKey !== key) return;
-        input.value = `${key}${input.value || ""}`;
-        delete input.dataset.maintPendingDirectKey;
-        delete input.dataset.maintReplaceOnComposition;
-        if (typeof input.setSelectionRange === "function") {
-          const pos = String(input.value || "").length;
-          input.setSelectionRange(pos, pos);
-        }
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }, 40);
-      maintDirectKeyTimers.set(input, timer);
-    }
-
     function endMaintCellEdit(input, options = {}) {
       if (!input) return;
       const wasEditing = input.dataset.maintEditing === "1";
@@ -1196,21 +1176,6 @@
     function shiftForCode(code) {
       const rows = payrollRowsByCode(rosterReportSources.payroll_times);
       return rows.find((row) => rosterCodeMatches(row.code, code)) || null;
-    }
-
-    function rosterDefinitionMap(rows) {
-      return collectRosterCodeDefinitions().concat(
-        (detailSettingsPayload.roster_code_definitions || []).filter((row) => row && row.pattern && row.label)
-      ).filter((row, idx, all) => all.findIndex((x) => x.pattern === row.pattern) === idx);
-    }
-
-    function rosterDefinitionForCode(code, defs) {
-      const s = String(code || "").trim();
-      for (const def of defs || []) {
-        if (def.pattern.endsWith("*") && s.startsWith(def.pattern.slice(0, -1))) return def.label;
-        if (def.pattern === s) return def.label;
-      }
-      return "Workday";
     }
 
     function renderRosterMaintReport(rows) {

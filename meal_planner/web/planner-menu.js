@@ -204,11 +204,6 @@
       item.classList.toggle("menu-child", group !== "top");
     }
 
-    function normalizeMenuOrder(group, keys) {
-      const saved = Array.isArray(menuOrder[group]) ? menuOrder[group].filter((key) => keys.includes(key)) : [];
-      return saved.concat(keys.filter((key) => !saved.includes(key)));
-    }
-
     function applyMenuOrder() {
       const order = cleanMenuOrder();
       removeDuplicateMenuNodes();
@@ -833,7 +828,6 @@
         [".detail-editor", "table_offset_detail"],
         ["#detail-code-definitions table.detail-code-table", "table_offset_detail_codes"],
         ["#maint-editor table.maint-table", "table_offset_maint_sheet"],
-        ["#maint-editor .maint-sheet-title:not(.maint-roster-title)", "table_offset_maint_sheet"],
         ["#maint-editor table.maint-roster-table", "table_offset_maint_roster"],
         ["#maint-editor .maint-roster-pane:first-child .maint-pane-title", "table_offset_maint_roster"],
         ["#shopping-content", "table_offset_shopping"],

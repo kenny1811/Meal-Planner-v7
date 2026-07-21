@@ -1,5 +1,3 @@
-    let rosterGcConsistencyTimer = null;
-    let rosterGcConsistencySeq = 0;
 
     function savedRosterMonthIndex(rows) {
       const n = Number(formColumnWidths.maint_roster_month_index);
@@ -15,7 +13,6 @@
         tr.classList.toggle("active-roster-row", Number(tr.getAttribute("data-maint-row-index")) === activeRosterMonthIndex);
       });
       refreshRosterMaintReport();
-      scheduleRosterGcConsistencyCheck();
       persistColumnWidths();
     }
 
@@ -183,24 +180,6 @@
       return focusRosterWakeInput(0);
     }
     const rosterDirectKeyTimers = new WeakMap();
-
-    function queueRosterDirectKey(input, key) {
-      if (!input || !key) return;
-      const oldTimer = rosterDirectKeyTimers.get(input);
-      if (oldTimer) clearTimeout(oldTimer);
-      input.dataset.maintPendingDirectKey = key;
-      const timer = setTimeout(() => {
-        rosterDirectKeyTimers.delete(input);
-        if (input.dataset.maintEditing !== "1" || input.dataset.maintPendingDirectKey !== key) return;
-        input.value = `${key}${input.value || ""}`;
-        delete input.dataset.maintPendingDirectKey;
-        delete input.dataset.maintReplaceOnComposition;
-        const pos = String(input.value || "").length;
-        input.setSelectionRange(pos, pos);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }, 40);
-      rosterDirectKeyTimers.set(input, timer);
-    }
 
     function rosterTextareaCaretTop(input, position) {
       const style = window.getComputedStyle(input);
@@ -412,50 +391,6 @@
       refreshAuthState();
     }
 
-    function activeRosterTextForConsistency() {
-      const input = document.querySelector(`#maint-editor textarea[data-maint-roster-row="${activeRosterMonthIndex}"]`);
-      if (input) return String(input.value || "");
-      const rows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows : [];
-      const row = rows[activeRosterMonthIndex];
-      return String((Array.isArray(row) ? row[0] : row) || "");
-    }
-
-    function setRosterGcConsistencyWarnings(warnings) {
-      const box = document.getElementById("roster-gc-consistency-warning");
-      if (!box) return;
-      const items = Array.isArray(warnings) ? warnings.filter(Boolean) : [];
-      box.textContent = items.join("；");
-      box.hidden = !items.length;
-    }
-
-    function scheduleRosterGcConsistencyCheck(delay = 600) {
-      if (activeMaintSheetKey !== "roster") return;
-      if (rosterGcConsistencyTimer) clearTimeout(rosterGcConsistencyTimer);
-      rosterGcConsistencyTimer = window.setTimeout(refreshRosterGcConsistencyCheck, delay);
-    }
-
-    async function refreshRosterGcConsistencyCheck() {
-      rosterGcConsistencyTimer = null;
-      const seq = ++rosterGcConsistencySeq;
-      const text = activeRosterTextForConsistency();
-      if (!text.trim() || typeof checkGoogleCalendarNonworkConsistency !== "function") {
-        setRosterGcConsistencyWarnings([]);
-        return;
-      }
-      try {
-        const result = await checkGoogleCalendarNonworkConsistency(text);
-        if (seq !== rosterGcConsistencySeq) return;
-        if (result && result.complete && Array.isArray(result.warnings)) {
-          setRosterGcConsistencyWarnings(result.warnings);
-        } else {
-          setRosterGcConsistencyWarnings([]);
-        }
-      } catch (err) {
-        if (seq !== rosterGcConsistencySeq) return;
-        setRosterGcConsistencyWarnings([String(err && err.message ? err.message : err)]);
-      }
-    }
-
     function renderRosterMaintEditor() {
       const editor = document.getElementById("maint-editor");
       if (!editor) return;
@@ -473,7 +408,6 @@
       const splitStyle = Number.isFinite(topHeight) ? ` style="grid-template-rows:${Math.max(0, topHeight)}px 6px 1fr"` : "";
       editor.innerHTML = `<div class="maint-sheet-title maint-roster-title">
           <div class="maint-roster-title-left">${renderRosterGcSyncToggle()}</div>
-          <div class="roster-gc-consistency-warning" id="roster-gc-consistency-warning" hidden></div>
         </div>
         <div class="maint-roster-split"${splitStyle}>
           <section class="maint-roster-pane">
@@ -499,7 +433,6 @@
           activeRosterMonthIndex = Number(input.getAttribute("data-maint-roster-row"));
           setUnsavedChanges("餐單參數");
           refreshRosterMaintReport();
-          scheduleRosterGcConsistencyCheck();
         });
         input.addEventListener("blur", () => endRosterCellEdit(input));
         input.addEventListener("dblclick", () => beginRosterCellEdit(input));
@@ -534,7 +467,6 @@
       const activeInput = editor.querySelector(`textarea[data-maint-roster-row="${activeRosterMonthIndex}"]`);
       activeInput?.focus({ preventScroll: true });
       activeInput?.closest("tr")?.scrollIntoView({ block: "nearest", inline: "nearest" });
-      scheduleRosterGcConsistencyCheck(50);
     }
 
     function isScheduleGridEffectiveCol(colIndex) {
@@ -850,16 +782,18 @@
           && rIdx < scheduleGridNewShiftStartIndex + scheduleGridNewShiftCount
           ? ` data-schedule-new-shift-batch="${esc(scheduleGridNewShiftBatchId)}"`
           : "";
-        const headerRowClass = maintSheetPayload.sheet_key === "mtr_doors" && rIdx === 0
-          ? ' class="maint-blue-header"'
+        // 除咗更表（roster 第 0 行係一月資料，唔係標題），其餘 sheet 第 0 行都係標題列：
+        // 跟餐單 hdr-labels 一樣藍底 + 釘喺頂，scroll 嘅只係資料。
+        const headerRowClass = rIdx === 0 && maintSheetPayload.sheet_key !== "roster"
+          ? ' class="maint-blue-header maint-sticky-header"'
           : "";
         return `<tr data-maint-row-index="${rIdx}"${headerRowClass}${batchAttr}>${maintRowHtml(row, rIdx, cols, formKey, isShiftCodeCol)}</tr>`;
       }).join("");
       editor.innerHTML = `<div class="maint-sheet-title" style="display:flex;align-items:center;"><span>${esc(title)}</span>${filterHtml}</div>
-        <table class="maint-table" data-form-table>
+        <div class="maint-sheet-body"><table class="maint-table" data-form-table>
           <colgroup>${colGroup}</colgroup>
           <tbody>${body}</tbody>
-        </table>`;
+        </table></div>`;
       bindMaintContextMenu(editor);
       applyFormColumnWidths(editor);
       attachFormColumnResizers(editor);

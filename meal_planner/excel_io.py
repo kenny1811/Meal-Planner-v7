@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from openpyxl import load_workbook
 from openpyxl.workbook.workbook import Workbook
@@ -135,12 +135,6 @@ def get_sheet(wb: Workbook, name: str) -> Worksheet:
             f"現有工作表：{_join_items([_format_sheet_name(x) for x in wb.sheetnames])}"
         )
     return wb[name]
-
-
-def iter_sheet_column_a(ws: Worksheet, max_row: int | None = None) -> Iterator[Any]:
-    limit = max_row or (ws.max_row or 0)
-    for row in range(1, limit + 1):
-        yield ws.cell(row=row, column=1).value
 
 
 def read_menu_v5_indicators(settings: AppSettings, wb: Workbook) -> tuple[list[str], list[Any], list[Any]]:

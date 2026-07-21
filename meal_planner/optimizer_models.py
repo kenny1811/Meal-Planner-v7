@@ -12,12 +12,10 @@ from meal_planner.nutrition_catalog import NutritionEntry
 class _Candidate:
     meal: str
     item_idx: int
-    alt_key: str
     entry: NutritionEntry
     min_g: float
     max_g: float
     is_rice_item: bool
-    rank: int
 
 
 @dataclass

@@ -108,32 +108,6 @@ def _match_entries_for_token(entries: list[NutritionEntry], token: str) -> list[
     return []
 
 
-def resolve_item_name_from_alternatives(
-    entries: list[NutritionEntry],
-    alternatives: list[str],
-) -> str | None:
-    """
-    item 內 alternatives 由左到右嘗試；每個 token 先類別 exact，再名稱 contains。
-    一旦找到候選，回傳候選中第一個名稱（保留工作簿原順序）。
-    """
-    for token in alternatives:
-        matches = _match_entries_for_token(entries, token)
-        if matches:
-            return matches[0].name
-    return None
-
-
-def resolve_item_entry_from_alternatives(
-    entries: list[NutritionEntry],
-    alternatives: list[str],
-) -> NutritionEntry | None:
-    for token in alternatives:
-        matches = _match_entries_for_token(entries, token)
-        if matches:
-            return matches[0]
-    return None
-
-
 def candidate_entries_from_alternatives(
     entries: list[NutritionEntry],
     alternatives: list[str],

@@ -336,7 +336,7 @@ def solve_day_meal_plan(
         solver = pulp.PULP_CBC_CMD(msg=False)
         model.solve(solver)
         status = pulp.LpStatus.get(model.status, str(model.status))
-    except Exception as ex:  # pragma: no cover
+    except Exception:  # pragma: no cover
         return None
 
     if status not in {"Optimal", "Feasible"}:

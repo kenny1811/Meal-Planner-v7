@@ -36,8 +36,6 @@ def build_active_items_and_candidates(
         if meal not in visible_meals:
             continue
         for i, item in enumerate(items):
-            alts = item.get("alternatives", [])
-            alts_list = [str(x) for x in alts] if isinstance(alts, list) else []
             item_candidates = candidates_by_item.get((meal, i), [])
             forced_row = (forced_item_rows or {}).get((meal, i))
             if forced_row is not None:
@@ -61,7 +59,7 @@ def build_active_items_and_candidates(
             if forced_row is not None:
                 item_candidates = [x for x in item_candidates if int(x.row_index) == int(forced_row)]
             is_rice_item = any((a or "").strip().lower() == rice_token for a in alts_list)
-            for rank, e in enumerate(item_candidates):
+            for e in item_candidates:
                 ov = (bound_overrides or {}).get(e.row_index, {})
                 ov_min = ov.get("min_g")
                 ov_daymax = ov.get("daymax_g")
@@ -89,12 +87,10 @@ def build_active_items_and_candidates(
                     _Candidate(
                         meal=meal,
                         item_idx=i,
-                        alt_key="|".join(alts_list),
                         entry=e,
                         min_g=eff_min,
                         max_g=max(eff_max, eff_min),
                         is_rice_item=is_rice_item,
-                        rank=rank,
                     )
                 )
 

@@ -7,10 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
-from openpyxl.workbook.workbook import Workbook
-from openpyxl.worksheet.worksheet import Worksheet
 
-from meal_planner.excel_io import get_sheet
 from meal_planner.settings import AppSettings
 from meal_planner.timeparse import parse_time as _to_time
 
@@ -66,28 +63,6 @@ def grid_row_matches_roster(cell_code: str | None, roster_code: str) -> bool:
     return str(cell_code).strip().casefold() == str(roster_code).strip().casefold()
 
 
-def _header_col_map(
-    ws: Worksheet,
-    header_row: int = 1,
-    *,
-    required_headers: set[str] | None = None,
-    max_scan_col: int | None = None,
-) -> dict[str, int]:
-    out: dict[str, int] = {}
-    scan_to = int(max_scan_col or (ws.max_column or 0))
-    for col in range(1, scan_to + 1):
-        v = ws.cell(header_row, col).value
-        if v is not None and str(v).strip():
-            key = str(v).strip()
-            if key in out and out[key] != col:
-                raise ValueError(
-                    f"工作表「{ws.title}」第 {header_row} 行有重覆欄名「{key}」"
-                    f"（第 {out[key]} 欄與第 {col} 欄）。"
-                )
-            out[key] = col
-    return out
-
-
 @dataclass
 class ScheduleRow:
     code: str
@@ -95,44 +70,6 @@ class ScheduleRow:
     content: str
     duration_min: int | None
     effective_from: date | None = None
-
-
-def load_schedule_rows(ws: Worksheet) -> list[ScheduleRow]:
-    h = _header_col_map(
-        ws,
-        1,
-        required_headers={"更碼", "時間", "內容", "時長"},
-        max_scan_col=12,
-    )
-    c_code = h.get("更碼")
-    c_time = h.get("時間")
-    c_content = h.get("內容")
-    c_dur = h.get("時長")
-    c_eff = h.get("生效日期") or h.get("生效") or h.get("Effective From")
-    if not c_code or not c_time or not c_content:
-        return []
-    rows: list[ScheduleRow] = []
-    for r in range(2, (ws.max_row or 0) + 1):
-        code = ws.cell(r, c_code).value
-        if code is None or str(code).strip() == "":
-            continue
-        dur_raw = ws.cell(r, c_dur).value if c_dur else None
-        dur: int | None = None
-        if dur_raw is not None:
-            try:
-                dur = int(float(dur_raw))
-            except (TypeError, ValueError):
-                dur = None
-        rows.append(
-            ScheduleRow(
-                code=str(code).strip(),
-                t=_to_time(ws.cell(r, c_time).value),
-                content=str(ws.cell(r, c_content).value or ""),
-                duration_min=dur,
-                effective_from=_to_date(ws.cell(r, c_eff).value) if c_eff else None,
-            )
-        )
-    return rows
 
 
 def rows_for_roster(rows: list[ScheduleRow], roster_code: str, day: date | None = None) -> list[ScheduleRow]:
@@ -212,73 +149,6 @@ def first_food_time(rows: list[ScheduleRow], *, keyword: str) -> tuple[time | No
     return None, None
 
 
-def first_snack_time(rows: list[ScheduleRow]) -> tuple[time | None, int | None]:
-    """
-    小食時間：只接受內容包含「小食」。
-    """
-    for x in rows:
-        txt = x.content or ""
-        if x.t is None:
-            continue
-        if "小食" in txt:
-            return x.t, x.duration_min
-    return None, None
-
-
-def overtime_override(ws: Worksheet, day: date) -> tuple[time | None, time | None]:
-    h = _header_col_map(
-        ws,
-        1,
-        required_headers={"日期", "開工", "收工"},
-        max_scan_col=8,
-    )
-    c_date = h.get("日期")
-    c_start = h.get("開工")
-    c_end = h.get("收工")
-    if not c_date:
-        return None, None
-    for r in range(2, (ws.max_row or 0) + 1):
-        dv = ws.cell(r, c_date).value
-        dd: date | None = None
-        if isinstance(dv, datetime):
-            dd = dv.date()
-        elif isinstance(dv, date):
-            dd = dv
-        if dd != day:
-            continue
-        return _to_time(ws.cell(r, c_start).value) if c_start else None, _to_time(ws.cell(r, c_end).value) if c_end else None
-    return None, None
-
-
-def load_overtime_overrides(ws: Worksheet) -> dict[date, tuple[time | None, time | None]]:
-    h = _header_col_map(
-        ws,
-        1,
-        required_headers={"日期", "開工", "收工"},
-        max_scan_col=8,
-    )
-    c_date = h.get("日期")
-    c_start = h.get("開工")
-    c_end = h.get("收工")
-    if not c_date:
-        return {}
-    out: dict[date, tuple[time | None, time | None]] = {}
-    for r in range(2, (ws.max_row or 0) + 1):
-        dv = ws.cell(r, c_date).value
-        dd: date | None = None
-        if isinstance(dv, datetime):
-            dd = dv.date()
-        elif isinstance(dv, date):
-            dd = dv
-        if dd is None:
-            continue
-        out[dd] = (
-            _to_time(ws.cell(r, c_start).value) if c_start else None,
-            _to_time(ws.cell(r, c_end).value) if c_end else None,
-        )
-    return out
-
-
 def load_overtime_overrides_from_rows(rows: list[list[Any]]) -> dict[date, tuple[time | None, time | None]]:
     if not rows:
         return {}
@@ -350,7 +220,6 @@ def _cell_rule_str(v: Any) -> str | None:
 
 def resolve_meal_times_display(
     settings: AppSettings,
-    wb: Workbook | None,
     *,
     day: date,
     roster_code: str,
@@ -368,30 +237,11 @@ def resolve_meal_times_display(
     if not primary_rule or not roster_code:
         return out
 
-    if schedule_rows is None:
-        if wb is None:
-            return out
-        try:
-            sg_ws = get_sheet(wb, settings.sheets.schedule_grid)
-        except KeyError:
-            return out
-        all_rows = load_schedule_rows(sg_ws)
-    else:
-        all_rows = schedule_rows
+    all_rows = schedule_rows or []
     my_rows = rows_for_roster(all_rows, roster_code, day)
     g_start, g_end = report_start_end(my_rows)
 
-    ot_start, ot_end = None, None
-    if overtime_overrides is not None:
-        ot_start, ot_end = overtime_overrides.get(day, (None, None))
-    else:
-        try:
-            if wb is None:
-                raise KeyError
-            ot_ws = get_sheet(wb, settings.sheets.overtime)
-            ot_start, ot_end = overtime_override(ot_ws, day)
-        except KeyError:
-            pass
+    ot_start, ot_end = (overtime_overrides or {}).get(day, (None, None))
 
     start = ot_start if ot_start is not None else g_start
     end = ot_end if ot_end is not None else g_end
@@ -420,7 +270,7 @@ def resolve_meal_times_display(
                     return None
                 return _fmt_clock(t)
             if meal == "小食":
-                t, _ = first_snack_time(my_rows)
+                t, _ = first_food_time(my_rows, keyword="小食")
                 if t is None:
                     return None
                 return _fmt_clock(t)

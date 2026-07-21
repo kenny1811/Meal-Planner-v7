@@ -1,5 +1,4 @@
 
-    const DESKTOP_LAN_SERVER = "http://192.168.15.125:8765";
     let rerollNonce = 0;
 
     document.addEventListener("contextmenu", (ev) => {
@@ -57,7 +56,6 @@
         const nutrientKeys = data.nutrient_keys || [];
         const days = data.days || [];
         stampDays(days);
-        lastData = data;
         const anchor = captureViewportAnchor();
         memoryPayload.headers = headers;
         memoryPayload.indicator_rows = indicatorRows;
@@ -453,7 +451,8 @@
       if (ev.key === "Escape") hideDetailRowMenu();
     });
     document.getElementById("catalog-editor").addEventListener("scroll", hideCatalogRowMenu);
-    document.getElementById("maint-editor").addEventListener("scroll", hideMaintRowMenu);
+    // capture=true：scroll event 唔 bubble，資料而家喺 .maint-sheet-body 內捲，要用 capture 先截到。
+    document.getElementById("maint-editor").addEventListener("scroll", hideMaintRowMenu, true);
     document.querySelector(".detail-editor")?.addEventListener("scroll", hideDetailRowMenu);
     document.addEventListener("keydown", async (ev) => {
       if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && String(ev.key).toLowerCase() === "s") {

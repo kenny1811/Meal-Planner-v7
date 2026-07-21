@@ -213,19 +213,6 @@
       return data || {};
     }
 
-    async function checkGoogleCalendarNonworkConsistency(rosterText) {
-      const r = await fetch("/api/google-calendar/nonwork-consistency", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roster_text: String(rosterText || "") }),
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Google Calendar non-work consistency check failed.", r.status));
-      }
-      return data || {};
-    }
-
     async function loadMemoryPayload() {
       try {
         const r = await fetch("/api/memory-list");

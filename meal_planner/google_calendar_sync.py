@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from meal_planner.maintenance_db import load_sheet_rows
 from meal_planner.meal_schedule import roster_matches_rule
-from meal_planner.roster import is_work_day, last_day_of_month, parse_roster_line, roster_map_from_sheet_rows
+from meal_planner.roster import is_work_day, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import load_overtime_overrides_from_rows, load_wake_alarm_overrides_from_rows
 from meal_planner.atomic_io import write_text_atomic
 from meal_planner.settings import AppSettings
@@ -499,120 +499,6 @@ def _event_summary(event: dict[str, Any]) -> str:
     return str(event.get("summary") or "").strip()
 
 
-def _last_prefixed_calendar_event(events: list[dict[str, Any]], prefix: str) -> dict[str, str] | None:
-    matches: list[dict[str, str]] = []
-    for event in events:
-        summary = _event_summary(event)
-        if not summary.startswith(prefix):
-            continue
-        day = _event_roster_date(event)
-        if not day:
-            continue
-        matches.append({"date": day, "code": summary})
-    if not matches:
-        return None
-    return sorted(matches, key=lambda item: (item["date"], item["code"]))[-1]
-
-
-def _same_calendar_marker(a: dict[str, str] | None, b: dict[str, str] | None) -> bool:
-    if a is None or b is None:
-        return a is None and b is None
-    # 只比較當月最後一個同 prefix 嘅更碼，日期唔使一致。
-    return a.get("code") == b.get("code")
-
-
-def check_nonwork_calendar_consistency(
-    roster_text: str,
-    settings: AppSettings,
-    *,
-    service: Any | None = None,
-    config: GoogleCalendarSyncConfig | None = None,
-) -> dict[str, Any]:
-    month = parse_roster_line(roster_text)
-    if month is None:
-        return {"status": "invalid_roster", "complete": False, "warnings": []}
-    last_day = last_day_of_month(month.year, month.month)
-    missing = [day for day in range(1, last_day + 1) if day not in month.day_to_code]
-    if missing:
-        return {
-            "status": "incomplete",
-            "complete": False,
-            "year": month.year,
-            "month": month.month,
-            "missing_days": missing,
-            "warnings": [],
-        }
-
-    config = config or config_from_env(settings)
-    if not config.leave_calendar_id:
-        return {
-            "status": "missing_nonwork_calendar",
-            "complete": True,
-            "year": month.year,
-            "month": month.month,
-            "warnings": ["未設定非返工日日曆"],
-        }
-    auth_status = google_calendar_auth_status(settings, config)
-    if not auth_status.get("authenticated"):
-        return {
-            "status": "not_authenticated",
-            "complete": True,
-            "year": month.year,
-            "month": month.month,
-            "warnings": ["Google Calendar 未登入"],
-        }
-
-    tz = ZoneInfo(config.time_zone)
-    time_min = datetime(month.year, month.month, 1, tzinfo=tz)
-    time_max = (datetime(month.year, month.month, last_day, tzinfo=tz) + timedelta(days=1))
-    service = service or build_google_calendar_service(config)
-    old_events = _list_events(service, OLD_LEAVE_CALENDAR_ID, time_min, time_max)
-    nonwork_events = _list_events(service, config.leave_calendar_id, time_min, time_max)
-
-    # 「大假」日曆全月冇 SH/WL 內容（已遷移／清空）→ 冇嘢好對，直接當通過，唔出不一致。
-    if (
-        _last_prefixed_calendar_event(old_events, "SH") is None
-        and _last_prefixed_calendar_event(old_events, "WL") is None
-    ):
-        return {
-            "status": "ok",
-            "complete": True,
-            "year": month.year,
-            "month": month.month,
-            "items": {},
-            "warnings": [],
-        }
-
-    items: dict[str, dict[str, Any]] = {}
-    warnings: list[str] = []
-    for prefix in ("SH", "WL"):
-        old_last = _last_prefixed_calendar_event(old_events, prefix)
-        nonwork_last = _last_prefixed_calendar_event(nonwork_events, prefix)
-        consistent = _same_calendar_marker(old_last, nonwork_last)
-        items[prefix] = {
-            "old_leave": old_last,
-            "nonwork": nonwork_last,
-            "consistent": consistent,
-        }
-        if not consistent:
-            def marker(value: dict[str, str] | None) -> str:
-                if not value:
-                    return "無"
-                return f"{value.get('date', '')} {value.get('code', '')}".strip()
-
-            warnings.append(
-                f"最後{prefix}不一致：大假 {marker(old_last)}；非返工日 {marker(nonwork_last)}"
-            )
-    return {
-        "status": "ok" if not warnings else "mismatch",
-        "complete": True,
-        "year": month.year,
-        "month": month.month,
-        "items": items,
-        "warnings": warnings,
-    }
-
-
 def _event_start_value(event: dict[str, Any]) -> str | None:
     start = event.get("start") or {}
     raw = start.get("dateTime") or start.get("date")
@@ -718,7 +604,21 @@ def _backup_events(
         ),
         encoding="utf-8",
     )
+    _prune_old_backups(config.backup_dir)
     return path, backup
+
+
+_BACKUPS_KEEP = 20
+
+
+def _prune_old_backups(backup_dir: Path, keep: int = _BACKUPS_KEEP) -> None:
+    """每次 sync 都寫一個新 backup，冇 pruning 會無限增生——只留最新 keep 份。"""
+    try:
+        files = sorted(backup_dir.glob("google-calendar-roster-sync-*.json"))
+        for old in files[:-keep]:
+            old.unlink(missing_ok=True)
+    except OSError:
+        pass  # backup pruning 失敗唔可以拖冧 sync 本身
 
 
 def _upsert_events(

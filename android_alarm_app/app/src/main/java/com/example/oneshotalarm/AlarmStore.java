@@ -19,8 +19,6 @@ final class AlarmStore {
     private static final String KEY_PLAN_DATE = "plan_date";
     private static final String KEY_ROSTER_CODE = "roster_code";
     private static final String KEY_AUTO_SYNC_SERVER = "auto_sync_server_url";
-    private static final String KEY_AUTO_SYNC_DEVICE = "auto_sync_device_id";
-    private static final String KEY_AUTO_SYNC_LAST_ID = "auto_sync_last_id";
     private static final String KEY_MEAL_PLAN_TEXT = "meal_plan_text";
     private static final String KEY_MEAL_PLAN_JSON = "meal_plan_json";
     private static final String KEY_MEAL_PLAN_JSON_DATE = "meal_plan_json_date";
@@ -76,10 +74,6 @@ final class AlarmStore {
         }
     }
 
-    static long getCleanupAt(Context context) {
-        return 0L;
-    }
-
     static String getPlanDate(Context context) {
         return prefs(context).getString(KEY_PLAN_DATE, "");
     }
@@ -102,10 +96,6 @@ final class AlarmStore {
 
     static void setWatchAlarmEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_WATCH_ALARM_ENABLED, enabled).apply();
-    }
-
-    static void saveMealPlanText(Context context, String text) {
-        prefs(context).edit().putString(KEY_MEAL_PLAN_TEXT, text == null ? "" : text).apply();
     }
 
     static String getMealPlanText(Context context) {
@@ -153,21 +143,7 @@ final class AlarmStore {
         return prefs(context).getString(KEY_MEAL_PLAN_JSON_VERSION_BY_DATE_PREFIX + normalizedDate, "");
     }
 
-    static void saveAutoSyncConfig(Context context, String serverUrl, String deviceId) {
-        String normalizedDevice = (deviceId == null || deviceId.trim().isEmpty())
-                ? "default"
-                : deviceId.trim();
-        prefs(context).edit()
-                .putString(KEY_AUTO_SYNC_SERVER, DEFAULT_AUTO_SYNC_SERVER)
-                .putString(KEY_AUTO_SYNC_DEVICE, normalizedDevice)
-                .apply();
-    }
-
     static String getAutoSyncServerUrl(Context context) {
-        return DEFAULT_AUTO_SYNC_SERVER;
-    }
-
-    static String getConfiguredAutoSyncServerUrl(Context context) {
         return DEFAULT_AUTO_SYNC_SERVER;
     }
 
@@ -206,38 +182,6 @@ final class AlarmStore {
         } catch (Exception ignored) {
         }
         return false;
-    }
-
-    static String getAutoSyncServerUrl(Context context, boolean fallbackToLoopback) {
-        return DEFAULT_AUTO_SYNC_SERVER;
-    }
-
-    static String getAutoSyncDeviceId(Context context) {
-        return prefs(context).getString(KEY_AUTO_SYNC_DEVICE, "default");
-    }
-
-    static long getAutoSyncLastSyncId(Context context) {
-        return prefs(context).getLong(KEY_AUTO_SYNC_LAST_ID, 0L);
-    }
-
-    static void setAutoSyncLastSyncId(Context context, long syncId) {
-        prefs(context).edit().putLong(KEY_AUTO_SYNC_LAST_ID, syncId).apply();
-    }
-
-    static void removeAlarm(Context context, String id) {
-        String targetId = id == null ? "" : id;
-        JSONArray current = getAlarms(context);
-        JSONArray next = new JSONArray();
-        for (int i = 0; i < current.length(); i++) {
-            JSONObject alarm = current.optJSONObject(i);
-            if (alarm == null) {
-                continue;
-            }
-            if (!targetId.equals(alarm.optString("id"))) {
-                next.put(alarm);
-            }
-        }
-        prefs(context).edit().putString(KEY_ALARMS, next.toString()).apply();
     }
 
     static void markAlarmFired(Context context, String id) {
@@ -295,9 +239,5 @@ final class AlarmStore {
             return "";
         }
         return value;
-    }
-
-    private static String normalizeServerUrl(String serverUrl) {
-        return DEFAULT_AUTO_SYNC_SERVER;
     }
 }

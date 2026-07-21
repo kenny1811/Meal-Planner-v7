@@ -295,30 +295,6 @@
       </div>`;
     }
 
-    function replaceDayRowsInPlace(dayObj, headers, nutrientKeys) {
-      if (!dayObj || !dayObj.date) return false;
-      const tbody = document.querySelector(".panel-bottom table.sheet tbody");
-      if (!tbody) return false;
-      const existing = Array.from(tbody.querySelectorAll(`tr[data-day="${dayObj.date}"]`));
-      if (!existing.length) return false;
-      const first = existing[0];
-      const anchor = first.nextSibling;
-      const tpl = document.createElement("template");
-      tpl.innerHTML = renderDayRows(dayObj, headers, nutrientKeys);
-      const freshRows = Array.from(tpl.content.querySelectorAll("tr"));
-      if (!freshRows.length) return false;
-      // Remove old rows only after we've prepared replacement rows.
-      existing.forEach((r) => r.remove());
-      const frag = document.createDocumentFragment();
-      for (const r of freshRows) frag.appendChild(r);
-      if (anchor && anchor.parentNode === tbody) {
-        tbody.insertBefore(frag, anchor);
-      } else {
-        tbody.appendChild(frag);
-      }
-      return true;
-    }
-
     function sortDaysByDate(days) {
       return [...(Array.isArray(days) ? days : [])].sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
     }

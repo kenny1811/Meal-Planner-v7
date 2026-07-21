@@ -46,10 +46,6 @@
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
                 <data
                     android:host="*"
-                    android:path="/oneshotalarm/alarm"
-                    android:scheme="wear" />
-                <data
-                    android:host="*"
                     android:path="/oneshotalarm/watch-dismiss"
                     android:scheme="wear" />
                 <data

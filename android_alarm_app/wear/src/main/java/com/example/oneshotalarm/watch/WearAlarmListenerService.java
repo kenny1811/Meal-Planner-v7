@@ -19,15 +19,11 @@ import java.nio.charset.StandardCharsets;
 
 public class WearAlarmListenerService extends WearableListenerService {
     private static final String TAG = "ShiftAlarmWatch";
-    private static final String ALARM_PATH = "/oneshotalarm/alarm";
     private static final String WATCH_DISMISS_PATH = "/oneshotalarm/watch-dismiss";
     private static final String WATCH_DISMISS_DATA_PATH = "/oneshotalarm/watch-dismiss-data";
     private static final String TILE_STATE_PATH = "/oneshotalarm/tile-state";
     private static final String PREFS = "watch_alarm_listener";
-    private static final String KEY_LAST_ALARM_KEY = "last_alarm_key";
-    private static final String KEY_LAST_ALARM_AT = "last_alarm_at";
     private static final String KEY_LAST_TILE_STATE_AT = "last_tile_state_at";
-    private static final long DUPLICATE_ALARM_MS = 2 * 60 * 1000L;
     private static final long DISMISS_FRESH_MS = 30 * 1000L;
 
     @Override
@@ -67,26 +63,6 @@ public class WearAlarmListenerService extends WearableListenerService {
             saveTileState(new String(messageEvent.getData(), StandardCharsets.UTF_8));
             return;
         }
-        if (!ALARM_PATH.equals(messageEvent.getPath())) {
-            return;
-        }
-        String time = "--:--";
-        String label = "鬧鐘";
-        String alarmId = "";
-        try {
-            JSONObject json = new JSONObject(new String(messageEvent.getData(), StandardCharsets.UTF_8));
-            time = json.optString("time", time);
-            label = json.optString("label", label);
-            alarmId = json.optString("id", "");
-        } catch (Exception e) {
-            Log.e(TAG, "Parse alarm message failed", e);
-        }
-        String alarmKey = alarmId + "\n" + time + "\n" + label;
-        if (isDuplicateAlarm(alarmKey)) {
-            Log.d(TAG, "Duplicate watch alarm ignored");
-            return;
-        }
-        WatchLocalAlarmScheduler.scheduleImmediate(this, alarmId, time, label);
     }
 
     private void dismissWatchAlarm(String alarmId, long sentAtMillis) {
@@ -113,32 +89,6 @@ public class WearAlarmListenerService extends WearableListenerService {
             sendBroadcast(intent);
         }
         WatchScheduleDisplayState.refreshFromCacheAndRequest(this);
-    }
-
-    private boolean isDuplicateAlarm(String alarmKey) {
-        String key = alarmKey == null ? "" : alarmKey;
-        if (key.isEmpty()) {
-            return false;
-        }
-        SharedPreferences preferences = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        String previousKey = preferences.getString(KEY_LAST_ALARM_KEY, "");
-        long previousAt = preferences.getLong(KEY_LAST_ALARM_AT, 0L);
-        long now = System.currentTimeMillis();
-        if (key.equals(previousKey) && now - previousAt >= 0L && now - previousAt < DUPLICATE_ALARM_MS) {
-            return true;
-        }
-        preferences.edit()
-                .putString(KEY_LAST_ALARM_KEY, key)
-                .putLong(KEY_LAST_ALARM_AT, now)
-                .apply();
-        return false;
-    }
-
-    private void clearLastAlarm() {
-        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                .remove(KEY_LAST_ALARM_KEY)
-                .remove(KEY_LAST_ALARM_AT)
-                .apply();
     }
 
     /**

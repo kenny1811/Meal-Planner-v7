@@ -6,7 +6,6 @@
     const DEFAULT_NUTRIENT_KEYS = [
       "kcal","protein_g","carb_g","sugar_g","cholesterol_mg","sodium_mg","calcium_mg","fat_total_g","fat_sat_g","fat_trans_g"
     ];
-    let lastData = null;
     let currentFocusedDate = null;
     let columnWidths = {};
     let memoryPayload = { headers: [], indicator_rows: {}, nutrient_keys: [], days: [] };

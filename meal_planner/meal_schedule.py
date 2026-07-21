@@ -8,7 +8,6 @@ from typing import Any
 
 from openpyxl.workbook.workbook import Workbook
 
-from meal_planner.excel_io import get_sheet, header_col_map
 from meal_planner.indicators import DayIndicatorProfile, NUTRIENT_KEYS
 from meal_planner.nutrition_catalog import (
     NUTRIENT_HEADER_BY_KEY,
@@ -17,7 +16,7 @@ from meal_planner.nutrition_catalog import (
 from meal_planner.nutrition_db import load_catalog_entries
 from meal_planner.optimizer import solve_day_meal_plan
 from meal_planner.patterns import parse_meal_patterns
-from meal_planner.settings import AppSettings, MealTimesStackConfig
+from meal_planner.settings import AppSettings
 
 
 def roster_matches_rule(rule_cell: str | None, roster_code: str) -> bool:
@@ -67,36 +66,6 @@ class MealPlanningCache:
     overtime_overrides: dict[date, tuple[time | None, time | None]]
 
 
-def load_meal_time_rules(ws: Worksheet) -> list[MealTimeRule]:
-    h = header_col_map(
-        ws,
-        1,
-        required_headers={"更碼", "早餐", "午餐", "小食", "晚餐"},
-        max_scan_col=8,  # 只讀左側時間主表 A:E（含少量緩衝）
-    )
-    c_code = h.get("更碼")
-    if not c_code:
-        return []
-    keys = ("早餐", "午餐", "小食", "晚餐")
-    cols = {k: h.get(k) for k in keys}
-    rules: list[MealTimeRule] = []
-    for r in range(2, (ws.max_row or 0) + 1):
-        code = ws.cell(r, c_code).value
-        if code is None or str(code).strip() == "":
-            continue
-        rules.append(
-            MealTimeRule(
-                row_index=r,
-                code_pattern=str(code).strip(),
-                breakfast=_cell_str(ws.cell(r, cols["早餐"]).value) if cols["早餐"] else None,
-                lunch=_cell_str(ws.cell(r, cols["午餐"]).value) if cols["午餐"] else None,
-                snack=_cell_str(ws.cell(r, cols["小食"]).value) if cols["小食"] else None,
-                dinner=_cell_str(ws.cell(r, cols["晚餐"]).value) if cols["晚餐"] else None,
-            )
-        )
-    return rules
-
-
 def load_meal_time_rules_from_rows(raw_rows: list[list[Any]]) -> list[MealTimeRule]:
     if not raw_rows:
         return []
@@ -127,32 +96,6 @@ def load_meal_time_rules_from_rows(raw_rows: list[list[Any]]) -> list[MealTimeRu
             )
         )
     return rules
-
-
-def load_meal_patterns_table(ws: Worksheet) -> dict[str, str | None]:
-    """
-    讀取飯時表 G:H（餐名/Pattern）作為獨立 pattern 表。
-    與 A:E（更碼/時間）完全分開，不按同一行綁定。
-    """
-    h = header_col_map(
-        ws,
-        1,
-        required_headers={"餐名", "Pattern"},
-        max_scan_col=8,  # 只讀 G:H pattern 表
-    )
-    c_meal = h.get("餐名")
-    c_pat = h.get("Pattern")
-    out: dict[str, str | None] = {m: None for m in MEAL_LABELS}
-    if not c_meal or not c_pat:
-        return out
-    for r in range(2, (ws.max_row or 0) + 1):
-        meal = _cell_str(ws.cell(r, c_meal).value)
-        pat = _cell_str(ws.cell(r, c_pat).value)
-        if meal not in out or not pat:
-            continue
-        if out[meal] is None:
-            out[meal] = pat
-    return out
 
 
 def load_meal_patterns_table_from_rows(raw_rows: list[list[Any]]) -> dict[str, str | None]:
@@ -188,66 +131,6 @@ def first_matching_meal_rule(rules: list[MealTimeRule], roster_code: str) -> Mea
 
 MEAL_LABELS = ("早餐", "午餐", "小食", "晚餐")
 MEAL_ROTATION_OFFSET = {"早餐": 0, "午餐": 1, "小食": 2, "晚餐": 3}
-
-
-def patterns_peninsula_stack(
-    meal_patterns: dict[str, str | None],
-    pattern_rules: tuple[str, str, str, str],
-) -> dict[str, str | None]:
-    """
-    與時間表分離後，Pattern 直接來自獨立餐名表（G:H）。
-    保留此函數介面，回傳該表的四餐映射。
-    """
-    return {m: meal_patterns.get(m) for m in MEAL_LABELS}
-
-
-def _use_peninsula_stack(roster_code: str, cfg: MealTimesStackConfig) -> bool:
-    return bool(cfg.enabled and roster_code.startswith(cfg.roster_prefix))
-
-
-def patterns_by_meal_name(rules: list[MealTimeRule], roster_code: str) -> dict[str, str | None]:
-    # Pattern 已由獨立表讀取；此函數保留兼容，預設不由時間表推 Pattern。
-    return {k: None for k in MEAL_LABELS}
-
-
-def default_patterns_by_meal_name(rules: list[MealTimeRule]) -> dict[str, str | None]:
-    # Pattern 已由獨立表讀取；此函數保留兼容。
-    return {k: None for k in MEAL_LABELS}
-
-
-def load_restaurant_rows(ws: Worksheet) -> list[dict[str, Any]]:
-    required = {"更碼關鍵字", "舖頭 (Store)", "營業時間", "餐廳選擇", "地址"}
-    required.update(NUTRIENT_HEADER_BY_KEY.values())
-    h = header_col_map(ws, 1, required_headers=required, max_scan_col=30)
-    c_kw = h.get("更碼關鍵字")
-    if not c_kw:
-        return []
-    cols = {name: h.get(name) for name in ("舖頭 (Store)", "營業時間", "餐廳選擇", "地址")}
-    nutrient_cols = {k: h.get(NUTRIENT_HEADER_BY_KEY[k]) for k in NUTRIENT_KEYS}
-    rows: list[dict[str, Any]] = []
-    for r in range(2, (ws.max_row or 0) + 1):
-        kw = ws.cell(r, c_kw).value
-        if kw is None or str(kw).strip() == "":
-            continue
-        def gv(name: str) -> Any:
-            ci = cols.get(name)
-            return ws.cell(r, ci).value if ci else None
-
-        rows.append(
-            {
-                "row": r,
-                "keyword": str(kw).strip(),
-                "store": gv("舖頭 (Store)"),
-                "hours": gv("營業時間"),
-                "choice": gv("餐廳選擇"),
-                "address": gv("地址"),
-                "nutrients": {
-                    k: float(ws.cell(r, nutrient_cols[k]).value or 0.0) if nutrient_cols[k] else 0.0
-                    for k in NUTRIENT_KEYS
-                },
-            }
-        )
-    return rows
 
 
 def load_restaurant_rows_from_rows(raw_rows: list[list[Any]]) -> list[dict[str, Any]]:
@@ -293,28 +176,22 @@ def load_restaurant_rows_from_rows(raw_rows: list[list[Any]]) -> list[dict[str, 
     return rows
 
 
-def build_meal_planning_cache(settings: AppSettings, wb: Workbook | None = None) -> MealPlanningCache:
+def build_meal_planning_cache(settings: AppSettings) -> MealPlanningCache:
     from meal_planner.reference_db import load_planning_references
 
-    rules, patterns, restaurant_rows, schedule_rows = load_planning_references(settings, wb)
+    rules, patterns, restaurant_rows, schedule_rows = load_planning_references(settings)
 
-    nutrition_entries = load_catalog_entries(settings, wb)
+    nutrition_entries = load_catalog_entries(settings)
 
     overtime_overrides: dict[date, tuple[time | None, time | None]] = {}
     try:
         from meal_planner.maintenance_db import load_sheet_rows
         from meal_planner.schedule_grid import load_overtime_overrides_from_rows
 
-        overtime_sheet = load_sheet_rows("overtime", settings, wb)
+        overtime_sheet = load_sheet_rows("overtime", settings)
         overtime_overrides = load_overtime_overrides_from_rows(overtime_sheet.get("rows", []))
     except Exception:
-        if wb is not None:
-            try:
-                from meal_planner.schedule_grid import load_overtime_overrides
-
-                overtime_overrides = load_overtime_overrides(get_sheet(wb, settings.sheets.overtime))
-            except KeyError:
-                pass
+        pass
 
     return MealPlanningCache(
         meal_time_rules=rules,
@@ -550,13 +427,15 @@ def build_day_meal_plan(
             "note": "無更表更碼，無法對應飯時。",
         }
 
-    rules = cache.meal_time_rules if cache is not None else load_meal_time_rules(get_sheet(wb, settings.sheets.meal_times))
+    if cache is None:
+        raise ValueError("build_day_meal_plan requires a MealPlanningCache (Worksheet fallback removed)")
+    rules = cache.meal_time_rules
     primary = first_matching_meal_rule(rules, roster_code)
-    pattern_table = cache.meal_patterns if cache is not None else load_meal_patterns_table(get_sheet(wb, settings.sheets.meal_times))
+    pattern_table = cache.meal_patterns
 
     rest = None
     if (not settings.meal_business_rules.restaurant_lunch_workday_only) or is_work_day is True:
-        r_rows = cache.restaurant_rows if cache is not None else load_restaurant_rows(get_sheet(wb, settings.sheets.restaurant))
+        r_rows = cache.restaurant_rows
         hit = first_matching_restaurant(r_rows, roster_code)
         if hit:
             rest = {
@@ -586,14 +465,13 @@ def build_day_meal_plan(
 
         meal_times_resolved = resolve_meal_times_display(
             settings,
-            wb,
             day=day,
             roster_code=roster_code,
             primary_rule=primary_dict,
             is_work_day=is_work_day,
             restaurant=rest,
-            schedule_rows=cache.schedule_rows if cache is not None else None,
-            overtime_overrides=cache.overtime_overrides if cache is not None else None,
+            schedule_rows=cache.schedule_rows,
+            overtime_overrides=cache.overtime_overrides,
         )
     if meal_times_resolved:
         visible_meals = {

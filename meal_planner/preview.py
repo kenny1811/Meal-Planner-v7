@@ -88,7 +88,6 @@ class DayPreview:
 
     def to_dict(
         self,
-        settings: AppSettings,
         nutrients_json: list[Any],
         meal_plan: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -318,7 +317,7 @@ def preview_days(
             is_work_day=is_wd,
             indicator_profile=prof_kind,
         )
-        days_out.append(dp.to_dict(settings, _serialize_profile(nutrients), meal_plan=meal_plan))
+        days_out.append(dp.to_dict(_serialize_profile(nutrients), meal_plan=meal_plan))
 
     return {
         "headers": [str(h) if h is not None else None for h in headers],
@@ -526,27 +525,6 @@ def recalc_days_from_edits(days_payload: list[dict[str, Any]]) -> dict[str, Any]
         out_days.append({"date": date_s, "meal_plan": meal_plan})
 
     return {"days": out_days}
-
-
-def refresh_payload_summaries(days_payload: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    用最新規則重算 payload 內每一日的 summary。
-    用於修復舊 memory payload 內已過時/錯誤的誤差與紅黑字結果。
-    """
-    settings = get_settings()
-    out: list[dict[str, Any]] = []
-    for d in days_payload:
-        if not isinstance(d, dict):
-            continue
-        meal_plan = d.get("meal_plan") if isinstance(d.get("meal_plan"), dict) else {}
-        indicators_json = d.get("nutrient_indicators") if isinstance(d.get("nutrient_indicators"), dict) else {}
-        indicators = profile_from_json_map(indicators_json)
-        _clear_restaurant_lunch_items(meal_plan)
-        _apply_rice_note_and_summary(meal_plan, indicators, settings)
-        nd = dict(d)
-        nd["meal_plan"] = meal_plan
-        out.append(nd)
-    return out
 
 
 def refresh_payload_with_latest_indicators(payload: dict[str, Any]) -> dict[str, Any]:

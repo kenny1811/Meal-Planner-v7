@@ -39,3 +39,6 @@ android_watchface_app/alarm-*.xml
 # OS/editor noise
 Thumbs.db
 .DS_Store
+
+# Google Calendar sync backups (auto-generated, pruned to last 20 by the app)
+google_calendar_backups/

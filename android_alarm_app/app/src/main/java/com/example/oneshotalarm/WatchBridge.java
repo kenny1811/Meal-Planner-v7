@@ -21,46 +21,11 @@ import java.util.Locale;
 
 final class WatchBridge {
     private static final String TAG = "OneShotWatchBridge";
-    private static final String ALARM_PATH = "/oneshotalarm/alarm";
     private static final String WATCH_DISMISS_PATH = "/oneshotalarm/watch-dismiss";
     private static final String WATCH_DISMISS_DATA_PATH = "/oneshotalarm/watch-dismiss-data";
     private static final String TILE_STATE_PATH = "/oneshotalarm/tile-state";
 
     private WatchBridge() {
-    }
-
-    static void sendAlarm(Context context, String label, long triggerAtMillis) {
-        sendAlarm(context, "", label, triggerAtMillis);
-    }
-
-    static void sendAlarm(Context context, String id, String label, long triggerAtMillis) {
-        if (!AlarmStore.isWatchAlarmEnabled(context)) {
-            Log.d(TAG, "Watch alarm disabled; skip sending alarm");
-            return;
-        }
-        long millis = triggerAtMillis > 0L ? triggerAtMillis : System.currentTimeMillis();
-        String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(millis);
-        String text = label == null ? "" : label.trim();
-        if (text.isEmpty()) {
-            text = "鬧鐘";
-        }
-        JSONObject payload = new JSONObject();
-        try {
-            payload.put("id", id == null ? "" : id);
-            payload.put("time", time);
-            payload.put("label", text);
-        } catch (Exception e) {
-            Log.e(TAG, "Build watch alarm payload failed", e);
-            return;
-        }
-        byte[] bytes = payload.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        Wearable.getNodeClient(context).getConnectedNodes()
-                .addOnSuccessListener(nodes -> sendToNodes(context, nodes, bytes))
-                .addOnFailureListener(e -> Log.e(TAG, "Get connected watch nodes failed", e));
-    }
-
-    static void sendDismiss(Context context) {
-        sendDismiss(context, "");
     }
 
     static void sendDismiss(Context context, String alarmId) {
@@ -227,19 +192,6 @@ final class WatchBridge {
         json.put(prefix + "_at", triggerAt);
         String label = alarm.optString("label", "").trim();
         json.put(prefix + "_label", label.isEmpty() ? "鬧鐘" : label);
-    }
-
-    private static void sendToNodes(Context context, List<Node> nodes, byte[] bytes) {
-        if (nodes == null || nodes.isEmpty()) {
-            Log.d(TAG, "No connected watch nodes");
-            return;
-        }
-        for (Node node : nodes) {
-            Wearable.getMessageClient(context)
-                    .sendMessage(node.getId(), ALARM_PATH, bytes)
-                    .addOnSuccessListener(id -> Log.d(TAG, "Sent alarm to watch: " + node.getDisplayName()))
-                    .addOnFailureListener(e -> Log.e(TAG, "Send alarm to watch failed: " + node.getDisplayName(), e));
-        }
     }
 
     private static void sendToNodes(Context context, List<Node> nodes, String path, byte[] bytes) {

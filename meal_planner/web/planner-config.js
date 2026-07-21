@@ -1,8 +1,3 @@
-    function emptyNutCells(headers) {
-      const n = (headers && headers.length) || 10;
-      return Array.from({ length: n }, () => '<td class="nut">—</td>').join("");
-    }
-
     const TOOLTIP_TRADITIONAL_CHAR_MAP = {
       嘱: "囑",
       议: "議",
@@ -164,12 +159,6 @@
       const h = headers && headers.length ? headers : Array(10).fill("—");
       const attr = cellStyle ? ` style="${cellStyle}"` : "";
       return h.map((x) => `<td class="nut nut-h"${attr}>${esc(x || "—")}</td>`).join("");
-    }
-
-    function nutTextCells(values, cellStyle = "") {
-      const arr = Array.isArray(values) ? values : [];
-      const attr = cellStyle ? ` style="${cellStyle}"` : "";
-      return arr.map((v) => `<td class="nut"${attr}>${esc(v ?? "")}</td>`).join("");
     }
 
     function nutTargetInputCells(profile, values, cellStyle = "") {
@@ -353,23 +342,6 @@
       const timer = targetDirectKeyTimers.get(input);
       if (timer) clearTimeout(timer);
       targetDirectKeyTimers.delete(input);
-    }
-
-    function queueTargetDirectKey(input, key) {
-      if (!input || !key) return;
-      clearTargetDirectKeyTimer(input);
-      input.dataset.targetPendingDirectKey = key;
-      const timer = setTimeout(() => {
-        targetDirectKeyTimers.delete(input);
-        if (input.dataset.targetEditing !== "1" || input.dataset.targetPendingDirectKey !== key) return;
-        input.value = `${key}${input.value || ""}`;
-        delete input.dataset.targetPendingDirectKey;
-        delete input.dataset.targetReplaceOnComposition;
-        const pos = String(input.value || "").length;
-        if (typeof input.setSelectionRange === "function") input.setSelectionRange(pos, pos);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }, 40);
-      targetDirectKeyTimers.set(input, timer);
     }
 
     function endTargetCellEdit(input, options = {}) {
@@ -2374,24 +2346,6 @@
       }
       const pos = replaceValue ? 0 : input.value.length;
       input.setSelectionRange(pos, pos);
-    }
-
-    function queueCatalogDirectKey(input, key) {
-      if (!input || !key) return;
-      const oldTimer = catalogDirectKeyTimers.get(input);
-      if (oldTimer) clearTimeout(oldTimer);
-      input.dataset.catalogPendingDirectKey = key;
-      const timer = setTimeout(() => {
-        catalogDirectKeyTimers.delete(input);
-        if (input.dataset.catalogEditing !== "1" || input.dataset.catalogPendingDirectKey !== key) return;
-        input.value = `${key}${input.value || ""}`;
-        delete input.dataset.catalogPendingDirectKey;
-        delete input.dataset.catalogReplaceOnComposition;
-        const pos = String(input.value || "").length;
-        input.setSelectionRange(pos, pos);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }, 40);
-      catalogDirectKeyTimers.set(input, timer);
     }
 
     function normalizeCatalogInputValue(input) {

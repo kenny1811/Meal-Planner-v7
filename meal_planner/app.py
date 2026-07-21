@@ -25,7 +25,7 @@ from meal_planner.atomic_io import write_bytes_atomic
 from meal_planner.dates_input import DateValidationError, parse_date_expression
 from meal_planner.excel_io import WorkbookValidationError, load_workbook_data
 from meal_planner.free_port import free_tcp_port
-from meal_planner.google_calendar_sync import authorize_google_calendar, check_nonwork_calendar_consistency, google_calendar_auth_status, sync_roster_to_google_calendar
+from meal_planner.google_calendar_sync import authorize_google_calendar, google_calendar_auth_status, sync_roster_to_google_calendar
 from meal_planner.indicators import NUTRIENT_KEYS
 from meal_planner.maintenance_db import (
     MAINTENANCE_SHEETS,
@@ -301,10 +301,6 @@ class DetailSettingsRequest(BaseModel):
 
 class MaintenanceSheetRequest(BaseModel):
     rows: list[list[Any]] = Field(default_factory=list)
-
-
-class RosterCalendarConsistencyRequest(BaseModel):
-    roster_text: str = ""
 
 
 class DutyReportOverrideRequest(BaseModel):
@@ -654,25 +650,6 @@ def _schedule_day_minutes(rows: list[Any]) -> tuple[int, int]:
     return min(mins), max(mins)
 
 
-def _next_workday_schedule_from(
-    start: date,
-    roster_map: dict[tuple[int, int], Any],
-    parsed_rows: list[Any],
-    *,
-    max_days: int = 365,
-) -> tuple[date, str, list[Any]] | tuple[None, None, list[Any]]:
-    current = start
-    for _ in range(max_days + 1):
-        month_map = roster_map.get((current.year, current.month))
-        code = code_for_date(month_map, current) if month_map else None
-        if code and is_work_day(code):
-            candidate_rows = rows_for_roster(parsed_rows, code, current)
-            if candidate_rows:
-                return current, code, candidate_rows
-        current += timedelta(days=1)
-    return None, None, []
-
-
 def _latest_workday_schedule_before(
     start: date,
     roster_map: dict[tuple[int, int], Any],
@@ -759,21 +736,6 @@ def _choose_schedule_grid_export_target(
             candidate_rows = rows_for_roster(parsed_rows, code, candidate_date)
 
     return candidate_date.isoformat(), str(code), _schedule_grid_effective_iso(candidate_rows), candidate_rows
-
-
-def _parse_schedule_grid_rows_by_version(rows: list[list[Any]], effective_iso: str) -> list[list[Any]]:
-    out: list[list[Any]] = []
-    for row in rows:
-        if not isinstance(row, (list, tuple)) or len(row) < 4:
-            continue
-        effective = (
-            _normalize_schedule_grid_effective_date(row[4])
-            if len(row) >= 5
-            else ""
-        )
-        if effective == effective_iso:
-            out.append(list(row))
-    return out
 
 
 def _rows_for_dates(
@@ -1760,11 +1722,6 @@ def api_export_schedule_grid_to_xml() -> Response:
     )
 
 
-@app.get("/api/maint/sheets/schedule_grid/export")
-def api_export_schedule_grid_to_xml_compat() -> Response:
-    return api_export_schedule_grid_to_xml()
-
-
 @app.get("/api/maint/sheets/schedule_grid/export-all-xml")
 def api_export_all_schedule_grid_to_xml() -> dict[str, Any]:
     return _build_schedule_grid_all_variants_export()
@@ -2161,16 +2118,6 @@ def api_google_calendar_auth_status() -> dict[str, Any]:
         return {"ok": True, **google_calendar_auth_status(get_settings())}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Google Calendar auth status failed: {e}") from e
-
-
-@app.post("/api/google-calendar/nonwork-consistency")
-def api_google_calendar_nonwork_consistency(body: RosterCalendarConsistencyRequest) -> dict[str, Any]:
-    try:
-        return {"ok": True, **check_nonwork_calendar_consistency(body.roster_text, get_settings())}
-    except RuntimeError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Google Calendar non-work consistency check failed: {e}") from e
 
 
 @app.get("/api/duty-report/plan")
