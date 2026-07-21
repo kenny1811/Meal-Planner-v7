@@ -5,6 +5,8 @@
 
 - 30 小時制：00:00–05:59 屬前一日（business date = now - 6h 之日期）。
 - slot 來源：當日更碼喺行位表入面 內容 含「報平安更」嘅行；(日-四)/(五六) 標記按星期過濾。
+  預設時間＝行位表 + 加班表 override（開工 override →「報開工」slot、收工 override →
+  「報收工」slot），panel 改時間/skip/send now 再凌駕（同 OnOff_Duty 一致嘅分工）。
 - overlay：整日 stop／更碼 segments（支援中途轉更碼）／逐 slot skip、改時間、改群組。
 - 對照表（更碼→WhatsApp 群組）與訊息模板存 SQLite，可喺 panel 編輯。
 """
@@ -15,7 +17,7 @@ import json
 import re
 import sqlite3
 import threading
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -23,7 +25,12 @@ from meal_planner.duty_common import GRACE_DETAIL, GRACE_MINUTES, POST_MAPPING, 
 from meal_planner.duty_scheduler import notify_change
 from meal_planner.maintenance_db import load_sheet_rows
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
-from meal_planner.schedule_grid import ScheduleRow, load_schedule_rows_from_rows, rows_for_roster
+from meal_planner.schedule_grid import (
+    ScheduleRow,
+    load_overtime_overrides_from_rows,
+    load_schedule_rows_from_rows,
+    rows_for_roster,
+)
 from meal_planner.settings import AppSettings, get_settings
 from meal_planner.timeparse import (
     business_date,
@@ -339,8 +346,15 @@ def compute_slots(
     mapping: dict[str, str],
     template: str,
     slot_overrides: dict[str, Any],
+    overtime: tuple[time | None, time | None] = (None, None),
 ) -> list[dict[str, Any]]:
-    """由 segments（更碼時間軸）+ overlay 推導當日 slot 清單（未計 sent 狀態）。"""
+    """由 segments（更碼時間軸）+ 加班表 + overlay 推導當日 slot 清單（未計 sent 狀態）。
+
+    時間優先序：panel 改時間 override＞加班表（開工 override 套落有「報開工」嘅 slot、
+    收工 override 套落有「報收工」嘅 slot）＞行位表原時間。slot id 一律用行位表原時間，
+    唔會因 override 而變。
+    """
+    ot_start, ot_end = overtime
     slots: list[dict[str, Any]] = []
     for i, seg in enumerate(segments):
         code = seg["code"]
@@ -351,10 +365,15 @@ def compute_slots(
             if not (seg_from <= minutes < seg_to):
                 continue
             slot_id = f"{code}@{hhmm}"
+            base_time = hhmm
+            if ot_end is not None and "報收工" in content:
+                base_time = ot_end.strftime("%H:%M")
+            elif ot_start is not None and "報開工" in content:
+                base_time = ot_start.strftime("%H:%M")
             override = slot_overrides.get(slot_id) if isinstance(slot_overrides.get(slot_id), dict) else {}
-            effective_time = str(override.get("time") or hhmm)
+            effective_time = str(override.get("time") or base_time)
             if _parse_hhmm(effective_time) < 0:
-                effective_time = hhmm
+                effective_time = base_time
             group = str(override.get("group") or mapping.get(code, ""))
             default_message = template.replace("{code}", code)
             message = str(override.get("message") or default_message)
@@ -363,6 +382,7 @@ def compute_slots(
                     "id": slot_id,
                     "code": code,
                     "original_time": hhmm,
+                    "ot_override": base_time != hhmm,
                     "time": effective_time,
                     "content": content,
                     "group": group,
@@ -425,6 +445,7 @@ def build_plan(
 
     roster_code = ""
     parsed_rows: list[ScheduleRow] = []
+    overtime: tuple[time | None, time | None] = (None, None)
     data_error = ""
     try:
         sched = load_sheet_rows("schedule_grid", settings)
@@ -433,6 +454,8 @@ def build_plan(
         roster_map = roster_map_from_sheet_rows(roster_sheet.get("rows") or [])
         month_map = roster_map.get((biz_date.year, biz_date.month))
         roster_code = str(code_for_date(month_map, biz_date) or "") if month_map else ""
+        overtime_rows = load_sheet_rows("overtime", settings).get("rows") or []
+        overtime = load_overtime_overrides_from_rows(overtime_rows).get(biz_date, (None, None))
     except Exception as e:  # noqa: BLE001 - plan must render even with data errors
         data_error = str(e)
 
@@ -451,7 +474,8 @@ def build_plan(
     slot_overrides = overlay.get("slots") if isinstance(overlay.get("slots"), dict) else {}
 
     slots = compute_slots(
-        parsed_rows, segments, biz_date, config["mapping"], config["message_template"], slot_overrides
+        parsed_rows, segments, biz_date, config["mapping"], config["message_template"], slot_overrides,
+        overtime=overtime,
     )
     for slot in slots:
         entry = log.get(slot["id"])

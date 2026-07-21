@@ -137,6 +137,30 @@ class TestSegments(unittest.TestCase):
         )
         self.assertEqual(slots[1]["group"], "半島報更群組")
 
+    def test_overtime_overrides_on_off_slots_only(self):
+        """加班表：開工 override 套「報開工」slot、收工 override 套「報收工」slot，中間 slot 唔郁。"""
+        slots = compute_slots(
+            ALL_ROWS, [{"from": "00:00", "code": "VOC"}], date(2026, 7, 12), MAPPING, TEMPLATE, {},
+            overtime=(time(9, 0), time(22, 15)),
+        )
+        by_id = {s["id"]: s for s in slots}
+        self.assertEqual(by_id["VOC@09:15"]["time"], "09:00")
+        self.assertTrue(by_id["VOC@09:15"]["ot_override"])
+        self.assertEqual(by_id["VOC@13:15"]["time"], "13:15")
+        self.assertFalse(by_id["VOC@13:15"]["ot_override"])
+        self.assertEqual(by_id["VOC@21:30"]["time"], "22:15")
+        # slot id 保持行位表原時間，overlay 對應唔會甩
+        self.assertIn("VOC@21:30", by_id)
+
+    def test_panel_time_override_beats_overtime(self):
+        overrides = {"VOC@21:30": {"time": "23:00"}}
+        slots = compute_slots(
+            ALL_ROWS, [{"from": "00:00", "code": "VOC"}], date(2026, 7, 12), MAPPING, TEMPLATE, overrides,
+            overtime=(None, time(22, 15)),
+        )
+        by_id = {s["id"]: s for s in slots}
+        self.assertEqual(by_id["VOC@21:30"]["time"], "23:00")
+
     def test_slot_overrides_skip_time_group(self):
         overrides = {
             "VOC@09:15": {"skip": True},
