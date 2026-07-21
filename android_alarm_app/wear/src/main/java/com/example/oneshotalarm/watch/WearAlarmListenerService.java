@@ -26,6 +26,7 @@ public class WearAlarmListenerService extends WearableListenerService {
     private static final String PREFS = "watch_alarm_listener";
     private static final String KEY_LAST_ALARM_KEY = "last_alarm_key";
     private static final String KEY_LAST_ALARM_AT = "last_alarm_at";
+    private static final String KEY_LAST_TILE_STATE_AT = "last_tile_state_at";
     private static final long DUPLICATE_ALARM_MS = 2 * 60 * 1000L;
     private static final long DISMISS_FRESH_MS = 30 * 1000L;
 
@@ -140,8 +141,29 @@ public class WearAlarmListenerService extends WearableListenerService {
                 .apply();
     }
 
+    /**
+     * Tile state 行雙通道（message 快 + data item 捱得過 Doze），兩邊帶同一個
+     * updated_at。兩個通道都到齊時，第二份唔好再 cancel+reschedule 晒全部
+     * alarm 同 refresh complication 多次——慳電。
+     */
+    private boolean isDuplicateTileState(long updatedAt) {
+        if (updatedAt <= 0L) {
+            return false; // 冇 updated_at 嘅舊 payload 照處理
+        }
+        SharedPreferences preferences = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (updatedAt == preferences.getLong(KEY_LAST_TILE_STATE_AT, 0L)) {
+            return true;
+        }
+        preferences.edit().putLong(KEY_LAST_TILE_STATE_AT, updatedAt).apply();
+        return false;
+    }
+
     private void saveTileState(DataMap map) {
         if (map == null) {
+            return;
+        }
+        if (isDuplicateTileState(map.getLong("updated_at", 0L))) {
+            Log.d(TAG, "Duplicate tile state (data channel) ignored");
             return;
         }
         getSharedPreferences(AlarmScheduleState.PREFS, Context.MODE_PRIVATE).edit()
@@ -166,6 +188,10 @@ public class WearAlarmListenerService extends WearableListenerService {
     private void saveTileState(String rawJson) {
         try {
             JSONObject json = new JSONObject(rawJson == null ? "{}" : rawJson);
+            if (isDuplicateTileState(json.optLong("updated_at", 0L))) {
+                Log.d(TAG, "Duplicate tile state (message channel) ignored");
+                return;
+            }
             JSONArray items = json.optJSONArray("schedule_items");
             getSharedPreferences(AlarmScheduleState.PREFS, Context.MODE_PRIVATE).edit()
                     .putString(AlarmScheduleState.KEY_PLAN_DATE, json.optString("plan_date", ""))
