@@ -12,11 +12,11 @@ from zoneinfo import ZoneInfo
 
 from meal_planner.maintenance_db import load_sheet_rows
 from meal_planner.meal_schedule import roster_matches_rule
-from meal_planner.roster import is_work_day, last_day_of_month, parse_roster_line, roster_for_month
+from meal_planner.roster import is_work_day, last_day_of_month, parse_roster_line, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import load_overtime_overrides_from_rows, load_wake_alarm_overrides_from_rows
 from meal_planner.atomic_io import write_text_atomic
 from meal_planner.settings import AppSettings
-from meal_planner.shift_time import holiday_dates_from_rows, parse_time as _normal_time, resolve_shift_time
+from meal_planner.shift_time import holiday_dates_from_rows, resolve_shift_time
 
 
 GC_ACCOUNT_EMAIL = "kenny1811@gmail.com"
@@ -115,14 +115,6 @@ def config_from_env(settings: AppSettings) -> GoogleCalendarSyncConfig:
     )
 
 
-def _roster_cell_texts(rows: list[list[Any]]) -> list[str | None]:
-    out: list[str | None] = []
-    for row in rows:
-        if isinstance(row, list) and row:
-            out.append(None if row[0] is None else str(row[0]))
-    return out
-
-
 def mtr_door_lookup(rows: list[list[Any]] | None) -> list[tuple[str, str]]:
     """由「地鐵車門」表砌 (更碼pattern, location) 清單，保留原次序（先命中先用）。
 
@@ -190,7 +182,7 @@ def build_roster_calendar_plan(
     holidays: set[date] | None = None,
 ) -> RosterCalendarPlan:
     tz = ZoneInfo(time_zone)
-    roster_map = roster_for_month(_roster_cell_texts(roster_rows))
+    roster_map = roster_map_from_sheet_rows(roster_rows)
     holidays = holidays or set()
     overtime_by_date = load_overtime_overrides_from_rows(overtime_rows or [])
     wake_alarm_by_date = load_wake_alarm_overrides_from_rows(wake_alarm_rows or [])

@@ -2,6 +2,10 @@
     const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const MEALS = ["早餐", "午餐", "小食", "晚餐"];
     const MEAL_EN = { "早餐": "Breakfast", "午餐": "Lunch", "小食": "Snack", "晚餐": "Dinner" };
+    // Fallback only — the API payload's nutrient_keys wins; keep in sync with indicators.NUTRIENT_KEYS.
+    const DEFAULT_NUTRIENT_KEYS = [
+      "kcal","protein_g","carb_g","sugar_g","cholesterol_mg","sodium_mg","calcium_mg","fat_total_g","fat_sat_g","fat_trans_g"
+    ];
     let lastData = null;
     let currentFocusedDate = null;
     let columnWidths = {};
@@ -556,9 +560,7 @@
     }
 
     function getColumnKeys(nutrientKeys) {
-      const nk = Array.isArray(nutrientKeys) && nutrientKeys.length ? nutrientKeys : [
-        "kcal","protein_g","carb_g","sugar_g","cholesterol_mg","sodium_mg","calcium_mg","fat_total_g","fat_sat_g","fat_trans_g"
-      ];
+      const nk = Array.isArray(nutrientKeys) && nutrientKeys.length ? nutrientKeys : DEFAULT_NUTRIENT_KEYS;
       return ["date", "dow", "code", "time", "content", ...nk];
     }
 

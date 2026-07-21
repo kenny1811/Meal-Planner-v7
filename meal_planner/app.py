@@ -60,13 +60,14 @@ from meal_planner.settings import (
     save_folder_settings,
     save_rice_detail_settings,
 )
-from meal_planner.roster import code_for_date, is_work_day, roster_for_month
+from meal_planner.roster import code_for_date, is_work_day, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import (
     grid_row_matches_roster,
     load_schedule_rows_from_rows,
     rows_for_roster,
 )
 from meal_planner.shift_time import payroll_coverage_issues
+from meal_planner.timeparse import business_date
 from meal_planner.storage import (
     load_active_panel,
     load_active_config_view,
@@ -561,31 +562,6 @@ def _normalize_schedule_grid_effective_date(raw: Any) -> str:
     return normalized
 
 
-def _time_to_minutes(raw_time: str) -> int:
-    token = raw_time.strip()
-    if not _TIME_RE.fullmatch(token):
-        return -1
-    hour, minute = token.split(":", 1)
-    return int(hour) * 60 + int(minute)
-
-
-def _collect_roster_cell_texts(rows: list[list[Any]]) -> list[str | None]:
-    out: list[str | None] = []
-    for row in rows:
-        if not isinstance(row, list):
-            continue
-        for value in row:
-            if value is None:
-                continue
-            out.append(str(value))
-    return out
-
-
-def _roster_workday_code_map(sheet_rows: list[Any]) -> dict[tuple[int, int], Any]:
-    row_lists = sheet_rows if isinstance(sheet_rows, list) else []
-    return roster_for_month(_collect_roster_cell_texts(row_lists))
-
-
 def _check_roster_codes_against_schedule_grid(roster_rows: list[Any]) -> dict[str, Any]:
     """
     更表檢查：今日及之後每個返工日，行位表有冇當日可用嘅版本。
@@ -613,7 +589,7 @@ def _check_roster_codes_against_schedule_grid(roster_rows: list[Any]) -> dict[st
 
     today = datetime.now(ZoneInfo(settings.dates.timezone)).date()
     grouped: dict[tuple[str, str], list[str]] = {}
-    for (year, month), month_map in sorted(_roster_workday_code_map(roster_rows).items()):
+    for (year, month), month_map in sorted(roster_map_from_sheet_rows(roster_rows).items()):
         for day, raw_code in sorted(month_map.day_to_code.items()):
             code = str(raw_code or "").strip()
             if not code or not is_work_day(code):
@@ -750,7 +726,7 @@ def _choose_schedule_grid_export_target(
     if not parsed_rows:
         return None
 
-    roster_map = _roster_workday_code_map(roster_rows)
+    roster_map = roster_map_from_sheet_rows(roster_rows)
     if not roster_map:
         return None
 
@@ -2299,7 +2275,6 @@ def api_onoffduty_plan(date_iso: str | None = None) -> dict[str, Any]:
 @app.post("/api/onoffduty/log")
 def api_onoffduty_log(body: OnOffDutyLogRequest) -> dict[str, Any]:
     from meal_planner.duty_form import build_day_plan, record_onoff_log
-    from meal_planner.duty_report import business_date
 
     if body.kind not in {"start", "end"}:
         raise HTTPException(status_code=400, detail=f"Invalid kind: {body.kind}")
@@ -2335,7 +2310,6 @@ def api_onoffduty_log(body: OnOffDutyLogRequest) -> dict[str, Any]:
 @app.post("/api/onoffduty/override")
 def api_onoffduty_override(body: OnOffDutyOverrideRequest) -> dict[str, Any]:
     from meal_planner.duty_form import build_day_plan, set_time_override
-    from meal_planner.duty_report import business_date
 
     try:
         settings = get_settings()
@@ -2356,7 +2330,6 @@ def api_onoffduty_override(body: OnOffDutyOverrideRequest) -> dict[str, Any]:
 @app.post("/api/onoffduty/roster-code")
 def api_onoffduty_roster_code(body: OnOffDutyRosterCodeRequest) -> dict[str, Any]:
     from meal_planner.duty_form import build_day_plan, set_roster_code
-    from meal_planner.duty_report import business_date
 
     try:
         settings = get_settings()

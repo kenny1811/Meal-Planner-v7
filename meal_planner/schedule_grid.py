@@ -12,34 +12,12 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from meal_planner.excel_io import get_sheet
 from meal_planner.settings import AppSettings
+from meal_planner.timeparse import parse_time as _to_time
 
 MEAL_KEYS = ("早餐", "午餐", "小食", "晚餐")
 
 _RE_BEFORE = re.compile(r"開工前\s*(\d+(?:\.\d+)?)\s*小時")
 _RE_AFTER = re.compile(r"收工後\s*(\d+(?:\.\d+)?)\s*小時")
-
-
-def _to_time(v: Any) -> time | None:
-    if v is None:
-        return None
-    if isinstance(v, time):
-        return v
-    if isinstance(v, datetime):
-        return v.time()
-    if isinstance(v, str):
-        s = v.strip()
-        compact = re.match(r"^(\d{1,2})(\d{2})$", s)
-        if compact:
-            try:
-                return time(int(compact.group(1)), int(compact.group(2)))
-            except ValueError:
-                return None
-        for fmt in ("%H:%M", "%H:%M:%S"):
-            try:
-                return datetime.strptime(s, fmt).time()
-            except ValueError:
-                pass
-    return None
 
 
 def _to_date(v: Any) -> date | None:

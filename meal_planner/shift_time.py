@@ -13,35 +13,15 @@
 
 from __future__ import annotations
 
-import re
-from datetime import date, datetime, time
+from datetime import date, time
 from typing import Any
 
 from meal_planner.schedule_grid import _to_date, grid_row_matches_roster
+from meal_planner.timeparse import parse_time
 
 # Mon=0 .. Sun=6 → 更時表「適用日」用嘅星期字。
 WEEKDAY_CHAR = {0: "一", 1: "二", 2: "三", 3: "四", 4: "五", 5: "六", 6: "日"}
 _ALL_WEEKDAY_CHARS = "日一二三四五六"
-
-_TIME_RE = re.compile(r"^\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*$")
-_COMPACT_TIME_RE = re.compile(r"^\s*(\d{1,2})(\d{2})\s*$")
-
-
-def parse_time(value: Any) -> time | None:
-    """時間格仔 → time；接受 time/datetime/"HH:MM"/"HH:MM:SS"/"HHMM"。"""
-    if isinstance(value, time):
-        return time(value.hour, value.minute)
-    if isinstance(value, datetime):
-        return time(value.hour, value.minute)
-    raw = str(value or "")
-    match = _TIME_RE.match(raw) or _COMPACT_TIME_RE.match(raw)
-    if not match:
-        return None
-    hour = int(match.group(1))
-    minute = int(match.group(2))
-    if hour > 23 or minute > 59:
-        return None
-    return time(hour, minute)
 
 
 def holiday_dates_from_rows(rows: list[Any] | None) -> set[date]:

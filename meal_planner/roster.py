@@ -6,7 +6,7 @@ import calendar
 import re
 from dataclasses import dataclass
 from datetime import date
-from typing import Iterator
+from typing import Any, Iterator
 
 
 _MONTH_HEAD_RE = re.compile(r"^(\d{4})年(\d{1,2})月")
@@ -63,6 +63,28 @@ def roster_for_month(rows: Iterator[str | None]) -> dict[tuple[int, int], Roster
         if rm is not None:
             out[(rm.year, rm.month)] = rm
     return out
+
+
+def roster_texts_from_sheet_rows(rows: list[Any] | None) -> list[str]:
+    """maint 更表 sheet rows → 所有非空儲存格文字（掃齊所有欄，唔止 A 欄）。
+
+    全 project 讀更表一律經呢度，唔好各自 loop rows——以免有實作淨睇 A 欄、
+    有實作睇晒所有欄，兩邊對同一份資料答案唔同。
+    """
+    out: list[str] = []
+    for row in rows or []:
+        if not isinstance(row, list):
+            continue
+        for value in row:
+            if value is None:
+                continue
+            out.append(str(value))
+    return out
+
+
+def roster_map_from_sheet_rows(rows: list[Any] | None) -> dict[tuple[int, int], RosterMonth]:
+    """maint 更表 sheet rows → (年,月) → RosterMonth。"""
+    return roster_for_month(roster_texts_from_sheet_rows(rows))
 
 
 def is_work_day(code: str) -> bool:

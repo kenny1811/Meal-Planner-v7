@@ -113,9 +113,7 @@
       const rl = mp.restaurant_lunch;
       const resolved = mp.meal_times_resolved || {};
       const nCol = (headers && headers.length) || 10;
-      const nk = Array.isArray(nutrientKeys) && nutrientKeys.length ? nutrientKeys : [
-        "kcal","protein_g","carb_g","sugar_g","cholesterol_mg","sodium_mg","calcium_mg","fat_total_g","fat_sat_g","fat_trans_g"
-      ];
+      const nk = Array.isArray(nutrientKeys) && nutrientKeys.length ? nutrientKeys : DEFAULT_NUTRIENT_KEYS;
       const headStyle = "background:#99CCFF !important;color:#000 !important;";
 
       let body = "";
@@ -237,9 +235,7 @@
      */
     function renderPeriodTable(days, headers, nutrientKeys, indicatorRows) {
       const headStyle = "background:#99CCFF !important;color:#000 !important;";
-      const nk = Array.isArray(nutrientKeys) && nutrientKeys.length ? nutrientKeys : [
-        "kcal","protein_g","carb_g","sugar_g","cholesterol_mg","sodium_mg","calcium_mg","fat_total_g","fat_sat_g","fat_trans_g"
-      ];
+      const nk = Array.isArray(nutrientKeys) && nutrientKeys.length ? nutrientKeys : DEFAULT_NUTRIENT_KEYS;
       const workRow = indicatorRows && Array.isArray(indicatorRows.workday) ? indicatorRows.workday : [];
       const nonworkRow = indicatorRows && Array.isArray(indicatorRows.nonworkday) ? indicatorRows.nonworkday : [];
       let rows = "";

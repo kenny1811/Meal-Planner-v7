@@ -8,20 +8,7 @@ from typing import Any
 from openpyxl.worksheet.worksheet import Worksheet
 
 from meal_planner.excel_io import header_col_map
-from meal_planner.indicators import NUTRIENT_KEYS
-
-NUTRIENT_HEADER_BY_KEY = {
-    "kcal": "卡路里 (kCal)",
-    "protein_g": "蛋白質 (g)",
-    "carb_g": "碳水 (g)",
-    "sugar_g": "天然糖 (g)",
-    "cholesterol_mg": "膽固醇 (mg)",
-    "sodium_mg": "鈉 (mg)",
-    "calcium_mg": "鈣 (mg)",
-    "fat_total_g": "總脂肪 (g)",
-    "fat_sat_g": "飽和脂肪 (g)",
-    "fat_trans_g": "反式脂肪 (g)",
-}
+from meal_planner.indicators import NUTRIENT_HEADERS as NUTRIENT_HEADER_BY_KEY, NUTRIENT_KEYS
 
 
 @dataclass(frozen=True)

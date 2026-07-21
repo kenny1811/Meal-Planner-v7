@@ -128,6 +128,29 @@ NUTRIENT_KEYS = (
     "fat_trans_g",
 )
 
+# 10 個營養值嘅唯一權威來源：次序＝NUTRIENT_KEYS、中文名＝NUTRIENT_LABELS、
+# 表頭＝NUTRIENT_HEADERS。加/改營養值淨係改呢度（前端 fallback 喺 planner.js
+# DEFAULT_NUTRIENT_KEYS，正常會用 API 傳落去嘅 nutrient_keys）。
+NUTRIENT_LABELS = {
+    "kcal": "卡路里",
+    "protein_g": "蛋白質",
+    "carb_g": "碳水",
+    "sugar_g": "天然糖",
+    "cholesterol_mg": "膽固醇",
+    "sodium_mg": "鈉",
+    "calcium_mg": "鈣",
+    "fat_total_g": "總脂肪",
+    "fat_sat_g": "飽和脂肪",
+    "fat_trans_g": "反式脂肪",
+}
+
+
+def nutrient_unit(key: str) -> str:
+    return "kCal" if key == "kcal" else key.rsplit("_", 1)[-1]
+
+
+NUTRIENT_HEADERS = {k: f"{NUTRIENT_LABELS[k]} ({nutrient_unit(k)})" for k in NUTRIENT_KEYS}
+
 
 @dataclass
 class DayIndicatorProfile:

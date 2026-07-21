@@ -4,23 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from meal_planner.indicators import NUTRIENT_LABELS as _NUTRIENT_LABELS
 from meal_planner.nutrition_catalog import NutritionEntry
 from meal_planner.settings import AppSettings
 from meal_planner.optimizer_models import _Candidate
-
-
-_NUTRIENT_LABELS = {
-    "kcal": "卡路里",
-    "protein_g": "蛋白質",
-    "carb_g": "碳水",
-    "sugar_g": "天然糖",
-    "cholesterol_mg": "膽固醇",
-    "sodium_mg": "鈉",
-    "calcium_mg": "鈣",
-    "fat_total_g": "總脂肪",
-    "fat_sat_g": "飽和脂肪",
-    "fat_trans_g": "反式脂肪",
-}
 
 _CONSTRAINT_LABELS = {
     "low": "低過下限",

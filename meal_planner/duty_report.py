@@ -15,14 +15,20 @@ import json
 import re
 import sqlite3
 import threading
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from meal_planner.maintenance_db import load_sheet_rows
-from meal_planner.roster import code_for_date, roster_for_month
+from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import ScheduleRow, load_schedule_rows_from_rows, rows_for_roster
 from meal_planner.settings import AppSettings, get_settings
+from meal_planner.timeparse import (
+    business_date,
+    normalize_hhmm,
+    slot_datetime as _slot_datetime,
+    to_minutes as _parse_hhmm,
+)
 
 SAFE_KEYWORD = "報平安更"
 DEFAULT_MESSAGE_TEMPLATE = "{code} SAPP1801 報平安更正常"
@@ -39,60 +45,13 @@ EVENTS_KEEP = 50
 
 _RE_SUN_THU = re.compile(r"[（(]\s*日-四\s*[)）]")
 _RE_FRI_SAT = re.compile(r"[（(]\s*五六\s*[)）]")
-_HHMM_RE = re.compile(r"^\d{1,2}:\d{2}$")
 
 _DB_LOCK = threading.Lock()
 _ACTION_LOCK = threading.Lock()
 
 
-# ---------------------------------------------------------------- 時間 / 30 小時制
-
-
-def business_date(now: datetime) -> date:
-    """00:00–05:59 當前一日（30 小時制）。"""
-    return (now - timedelta(hours=6)).date()
-
-
 def _now(settings: AppSettings) -> datetime:
     return datetime.now(ZoneInfo(settings.dates.timezone))
-
-
-def _parse_hhmm(text: str) -> int:
-    """'HH:MM' → 分鐘；無效回 -1。"""
-    token = str(text or "").strip()
-    if not _HHMM_RE.fullmatch(token):
-        return -1
-    hour, minute = token.split(":", 1)
-    return int(hour) * 60 + int(minute)
-
-
-_HHMM_COMPACT_RE = re.compile(r"^\d{3,4}$")
-
-
-def normalize_hhmm(text: str) -> str:
-    """時間輸入寬鬆化：'9:16'/'09:16'/'916'/'0916' 都收；
-    30 小時制 24:00–29:59（或 2416 咁）轉成 00:00–05:59（即聽日凌晨）。無效回 ''。"""
-    token = str(text or "").strip()
-    if _HHMM_COMPACT_RE.fullmatch(token):
-        token = f"{token[:-2]}:{token[-2:]}"
-    if not _HHMM_RE.fullmatch(token):
-        return ""
-    hour_text, minute_text = token.split(":", 1)
-    hour, minute = int(hour_text), int(minute_text)
-    if 24 <= hour <= 29:
-        hour -= 24
-    if hour > 23 or minute > 59:
-        return ""
-    return f"{hour:02d}:{minute:02d}"
-
-
-def _slot_datetime(biz_date: date, hhmm: str, tz: ZoneInfo) -> datetime:
-    """slot 實際時刻：06:00 前嘅時間屬 30 小時制「翌日凌晨」。"""
-    minutes = _parse_hhmm(hhmm)
-    if minutes < 0:
-        minutes = 0
-    d = biz_date if minutes >= 6 * 60 else biz_date + timedelta(days=1)
-    return datetime.combine(d, time(minutes // 60, minutes % 60), tzinfo=tz)
 
 
 def weekday_allows(content: str, biz_date: date) -> bool:
@@ -467,11 +426,7 @@ def build_plan(
         sched = load_sheet_rows("schedule_grid", settings)
         parsed_rows = load_schedule_rows_from_rows(sched.get("rows") or [])
         roster_sheet = load_sheet_rows("roster", settings)
-        cells: list[str | None] = []
-        for row in roster_sheet.get("rows") or []:
-            if isinstance(row, list):
-                cells.extend(str(v) for v in row if v is not None)
-        roster_map = roster_for_month(cells)
+        roster_map = roster_map_from_sheet_rows(roster_sheet.get("rows") or [])
         month_map = roster_map.get((biz_date.year, biz_date.month))
         roster_code = str(code_for_date(month_map, biz_date) or "") if month_map else ""
     except Exception as e:  # noqa: BLE001 - plan must render even with data errors

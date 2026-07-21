@@ -82,9 +82,21 @@ def _connect(settings: AppSettings) -> sqlite3.Connection:
     return conn
 
 
+# 營養欄名＝NUTRIENT_KEYS（indicators.py 係唯一權威）；SQL 一律由佢砌，唔好手寫欄名。
+_NUTRIENT_COLS_DDL = ",\n            ".join(f"{key} REAL NOT NULL" for key in NUTRIENT_KEYS)
+_CATALOG_COLUMNS = ("row_index", "paused", "category", "name", "min_g", "max_g", "daymax_g", *NUTRIENT_KEYS)
+_CATALOG_INSERT_SQL = (
+    "INSERT INTO nutrition_catalog ("
+    + ", ".join(_CATALOG_COLUMNS)
+    + ") VALUES ("
+    + ", ".join(f":{col}" for col in _CATALOG_COLUMNS)
+    + ")"
+)
+
+
 def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS schema_meta (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -98,16 +110,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             min_g REAL,
             max_g REAL,
             daymax_g REAL,
-            kcal REAL NOT NULL,
-            protein_g REAL NOT NULL,
-            carb_g REAL NOT NULL,
-            sugar_g REAL NOT NULL,
-            cholesterol_mg REAL NOT NULL,
-            sodium_mg REAL NOT NULL,
-            calcium_mg REAL NOT NULL,
-            fat_total_g REAL NOT NULL,
-            fat_sat_g REAL NOT NULL,
-            fat_trans_g REAL NOT NULL
+            {_NUTRIENT_COLS_DDL}
         );
 
         CREATE TABLE IF NOT EXISTS nutrition_targets (
@@ -191,17 +194,7 @@ def _has_rows(conn: sqlite3.Connection, table_name: str) -> bool:
 
 def _seed_catalog(conn: sqlite3.Connection, entries: list[NutritionEntry]) -> None:
     conn.executemany(
-        """
-        INSERT INTO nutrition_catalog (
-            row_index, paused, category, name, min_g, max_g, daymax_g,
-            kcal, protein_g, carb_g, sugar_g, cholesterol_mg,
-            sodium_mg, calcium_mg, fat_total_g, fat_sat_g, fat_trans_g
-        ) VALUES (
-            :row_index, :paused, :category, :name, :min_g, :max_g, :daymax_g,
-            :kcal, :protein_g, :carb_g, :sugar_g, :cholesterol_mg,
-            :sodium_mg, :calcium_mg, :fat_total_g, :fat_sat_g, :fat_trans_g
-        )
-        """,
+        _CATALOG_INSERT_SQL,
         [
             {
                 "row_index": entry.row_index,
@@ -379,20 +372,7 @@ def save_catalog_entries(
     with closing(_connect(settings)) as conn:
         _ensure_schema(conn)
         conn.execute("DELETE FROM nutrition_catalog")
-        conn.executemany(
-            """
-            INSERT INTO nutrition_catalog (
-                row_index, paused, category, name, min_g, max_g, daymax_g,
-                kcal, protein_g, carb_g, sugar_g, cholesterol_mg,
-                sodium_mg, calcium_mg, fat_total_g, fat_sat_g, fat_trans_g
-            ) VALUES (
-                :row_index, :paused, :category, :name, :min_g, :max_g, :daymax_g,
-                :kcal, :protein_g, :carb_g, :sugar_g, :cholesterol_mg,
-                :sodium_mg, :calcium_mg, :fat_total_g, :fat_sat_g, :fat_trans_g
-            )
-            """,
-            clean_rows,
-        )
+        conn.executemany(_CATALOG_INSERT_SQL, clean_rows)
         conn.commit()
     return load_catalog_entries(settings)
 

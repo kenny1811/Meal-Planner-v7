@@ -21,15 +21,20 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from urllib.parse import quote_plus
 
-from meal_planner.google_calendar_sync import _roster_cell_texts
 from meal_planner.maintenance_db import load_sheet_rows
-from meal_planner.roster import code_for_date, roster_for_month
+from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import (
     load_overtime_overrides_from_rows,
     _to_date,
 )
 from meal_planner.settings import AppSettings, get_settings
 from meal_planner.shift_time import holiday_dates_from_rows, resolve_shift_time
+from meal_planner.timeparse import (
+    business_date,
+    minutes_30h as _minutes_30h,
+    normalize_hhmm,
+    slot_datetime as _slot_datetime,
+)
 
 STAFF_NUMBER = "SAPP1801"
 
@@ -294,7 +299,6 @@ def set_time_override(
     start/end：None=唔郁；""=清走該格（兩格都空成行刪走，還原跟更時表）；"21:30"/"2130"=設定。
     改完如果該格原本標咗 missed 而新時間重新趕得切，會清返個 log 俾 scheduler 重新處理。
     """
-    from meal_planner.duty_report import _slot_datetime, normalize_hhmm
     from meal_planner.maintenance_db import save_sheet_rows
     from zoneinfo import ZoneInfo
 
@@ -411,7 +415,6 @@ def set_roster_code(settings: AppSettings, biz_date: date, code: str) -> None:
     """
     from zoneinfo import ZoneInfo
 
-    from meal_planner.duty_report import _slot_datetime
     from meal_planner.maintenance_db import save_sheet_rows
     from meal_planner.roster import parse_roster_line
 
@@ -487,13 +490,6 @@ def submit_form(
             raise RuntimeError(f"formResponse HTTP {resp.status}")
 
 
-def _minutes_30h(hhmm: str) -> int:
-    """'HH:MM' → 分鐘（30 小時制：00:00–05:59 當 24:00–29:59）。"""
-    hour, minute = hhmm.split(":", 1)
-    value = int(hour) * 60 + int(minute)
-    return value + 1440 if int(hour) < 6 else value
-
-
 def _round_to_5min(value: datetime) -> time:
     """報更時間以 5 分鐘為單位四捨五入（:32→:30、:33→:35；小時進位照計）。"""
     total = value.hour * 60 + value.minute
@@ -521,7 +517,7 @@ def late_off_hold(settings: AppSettings, hold: bool) -> dict[str, Any]:
     ReportNormal 嘅「報收工」slot skip 埋（唔會夠鐘自動出 WhatsApp）。"""
     from zoneinfo import ZoneInfo
 
-    from meal_planner.duty_report import apply_override, business_date
+    from meal_planner.duty_report import apply_override
 
     now = datetime.now(ZoneInfo(settings.dates.timezone))
     biz_date = business_date(now)
@@ -558,7 +554,7 @@ def late_off_send_now(settings: AppSettings, *, note: str = "") -> dict[str, Any
     3) ReportNormal「報收工」slot 即發 WhatsApp。"""
     from zoneinfo import ZoneInfo
 
-    from meal_planner.duty_report import business_date, send_slot
+    from meal_planner.duty_report import send_slot
 
     tz = ZoneInfo(settings.dates.timezone)
     now = datetime.now(tz)
@@ -626,7 +622,6 @@ def process_due_actions(settings: AppSettings | None = None) -> None:
     """
     from zoneinfo import ZoneInfo
 
-    from meal_planner.duty_report import _slot_datetime, business_date
 
     settings = settings or get_settings()
     tz = ZoneInfo(settings.dates.timezone)
@@ -691,14 +686,13 @@ def process_due_actions(settings: AppSettings | None = None) -> None:
 def roster_code_for(settings: AppSettings, biz_date: date) -> str:
     roster_payload = load_sheet_rows("roster", settings)
     rows = roster_payload.get("rows") or [] if isinstance(roster_payload, dict) else []
-    roster_map = roster_for_month(_roster_cell_texts(rows))
+    roster_map = roster_map_from_sheet_rows(rows)
     month_map = roster_map.get((biz_date.year, biz_date.month))
     return str(code_for_date(month_map, biz_date) or "") if month_map else ""
 
 
 def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None = None) -> dict[str, Any]:
     """指定日（預設今日 30 小時制）嘅報開工／報收工計劃 + 兩條預填連結。"""
-    from meal_planner.duty_report import business_date  # 共用 30 小時制
 
     settings = settings or get_settings()
     from zoneinfo import ZoneInfo

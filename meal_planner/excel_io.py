@@ -161,17 +161,13 @@ def read_menu_v5_indicators(settings: AppSettings, wb: Workbook) -> tuple[list[s
 
 
 def load_roster_map(settings: AppSettings, wb: Workbook | None = None):
-    from meal_planner.roster import roster_for_month
+    from meal_planner.roster import roster_for_month, roster_map_from_sheet_rows
 
     try:
         from meal_planner.maintenance_db import load_sheet_rows
 
         sheet = load_sheet_rows("roster", settings, wb)
-        rows = (
-            row[0] if isinstance(row, list) and row else None
-            for row in sheet.get("rows", [])
-        )
-        roster = roster_for_month(rows)
+        roster = roster_map_from_sheet_rows(sheet.get("rows", []))
         if roster:
             return roster
     except Exception:
