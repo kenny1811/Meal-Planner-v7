@@ -19,7 +19,8 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from meal_planner.duty_common import GRACE_DETAIL, GRACE_MINUTES, POST_MAPPING, retry_backoff_active
+from meal_planner.duty_common import GRACE_DETAIL, GRACE_MINUTES, POST_MAPPING, RETRY_SECONDS, retry_backoff_active
+from meal_planner.duty_scheduler import notify_change
 from meal_planner.maintenance_db import load_sheet_rows
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import ScheduleRow, load_schedule_rows_from_rows, rows_for_roster
@@ -137,6 +138,7 @@ def save_overlay(settings: AppSettings, biz_date: date, overlay: dict[str, Any])
             conn.commit()
         finally:
             conn.close()
+    notify_change()
 
 
 def load_config(settings: AppSettings) -> dict[str, Any]:
@@ -196,6 +198,7 @@ def save_config(settings: AppSettings, patch: dict[str, Any]) -> dict[str, Any]:
             conn.commit()
         finally:
             conn.close()
+    notify_change()
     return current
 
 
@@ -259,6 +262,7 @@ def record_log(
             conn.commit()
         finally:
             conn.close()
+    notify_change()
 
 
 def record_event(settings: AppSettings, action: str, detail: str = "", *, source: str = "") -> None:
@@ -649,6 +653,7 @@ def process_due_slots(settings: AppSettings | None = None) -> datetime | None:
     auto_ready = bool(plan["auto_send"]) and plan["mode"] != "stop"
     now = datetime.now(tz)
     next_due: datetime | None = None
+    due_seen = False
     for slot in plan["slots"]:
         if slot["status"] == "overdue":
             record_log(
@@ -667,7 +672,12 @@ def process_due_slots(settings: AppSettings | None = None) -> datetime | None:
             continue
         if not auto_ready:
             continue
+        due_seen = True
         if slot.get("detail") and slot.get("sent_at") and retry_backoff_active(slot["sent_at"]):
             continue  # 之前失敗過：等最少 RETRY_SECONDS 先重試，唔好每 tick 狂試
         send_slot(settings, slot["id"], manual=False, source="scheduler")
+    if due_seen:
+        # 到期但未完成（失敗/backoff）→ 最遲 RETRY_SECONDS 後再埞一次。
+        retry_at = now + timedelta(seconds=RETRY_SECONDS)
+        next_due = retry_at if next_due is None else min(next_due, retry_at)
     return next_due

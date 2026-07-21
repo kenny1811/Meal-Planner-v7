@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime
 import json
 import sqlite3
+import threading
 from threading import RLock
 from typing import Any
 
@@ -238,11 +239,19 @@ def _ensure_plan_schema(conn: sqlite3.Connection) -> None:
     )
 
 
+# Schema DDL 每個 process 每個 db 檔跑一次就夠（CREATE IF NOT EXISTS 本身冪等，
+# 但每次讀都跑一輪 executescript 係白蝕，亦令讀操作揸住 write lock）。
+_PLAN_SCHEMA_READY: set[str] = set()
+
+
 @contextmanager
 def _plan_db():
     conn = _connect_plan_db()
     try:
-        _ensure_plan_schema(conn)
+        key = str(conn.execute("PRAGMA database_list").fetchone()["file"])
+        if key not in _PLAN_SCHEMA_READY:
+            _ensure_plan_schema(conn)
+            _PLAN_SCHEMA_READY.add(key)
         yield conn
         conn.commit()
     finally:
@@ -284,11 +293,42 @@ def _save_ui(ui: dict[str, Any]) -> None:
         )
 
 
+_UI_BATCH = threading.local()
+
+
 def _update_ui(mutator) -> None:
+    batched = getattr(_UI_BATCH, "ui", None)
+    if batched is not None:
+        mutator(batched)
+        return
     with _STORE_LOCK:
         ui = _load_ui()
         mutator(ui)
         _save_ui(ui)
+
+
+@contextmanager
+def batch_ui_updates():
+    """將 block 內所有 save_*（_update_ui）合併成一次 load + normalise + write。
+
+    /api/ui-state POST 一個 patch 可以掂十幾個欄位；冇呢個 batch 就係
+    每個欄位各自開 connection 重讀重寫成個 UI blob。
+    """
+    if getattr(_UI_BATCH, "ui", None) is not None:
+        yield
+        return
+    with _STORE_LOCK:
+        _UI_BATCH.ui = _load_ui()
+        try:
+            yield
+            _save_ui(_UI_BATCH.ui)
+        finally:
+            _UI_BATCH.ui = None
+
+
+def load_ui_snapshot() -> dict[str, Any]:
+    """成個 UI state 讀一次，俾 load_*(ui=...) 共用，唔使每個欄位開一次 db。"""
+    return _load_ui()
 
 
 def save_plan_versions(days: list[dict[str, Any]]) -> dict[str, Any]:
@@ -440,8 +480,8 @@ def save_target_editor_layout(
     _update_ui(mutate)
 
 
-def load_column_widths() -> dict[str, float]:
-    ui = _load_ui()
+def load_column_widths(ui: dict[str, Any] | None = None) -> dict[str, float]:
+    ui = _load_ui() if ui is None else ui
     raw = ui.get("column_widths", {})
     if not isinstance(raw, dict):
         return {}
@@ -454,16 +494,16 @@ def load_column_widths() -> dict[str, float]:
     return out
 
 
-def load_sidebar_width() -> float:
-    ui = _load_ui()
+def load_sidebar_width(ui: dict[str, Any] | None = None) -> float:
+    ui = _load_ui() if ui is None else ui
     try:
         return float(ui.get("sidebar_width", 260.0))
     except Exception:
         return 260.0
 
 
-def load_target_editor_layout() -> tuple[float | None, dict[str, float], dict[str, float]]:
-    ui = _load_ui()
+def load_target_editor_layout(ui: dict[str, Any] | None = None) -> tuple[float | None, dict[str, float], dict[str, float]]:
+    ui = _load_ui() if ui is None else ui
     try:
         width_raw = ui.get("target_editor_width")
         width = float(width_raw) if width_raw is not None else None
@@ -498,8 +538,8 @@ def save_form_column_widths(widths: dict[str, float]) -> None:
     _update_ui(mutate)
 
 
-def load_form_column_widths() -> dict[str, float]:
-    ui = _load_ui()
+def load_form_column_widths(ui: dict[str, Any] | None = None) -> dict[str, float]:
+    ui = _load_ui() if ui is None else ui
     raw = ui.get("form_column_widths", {})
     if not isinstance(raw, dict):
         return {}
@@ -537,8 +577,8 @@ def _builtin_calendar_ids() -> tuple[str, str]:
     return WORK_CALENDAR_ID, ALARM_CALENDAR_ID
 
 
-def load_google_calendar_sync_settings() -> dict[str, Any]:
-    ui = _load_ui()
+def load_google_calendar_sync_settings(ui: dict[str, Any] | None = None) -> dict[str, Any]:
+    ui = _load_ui() if ui is None else ui
     raw = ui.get("google_calendar_sync", {})
     if not isinstance(raw, dict):
         raw = {}
@@ -565,8 +605,8 @@ def save_menu_order(order: dict[str, list[str]]) -> None:
     _update_ui(lambda ui: ui.update({"menu_order": clean}))
 
 
-def load_menu_order() -> dict[str, list[str]]:
-    ui = _load_ui()
+def load_menu_order(ui: dict[str, Any] | None = None) -> dict[str, list[str]]:
+    ui = _load_ui() if ui is None else ui
     raw = ui.get("menu_order", {})
     if not isinstance(raw, dict):
         return _default_ui()["menu_order"]
@@ -588,8 +628,8 @@ def save_menu_labels(labels: dict[str, str]) -> None:
     _update_ui(lambda ui: ui.update({"menu_labels": clean}))
 
 
-def load_menu_labels() -> dict[str, str]:
-    ui = _load_ui()
+def load_menu_labels(ui: dict[str, Any] | None = None) -> dict[str, str]:
+    ui = _load_ui() if ui is None else ui
     raw = ui.get("menu_labels", {})
     if not isinstance(raw, dict):
         return {}
@@ -605,8 +645,8 @@ def save_menu_hidden_keys(keys: list[str]) -> None:
     _update_ui(lambda ui: ui.update({"menu_hidden_keys": clean}))
 
 
-def load_menu_hidden_keys() -> list[str]:
-    ui = _load_ui()
+def load_menu_hidden_keys(ui: dict[str, Any] | None = None) -> list[str]:
+    ui = _load_ui() if ui is None else ui
     raw = ui.get("menu_hidden_keys", [])
     if not isinstance(raw, list):
         return []
@@ -627,8 +667,8 @@ def save_menu_tree_open(open_state: dict[str, bool]) -> None:
     _update_ui(mutate)
 
 
-def load_menu_tree_open() -> dict[str, bool]:
-    ui = _load_ui()
+def load_menu_tree_open(ui: dict[str, Any] | None = None) -> dict[str, bool]:
+    ui = _load_ui() if ui is None else ui
     raw = ui.get("menu_tree_open", {})
     defaults = _default_ui()["menu_tree_open"]
     if not isinstance(raw, dict):
@@ -649,8 +689,8 @@ def save_show_past(show_past: bool) -> None:
     _update_ui(lambda ui: ui.update({"show_past": bool(show_past)}))
 
 
-def load_show_past() -> bool:
-    ui = _load_ui()
+def load_show_past(ui: dict[str, Any] | None = None) -> bool:
+    ui = _load_ui() if ui is None else ui
     return bool(ui.get("show_past", True))
 
 
@@ -659,8 +699,8 @@ def save_active_panel(panel: str) -> None:
     _update_ui(lambda ui: ui.update({"active_panel": value}))
 
 
-def load_active_panel() -> str:
-    ui = _load_ui()
+def load_active_panel(ui: dict[str, Any] | None = None) -> str:
+    ui = _load_ui() if ui is None else ui
     panel = str(ui.get("active_panel", "planner"))
     return panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports", "duty_report"} else "planner"
 
@@ -670,8 +710,8 @@ def save_active_config_view(view: str) -> None:
     _update_ui(lambda ui: ui.update({"active_config_view": value}))
 
 
-def load_active_config_view() -> str:
-    ui = _load_ui()
+def load_active_config_view(ui: dict[str, Any] | None = None) -> str:
+    ui = _load_ui() if ui is None else ui
     view = str(ui.get("active_config_view", "targets"))
     return view if view in {"targets", "catalog", "details"} else "targets"
 
@@ -681,8 +721,8 @@ def save_active_menu_path(path: list[str]) -> None:
     _update_ui(lambda ui: ui.update({"active_menu_path": clean or ["top", "planner"]}))
 
 
-def load_active_menu_path() -> list[str]:
-    ui = _load_ui()
+def load_active_menu_path(ui: dict[str, Any] | None = None) -> list[str]:
+    ui = _load_ui() if ui is None else ui
     path = ui.get("active_menu_path", ["top", "planner"])
     if not isinstance(path, list):
         return ["top", "planner"]

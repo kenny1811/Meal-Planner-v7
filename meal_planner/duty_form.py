@@ -25,9 +25,11 @@ from meal_planner.duty_common import (
     GRACE_DETAIL,
     GRACE_MINUTES,
     POST_MAPPING,
+    RETRY_SECONDS,
     retry_backoff_active,
 )
 from meal_planner.duty_report import apply_override, build_plan as build_report_normal_plan, send_slot
+from meal_planner.duty_scheduler import notify_change
 from meal_planner.maintenance_db import load_sheet_rows, save_sheet_rows
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import (
@@ -146,6 +148,7 @@ def save_onoff_config(settings: AppSettings, patch: dict[str, Any]) -> dict[str,
             conn.commit()
         finally:
             conn.close()
+    notify_change()
     return current
 
 
@@ -177,6 +180,7 @@ def record_onoff_log(
             conn.commit()
         finally:
             conn.close()
+    notify_change()
 
 
 def load_onoff_log(settings: AppSettings, biz_date: date) -> dict[str, dict[str, Any]]:
@@ -248,6 +252,7 @@ def clear_onoff_log_entry(settings: AppSettings, biz_date: date, kind: str) -> N
             conn.commit()
         finally:
             conn.close()
+    notify_change()
 
 
 def set_time_override(
@@ -591,6 +596,7 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
     auto_ready = bool(config["auto_send"]) and form is not None and bool(post)
 
     next_due: datetime | None = None
+    due_seen = False
     for action in actions:
         kind = str(action.get("kind") or "")
         time_text = str(action.get("time") or "")
@@ -614,6 +620,7 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
             continue
         if not auto_ready:
             continue
+        due_seen = True
         if status == "failed" and retry_backoff_active(entry.get("recorded_at"), now):
             continue  # 之前失敗過：等最少 RETRY_SECONDS 先重試，唔好每 tick 狂試
         hhmm = time_text.split(":")
@@ -631,6 +638,10 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
             )
             continue
         record_onoff_log(settings, biz_date, kind, "sent", time_text=time_text, source="scheduler")
+    if due_seen:
+        # 到期但未完成（失敗/backoff）→ 最遲 RETRY_SECONDS 後再試一次。
+        retry_at = now + timedelta(seconds=RETRY_SECONDS)
+        next_due = retry_at if next_due is None else min(next_due, retry_at)
     return next_due
 
 

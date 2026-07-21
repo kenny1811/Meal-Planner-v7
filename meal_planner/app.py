@@ -68,6 +68,8 @@ from meal_planner.schedule_grid import (
 from meal_planner.shift_time import payroll_coverage_issues
 from meal_planner.timeparse import business_date
 from meal_planner.storage import (
+    batch_ui_updates,
+    load_ui_snapshot,
     load_active_panel,
     load_active_config_view,
     load_active_menu_path,
@@ -353,12 +355,14 @@ class OnOffDutyRosterCodeRequest(BaseModel):
     code: str
 
 
-def _stored_meal_plan_payloads(date_isos: set[str]) -> dict[str, dict[str, Any]]:
+def _stored_meal_plan_payloads(
+    date_isos: set[str], payload: dict[str, Any] | None = None
+) -> dict[str, dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     if not date_isos:
         return found
 
-    payload = load_memory_payload()
+    payload = payload if payload is not None else load_memory_payload()
     days = payload.get("days") if isinstance(payload, dict) else []
     if isinstance(days, list):
         for item in days:
@@ -1320,38 +1324,32 @@ def api_mobile_meal_plan(date_iso: str, meta_only: bool = False) -> dict[str, An
         raise HTTPException(status_code=400, detail="date_iso must be YYYY-MM-DD.") from e
 
     try:
-        payload = load_memory_payload()
-        if isinstance(payload.get("days"), list):
-            payload = refresh_payload_with_latest_indicators(payload)
-        day_payload = next(
-            (
-                item for item in (payload.get("days", []) if isinstance(payload.get("days"), list) else [])
-                if isinstance(item, dict) and str(item.get("date") or "") == target_date.isoformat()
-            ),
-            None,
-        )
-        if day_payload is None:
-            latest = load_latest_versions([target_date.isoformat()])
-            latest_days = latest.get("days", []) if isinstance(latest.get("days"), list) else []
-            if latest_days:
-                payload = {
-                    "headers": payload.get("headers", []),
-                    "indicator_rows": payload.get("indicator_rows", {}),
-                    "nutrient_keys": payload.get("nutrient_keys", list(NUTRIENT_KEYS)),
-                    "days": latest_days,
-                }
-                payload = refresh_payload_with_latest_indicators(payload)
-                day_payload = next(
-                    (
-                        item for item in (payload.get("days", []) if isinstance(payload.get("days"), list) else [])
-                        if isinstance(item, dict) and str(item.get("date") or "") == target_date.isoformat()
-                    ),
-                    None,
-                )
+        # 手機要邊日就淨係 refresh 嗰一日——唔好對成個儲存期做全量重計。
+        target_iso = target_date.isoformat()
+        base = load_memory_payload()
+        stored = _stored_meal_plan_payloads({target_iso}, base)
+        day_payload = stored.get(target_iso)
         if day_payload is None:
             return {
                 "ok": False,
-                "date": target_date.isoformat(),
+                "date": target_iso,
+                "content_version": "",
+                "message": "Meal plan has not been generated for this date.",
+            }
+        payload = refresh_payload_with_latest_indicators(
+            {
+                "headers": base.get("headers", []),
+                "indicator_rows": base.get("indicator_rows", {}),
+                "nutrient_keys": base.get("nutrient_keys", list(NUTRIENT_KEYS)),
+                "days": [day_payload],
+            }
+        )
+        days = payload.get("days", []) if isinstance(payload.get("days"), list) else []
+        day_payload = days[0] if days else None
+        if day_payload is None:
+            return {
+                "ok": False,
+                "date": target_iso,
                 "content_version": "",
                 "message": "Meal plan has not been generated for this date.",
             }
@@ -1462,8 +1460,12 @@ def api_memory_list_get() -> dict[str, Any]:
     try:
         payload = load_memory_payload()
         if isinstance(payload.get("days"), list):
+            # refresh 會 in-place 郁 meal_plan，所以要喺 refresh 前影低原樣先比較得準。
+            before = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             payload = refresh_payload_with_latest_indicators(payload)
-            save_memory_payload(payload)
+            after = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            if after != before:
+                save_memory_payload(payload)
         return {"payload": payload}
     except WorkbookValidationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -2075,66 +2077,72 @@ def api_set_nutrition_catalog(body: CatalogRowsRequest) -> dict[str, Any]:
 
 @app.get("/api/ui-state")
 def api_get_ui_state() -> dict[str, Any]:
-    target_editor_width, target_column_widths, catalog_column_widths = load_target_editor_layout()
+    ui = load_ui_snapshot()  # 讀一次，13 個 loader 共用，唔使開 13 次 db
+    target_editor_width, target_column_widths, catalog_column_widths = load_target_editor_layout(ui)
     return {
-        "column_widths": load_column_widths(),
-        "sidebar_width": load_sidebar_width(),
+        "column_widths": load_column_widths(ui),
+        "sidebar_width": load_sidebar_width(ui),
         "target_editor_width": target_editor_width,
         "target_column_widths": target_column_widths,
         "catalog_column_widths": catalog_column_widths,
-        "form_column_widths": load_form_column_widths(),
-        "show_past": load_show_past(),
-        "active_panel": load_active_panel(),
-        "active_config_view": load_active_config_view(),
-        "active_menu_path": load_active_menu_path(),
-        "menu_order": load_menu_order(),
-        "menu_labels": load_menu_labels(),
-        "menu_hidden_keys": load_menu_hidden_keys(),
-        "menu_tree_open": load_menu_tree_open(),
-        "google_calendar_sync": load_google_calendar_sync_settings(),
+        "form_column_widths": load_form_column_widths(ui),
+        "show_past": load_show_past(ui),
+        "active_panel": load_active_panel(ui),
+        "active_config_view": load_active_config_view(ui),
+        "active_menu_path": load_active_menu_path(ui),
+        "menu_order": load_menu_order(ui),
+        "menu_labels": load_menu_labels(ui),
+        "menu_hidden_keys": load_menu_hidden_keys(ui),
+        "menu_tree_open": load_menu_tree_open(ui),
+        "google_calendar_sync": load_google_calendar_sync_settings(ui),
     }
 
 
 @app.post("/api/ui-state")
 def api_set_ui_state(body: UiStateRequest) -> dict[str, Any]:
     try:
-        if body.column_widths is not None:
-            save_column_widths(body.column_widths)
-        if (
-            body.target_editor_width is not None
-            or body.target_column_widths is not None
-            or body.catalog_column_widths is not None
-        ):
-            save_target_editor_layout(
-                body.target_editor_width,
-                body.target_column_widths or {},
-                body.catalog_column_widths,
-            )
-        if body.form_column_widths is not None:
-            save_form_column_widths(body.form_column_widths)
-        if body.menu_order is not None:
-            save_menu_order(body.menu_order)
-        if body.menu_labels is not None:
-            save_menu_labels(body.menu_labels)
-        if body.menu_hidden_keys is not None:
-            save_menu_hidden_keys(body.menu_hidden_keys)
-        if body.menu_tree_open is not None:
-            save_menu_tree_open(body.menu_tree_open)
-        if body.google_calendar_sync is not None:
-            save_google_calendar_sync_settings(body.google_calendar_sync)
-        if body.sidebar_width is not None:
-            save_sidebar_width(body.sidebar_width)
-        if body.show_past is not None:
-            save_show_past(body.show_past)
-        if body.active_panel is not None:
-            save_active_panel(body.active_panel)
-        if body.active_config_view is not None:
-            save_active_config_view(body.active_config_view)
-        if body.active_menu_path is not None:
-            save_active_menu_path(body.active_menu_path)
+        with batch_ui_updates():
+            _apply_ui_state_patch(body)
         return {"ok": True}
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"UI state save failed: {e}") from e
+
+
+def _apply_ui_state_patch(body: UiStateRequest) -> None:
+    if body.column_widths is not None:
+        save_column_widths(body.column_widths)
+    if (
+        body.target_editor_width is not None
+        or body.target_column_widths is not None
+        or body.catalog_column_widths is not None
+    ):
+        save_target_editor_layout(
+            body.target_editor_width,
+            body.target_column_widths or {},
+            body.catalog_column_widths,
+        )
+    if body.form_column_widths is not None:
+        save_form_column_widths(body.form_column_widths)
+    if body.menu_order is not None:
+        save_menu_order(body.menu_order)
+    if body.menu_labels is not None:
+        save_menu_labels(body.menu_labels)
+    if body.menu_hidden_keys is not None:
+        save_menu_hidden_keys(body.menu_hidden_keys)
+    if body.menu_tree_open is not None:
+        save_menu_tree_open(body.menu_tree_open)
+    if body.google_calendar_sync is not None:
+        save_google_calendar_sync_settings(body.google_calendar_sync)
+    if body.sidebar_width is not None:
+        save_sidebar_width(body.sidebar_width)
+    if body.show_past is not None:
+        save_show_past(body.show_past)
+    if body.active_panel is not None:
+        save_active_panel(body.active_panel)
+    if body.active_config_view is not None:
+        save_active_config_view(body.active_config_view)
+    if body.active_menu_path is not None:
+        save_active_menu_path(body.active_menu_path)
 
 
 @app.post("/api/google-calendar/auth")

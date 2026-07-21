@@ -10,6 +10,7 @@ from typing import Any
 
 from openpyxl.workbook.workbook import Workbook
 
+from meal_planner.duty_scheduler import notify_change
 from meal_planner.excel_io import get_sheet
 from meal_planner.settings import AppSettings, get_settings
 
@@ -55,7 +56,14 @@ def _connect(settings: AppSettings) -> sqlite3.Connection:
     return conn
 
 
+# Schema DDL 每個 process 每個 db 檔跑一次就夠——以前每次讀寫都重跑。
+_SCHEMA_READY: set[str] = set()
+
+
 def _ensure_schema(conn: sqlite3.Connection) -> None:
+    db_key = str(conn.execute("PRAGMA database_list").fetchone()["file"])
+    if db_key in _SCHEMA_READY:
+        return
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS maintenance_sheets (
@@ -82,6 +90,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     conn.commit()
+    _SCHEMA_READY.add(db_key)
 
 
 def _sheet_name_for_key(settings: AppSettings, sheet_key: str) -> str:
@@ -203,6 +212,8 @@ def save_sheet_rows(
             ],
         )
         conn.commit()
+    # 更表/加班表/行位表等一改 → 即刻叫醒 duty scheduler 重新計劃。
+    notify_change()
     return {"sheet_key": sheet_key, "updated_at": now, "row_count": len(clean_rows)}
 
 
@@ -359,25 +370,8 @@ def load_sheet_rows(
     wb: Workbook | None = None,
 ) -> dict[str, Any]:
     settings = settings or get_settings()
-    with closing(_connect(settings)) as conn:
-        _ensure_schema(conn)
-        has_rows = _has_sheet_rows(conn, sheet_key)
-    if not has_rows:
-        if sheet_key == "wake_alarms" and wb is None:
-            save_sheet_rows(sheet_key, [["日期", "起身時間", "備註"]], settings)
-            has_rows = True
-        if sheet_key == "mtr_doors" and wb is None:
-            save_sheet_rows(sheet_key, [list(row) for row in MTR_DOORS_DEFAULT_ROWS], settings)
-            has_rows = True
-        if not has_rows and wb is None:
-            raise MaintenanceDatabaseError(
-                f"Maintenance sheet {_display_name_for_key(sheet_key)} is empty and no workbook was provided."
-            )
-        if not has_rows and wb is not None:
-            bootstrap_sheet_from_workbook(settings, wb, sheet_key)
 
-    with closing(_connect(settings)) as conn:
-        _ensure_schema(conn)
+    def _read(conn: sqlite3.Connection) -> tuple[Any, list[Any]]:
         meta = conn.execute(
             "SELECT * FROM maintenance_sheets WHERE sheet_key = ?",
             (sheet_key,),
@@ -391,6 +385,27 @@ def load_sheet_rows(
             """,
             (sheet_key,),
         ).fetchall()
+        return meta, rows
+
+    with closing(_connect(settings)) as conn:
+        _ensure_schema(conn)
+        has_rows = _has_sheet_rows(conn, sheet_key)
+        meta, rows = _read(conn) if has_rows else (None, [])
+    if not has_rows:
+        if sheet_key == "wake_alarms" and wb is None:
+            save_sheet_rows(sheet_key, [["日期", "起身時間", "備註"]], settings)
+            has_rows = True
+        if sheet_key == "mtr_doors" and wb is None:
+            save_sheet_rows(sheet_key, [list(row) for row in MTR_DOORS_DEFAULT_ROWS], settings)
+            has_rows = True
+        if not has_rows and wb is None:
+            raise MaintenanceDatabaseError(
+                f"Maintenance sheet {_display_name_for_key(sheet_key)} is empty and no workbook was provided."
+            )
+        if not has_rows and wb is not None:
+            bootstrap_sheet_from_workbook(settings, wb, sheet_key)
+        with closing(_connect(settings)) as conn:
+            meta, rows = _read(conn)
 
     return {
         "sheet_key": sheet_key,

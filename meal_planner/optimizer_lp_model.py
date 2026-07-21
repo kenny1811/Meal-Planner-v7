@@ -548,7 +548,9 @@ def solve_day_meal_plan(
         "replacement_applied": False,
     }
     replacement_candidate: SolveArtifacts | None = None
-    if _auto_retry_depth == 0 and bool(settings.optimizer.replacement_search_enabled):
+    # 冇 hard violation 時 violation score 已經係 (0,0)，replacement search 數學上
+    # 冇可能再改善——唔好白跑幾十次 MILP。
+    if _auto_retry_depth == 0 and bool(settings.optimizer.replacement_search_enabled) and hard_violations:
         rep = _search_replacement_plan(
             solve_fn=solve_day_meal_plan,
             settings=settings,
@@ -573,7 +575,7 @@ def solve_day_meal_plan(
             diagnostics["replacement_search"] = rep
     elif _auto_retry_depth == 0:
         diagnostics["replacement_search"] = {
-            "enabled": False,
+            "enabled": bool(settings.optimizer.replacement_search_enabled),
             "attempts": 0,
             "plan": [],
         }

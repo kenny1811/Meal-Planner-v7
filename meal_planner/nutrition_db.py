@@ -94,7 +94,15 @@ _CATALOG_INSERT_SQL = (
 )
 
 
+# Schema DDL + migration + default seed 每個 process 每個 db 檔跑一次就夠——
+# 以前每次「讀」都重跑成套（仲要開 write transaction 揸住個 lock），純浪費。
+_SCHEMA_READY: set[str] = set()
+
+
 def _ensure_schema(conn: sqlite3.Connection) -> None:
+    db_key = str(conn.execute("PRAGMA database_list").fetchone()["file"])
+    if db_key in _SCHEMA_READY:
+        return
     conn.executescript(
         f"""
         CREATE TABLE IF NOT EXISTS schema_meta (
@@ -185,6 +193,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
                 (profile, key, float(value)),
             )
     conn.commit()
+    _SCHEMA_READY.add(db_key)
 
 
 def _has_rows(conn: sqlite3.Connection, table_name: str) -> bool:
@@ -279,23 +288,16 @@ def bootstrap_from_workbook(
 
 def load_catalog_entries(settings: AppSettings | None = None, wb: Workbook | None = None) -> list[NutritionEntry]:
     settings = settings or get_settings()
+    catalog_sql = "SELECT * FROM nutrition_catalog ORDER BY row_index"
     with closing(_connect(settings)) as conn:
         _ensure_schema(conn)
-        has_catalog = _has_rows(conn, "nutrition_catalog")
-    if not has_catalog:
+        rows = conn.execute(catalog_sql).fetchall() if _has_rows(conn, "nutrition_catalog") else None
+    if rows is None:
         if wb is None:
             raise NutritionDatabaseError("SQLite nutrition catalog is empty and no workbook was provided.")
         bootstrap_from_workbook(settings, wb, need_targets=False)
-
-    with closing(_connect(settings)) as conn:
-        _ensure_schema(conn)
-        rows = conn.execute(
-            """
-            SELECT *
-            FROM nutrition_catalog
-            ORDER BY row_index
-            """
-        ).fetchall()
+        with closing(_connect(settings)) as conn:
+            rows = conn.execute(catalog_sql).fetchall()
     return [
         NutritionEntry(
             row_index=int(row["row_index"]),
@@ -384,21 +386,17 @@ def load_target_rows(
     settings = settings or get_settings()
     with closing(_connect(settings)) as conn:
         _ensure_schema(conn)
-        has_targets = _has_rows(conn, "nutrition_targets")
-    if not has_targets:
+        targets_sql = (
+            "SELECT profile, nutrient_key, sort_order, header, raw_value"
+            " FROM nutrition_targets ORDER BY sort_order, profile"
+        )
+        rows = conn.execute(targets_sql).fetchall() if _has_rows(conn, "nutrition_targets") else None
+    if rows is None:
         if wb is None:
             raise NutritionDatabaseError("SQLite nutrition targets are empty and no workbook was provided.")
         bootstrap_from_workbook(settings, wb, need_catalog=False)
-
-    with closing(_connect(settings)) as conn:
-        _ensure_schema(conn)
-        rows = conn.execute(
-            """
-            SELECT profile, nutrient_key, sort_order, header, raw_value
-            FROM nutrition_targets
-            ORDER BY sort_order, profile
-            """
-        ).fetchall()
+        with closing(_connect(settings)) as conn:
+            rows = conn.execute(targets_sql).fetchall()
 
     by_profile = {profile: {} for profile in TARGET_PROFILES}
     headers: dict[str, str | None] = {}
