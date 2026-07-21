@@ -6,10 +6,14 @@
 
 核心：
 - 揀 form：更碼 V*/Lecole* → VCA form；其餘 → 其他 form。
-- 時間：更時表按「適用日」揀行（先睇公眾假期，再星期幾，再每日；shift_time.py），
-  再俾加班表按日期 override。同 Google Calendar 返工 event 共用同一份 resolver。
+- 時間分工（用戶 22/07/2026 定案）：
+  - **Form 內容**＝更時表官方時間（計糧用；按「適用日」揀行再套加班表，shift_time.py，
+    同 Google Calendar 返工 event 共用同一份 resolver）。
+  - **實際發射時間**＝行位表「報開工/報收工」行 + 加班表 override（行位表先係當日
+    實際時間軸，同更時表未必一致）；行位表冇嗰行先回落更時表時間。
 - 一日兩個 action：開工（填開工時間、收工留空）、收工（開工留空、填收工時間），各自獨立提交。
-- 交法：預設出預填連結（手機一 tap → 自己撳提交）；可選全自動 POST（auto_send）。
+- 交法：預設出預填連結（手機一 tap → 自己撳提交）；可選全自動 POST（auto_send）；
+  遲收工用 hold / send now 改變。
 """
 
 from __future__ import annotations
@@ -34,6 +38,9 @@ from meal_planner.maintenance_db import load_sheet_rows, save_sheet_rows
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import (
     load_overtime_overrides_from_rows,
+    load_schedule_rows_from_rows,
+    report_start_end,
+    rows_for_roster,
     _to_date,
 )
 from meal_planner.settings import AppSettings, get_settings
@@ -332,7 +339,8 @@ def _rearm_missed_actions(settings: AppSettings, biz_date: date) -> None:
     for action in plan.get("actions") or []:
         if action.get("status") != "missed" or not action.get("time"):
             continue
-        slot_dt = _slot_datetime(biz_date, str(action["time"]), tz)
+        fire_text = str(action.get("fire_time") or "") or str(action["time"])
+        slot_dt = _slot_datetime(biz_date, fire_text, tz)
         if now < slot_dt + timedelta(minutes=GRACE_MINUTES):
             clear_onoff_log_entry(settings, biz_date, str(action["kind"]))
 
@@ -599,14 +607,15 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
     due_seen = False
     for action in actions:
         kind = str(action.get("kind") or "")
-        time_text = str(action.get("time") or "")
+        time_text = str(action.get("time") or "")  # 更時表官方時間（Form 內容）
+        fire_text = str(action.get("fire_time") or "") or time_text  # 行位表+加班表（實際發射）
         if not kind or not time_text:
             continue
         entry = log.get(kind) or {}
         status = str(entry.get("status") or "")
         if status in {"sent", "opened", "missed", "hold"}:
             continue  # 已交／已自己開 form／已標 missed／hold 緊等真收工
-        slot_dt = _slot_datetime(biz_date, time_text, tz)
+        slot_dt = _slot_datetime(biz_date, fire_text, tz)
         if now < slot_dt:
             if auto_ready and (next_due is None or slot_dt < next_due):
                 next_due = slot_dt
@@ -691,7 +700,15 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
     overtime_by_date = load_overtime_overrides_from_rows(overtime_rows)
     start, end = resolve_shift_time(payroll_rows, roster_code, biz_date, holidays, overtime_by_date)
 
+    # 實際發射時間：行位表「報開工/報收工」行 + 加班表 override。
+    # 更時表（start/end）係計糧官方時間，淨係做 Form 內容；行位表先係當日實際時間軸，
+    # 兩者未必一致。行位表搵唔到嗰行先回落更時表。
     ot_start, ot_end = overtime_by_date.get(biz_date, (None, None))
+    grid_rows = load_schedule_rows_from_rows(load_sheet_rows("schedule_grid", settings).get("rows") or [])
+    grid_start, grid_end = report_start_end(rows_for_roster(grid_rows, roster_code, biz_date))
+    fire_start = next((t for t in (ot_start, grid_start, start) if t is not None), None)
+    fire_end = next((t for t in (ot_end, grid_end, end) if t is not None), None)
+
     result["form"] = form.key
     result["post"] = post
     result["start"] = start.strftime("%H:%M") if start else ""
@@ -708,12 +725,14 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
             "kind": "start",
             "label": "On Duty",
             "time": start.strftime("%H:%M") if start else "",
+            "fire_time": fire_start.strftime("%H:%M") if fire_start else "",
             "url": build_prefill_url(form, post, biz_date, start=start, end=None),
         },
         {
             "kind": "end",
             "label": "Off Duty",
             "time": end.strftime("%H:%M") if end else "",
+            "fire_time": fire_end.strftime("%H:%M") if fire_end else "",
             "url": build_prefill_url(form, post, biz_date, start=None, end=end),
         },
     ]
