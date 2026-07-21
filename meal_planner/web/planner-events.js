@@ -658,6 +658,10 @@
       wrapper.appendChild(select);
       select.dataset.pickupEnhanced = "1";
       select.classList.add("pickup-native");
+      // 闊度/margin 已搬去 wrapper；清走 select 本身嘅 inline 值，免得蓋過 .pickup-native 收埋佢嘅 CSS。
+      ["marginLeft", "marginRight", "marginTop", "marginBottom", "width", "minWidth", "maxWidth"].forEach((name) => {
+        if (select.style[name]) select.style[name] = "";
+      });
       select.tabIndex = -1;
       const button = document.createElement("button");
       button.type = "button";

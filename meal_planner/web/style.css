@@ -28,19 +28,12 @@
       color: var(--text);
       background: var(--bg);
     }
-    body.is-dnd-dragging,
-    body.is-dnd-dragging * {
-      cursor: move !important;
-    }
-    body.is-horizontal-dragging,
-    body.is-horizontal-dragging * {
-      cursor: ew-resize !important;
-    }
+    /* 拖動狀態嘅全域 cursor 鎖搬咗去檔案最尾（要排最後先蓋得過所有規則）。 */
     select,
     option {
       color-scheme: light;
-      background: #fff !important;
-      color: #000 !important;
+      background: #fff;
+      color: #000;
       font-size: var(--pickup-font-size);
       line-height: 1.05;
     }
@@ -63,19 +56,21 @@
       margin: 0;
     }
     option:checked {
-      background: #dbeafe !important;
-      color: #000 !important;
+      background: #dbeafe;
+      color: #000;
     }
-    select.pickup-native {
-      position: absolute !important;
-      width: 1px !important;
-      height: 1px !important;
-      min-width: 0 !important;
-      min-height: 0 !important;
-      padding: 0 !important;
-      margin: 0 !important;
-      opacity: 0 !important;
-      pointer-events: none !important;
+    /* :not(#…) 借一個冇人用嘅 id 抬高 specificity，
+       確保贏晒後面 .target-profile-table select 等同級規則（代替 !important）。 */
+    select.pickup-native:not(#specificity-boost) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+      margin: 0;
+      opacity: 0;
+      pointer-events: none;
     }
     .pickup-select {
       position: relative;
@@ -431,12 +426,6 @@
     .planner-drag-handle {
       width: auto;
       display: block;
-    }
-    /* 拖動期間：整頁鎖住 ↔ 游標，就算移到內容欄／其他位都保持，直到放手。 */
-    body.planner-offset-dragging,
-    body.planner-offset-dragging * {
-      cursor: ew-resize !important;
-      user-select: none !important;
     }
     .top {
       display: flex;
@@ -1852,11 +1841,11 @@
       background: #fffef5;
     }
     table.sheet tr.hdr-labels td {
-      background: #99CCFF !important;
+      background: #99CCFF;
       font-weight: 600;
       font-size: 10px;
       text-align: center;
-      color: #000 !important;
+      color: #000;
       position: relative;
       height: var(--sticky-row-h);
       min-height: var(--sticky-row-h);
@@ -1899,8 +1888,8 @@
       background: rgba(11, 87, 208, 0.18);
     }
     table.sheet tr.indicator-head td {
-      background: #99CCFF !important;
-      color: #000 !important;
+      background: #99CCFF;
+      color: #000;
       font-size: 10px;
       text-align: center;
       font-weight: 600;
@@ -1908,18 +1897,18 @@
       height: var(--sticky-row-h);
       min-height: var(--sticky-row-h);
       line-height: 1.15;
-      vertical-align: middle !important;
+      vertical-align: middle;
     }
     table.sheet tr.indicator-values td {
-      background: #fff !important;
-      color: #000 !important;
+      background: #fff;
+      color: #000;
       font-size: 10px;
       text-align: center;
       font-weight: 600;
       height: var(--sticky-row-h);
       min-height: var(--sticky-row-h);
       line-height: 1.15;
-      vertical-align: middle !important;
+      vertical-align: middle;
     }
     table.sheet tr.indicator-values input.target-inline-input {
       width: 100%;
@@ -1935,7 +1924,7 @@
       text-align: right;
     }
     table.sheet tr.indicator-values td:has(input.target-inline-input) {
-      background: #fffef5 !important;
+      background: #fffef5;
     }
     table.sheet tr.indicator-values td:has(input.target-inline-input:focus) {
       box-shadow: inset 0 0 0 1px var(--accent);
@@ -1949,11 +1938,11 @@
     table.sheet tr.hdr-labels td {
       top: auto;
       z-index: auto;
-      vertical-align: middle !important;
+      vertical-align: middle;
     }
     table.sheet tr.indicator-head td.no-grid,
     table.sheet tr.indicator-values td.no-grid {
-      border: none !important;
+      border: none;
     }
     table.sheet tr.indicator-head td.ind-label,
     table.sheet tr.indicator-values td.ind-label {
@@ -1986,20 +1975,20 @@
       text-align: center;
       font-size: 9px;
       line-height: 1.1;
-      background: #99CCFF !important;
+      background: #99CCFF;
       font-weight: 600;
-      color: #000 !important;
+      color: #000;
     }
     table.sheet tr.sum td {
-      background: rgb(153, 204, 255) !important;
+      background: rgb(153, 204, 255);
       font-weight: 600;
-      color: #000 !important;
+      color: #000;
     }
     table.sheet tr.sum-err td {
-      background: rgb(153, 204, 255) !important;
+      background: rgb(153, 204, 255);
       font-weight: 400;
       font-size: 10px;
-      color: #000 !important;
+      color: #000;
     }
     table.sheet tr.sum .lbl,
     table.sheet tr.sum-err .lbl {
@@ -2010,8 +1999,8 @@
       font-weight: 400;
     }
     table.sheet tr.rec td {
-      background: #f2f8ff !important;
-      color: #000 !important;
+      background: #f2f8ff;
+      color: #000;
       font-size: 10px;
       line-height: 1.3;
     }
@@ -2027,12 +2016,12 @@
       word-break: break-word;
     }
     table.sheet tr.constraint-analysis td {
-      background: #fff7ed !important;
+      background: #fff7ed;
       border-top: 1px solid #f59e0b;
-      color: #3b2500 !important;
+      color: #3b2500;
     }
     table.sheet tr.constraint-analysis td.rec-lbl {
-      color: #7c2d12 !important;
+      color: #7c2d12;
       font-weight: 700;
     }
     footer { font-size: 9px; color: var(--muted); margin-top: 4px; }
@@ -2275,3 +2264,20 @@
     .duty-block table.duty-table td.duty-td-actions .duty-btn { height: 18px; line-height: 15px; padding: 0 7px; margin: 0; }
     .duty-block table.duty-table td.duty-plain { padding: 1px 4px; line-height: 1.1; }
     .duty-block table.duty-table tbody th { padding: 1px 4px; }
+    /* ---- 拖動狀態全域 cursor 鎖 ----
+       放喺檔案最尾 + :not(#specificity-boost) 抬高 specificity（#specificity-boost 冇元素用，
+       純粹借 id 權重），確保拖動期間蓋過所有元素自己嘅 cursor／user-select 規則，毋須 !important。 */
+    body.is-dnd-dragging,
+    body.is-dnd-dragging *:not(#specificity-boost) {
+      cursor: move;
+    }
+    body.is-horizontal-dragging,
+    body.is-horizontal-dragging *:not(#specificity-boost) {
+      cursor: ew-resize;
+    }
+    /* 拖 planner offset 期間：整頁鎖住 ↔ 游標，就算移到內容欄／其他位都保持，直到放手。 */
+    body.planner-offset-dragging,
+    body.planner-offset-dragging *:not(#specificity-boost) {
+      cursor: ew-resize;
+      user-select: none;
+    }

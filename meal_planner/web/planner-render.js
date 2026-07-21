@@ -114,7 +114,7 @@
       const resolved = mp.meal_times_resolved || {};
       const nCol = (headers && headers.length) || 10;
       const nk = Array.isArray(nutrientKeys) && nutrientKeys.length ? nutrientKeys : DEFAULT_NUTRIENT_KEYS;
-      const headStyle = "background:#99CCFF !important;color:#000 !important;";
+      const headStyle = "background:#99CCFF;color:#000;";
 
       let body = "";
       let shownMealCount = 0;
@@ -174,7 +174,7 @@
         shownMealCount += 1;
       }
 
-      const rowStyle = "background:#99CCFF !important;color:#000 !important;";
+      const rowStyle = "background:#99CCFF;color:#000;";
       const totals = Array.isArray(summary.totals) ? summary.totals : Array.from({ length: nCol }, () => null);
       const errors = Array.isArray(summary.errors) ? summary.errors : Array.from({ length: nCol }, () => null);
       const totalRed = Array.isArray(summary.total_red_flags) ? summary.total_red_flags : [];
@@ -234,7 +234,7 @@
      * @param {string[]|null} headers
      */
     function renderPeriodTable(days, headers, nutrientKeys, indicatorRows) {
-      const headStyle = "background:#99CCFF !important;color:#000 !important;";
+      const headStyle = "background:#99CCFF;color:#000;";
       const nk = Array.isArray(nutrientKeys) && nutrientKeys.length ? nutrientKeys : DEFAULT_NUTRIENT_KEYS;
       const workRow = indicatorRows && Array.isArray(indicatorRows.workday) ? indicatorRows.workday : [];
       const nonworkRow = indicatorRows && Array.isArray(indicatorRows.nonworkday) ? indicatorRows.nonworkday : [];

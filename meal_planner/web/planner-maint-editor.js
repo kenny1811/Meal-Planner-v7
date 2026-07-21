@@ -710,7 +710,7 @@
         const newShiftOption = maintSheetPayload.sheet_key === "schedule_grid" && scheduleGridNewShiftBatchId
           ? `<option value="${SCHEDULE_GRID_NEW_SHIFT_FILTER}" ${currentMaintFilter === SCHEDULE_GRID_NEW_SHIFT_FILTER ? "selected" : ""}>&lt;new shift code&gt;</option>`
           : "";
-        filterHtml = `<select id="maint-table-filter" class="maint-filter-select" style="margin-left: 16px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: inherit; cursor: pointer;">
+        filterHtml = `<select id="maint-table-filter" class="maint-filter-select" style="margin-left: 16px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border);">
           <option value="">全部更碼</option>
           ${newShiftOption}
           ${codes.map(c => `<option value="${esc(c)}" ${c === currentMaintFilter ? "selected" : ""}>${esc(c)}</option>`).join("")}
@@ -731,7 +731,7 @@
           return a.localeCompare(b);
         });
         if (!versions.includes(currentMaintEffectiveFilter)) currentMaintEffectiveFilter = "";
-        filterHtml += `<select id="maint-effective-filter" class="maint-filter-select" style="margin-left: 8px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: inherit; cursor: pointer;">
+        filterHtml += `<select id="maint-effective-filter" class="maint-filter-select" style="margin-left: 8px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border);">
           <option value="">全部生效日期</option>
           ${versions.map(v => `<option value="${esc(v)}" ${v === currentMaintEffectiveFilter ? "selected" : ""}>${esc(v === "__blank__" ? "未填生效日期" : v)}</option>`).join("")}
         </select>`;
@@ -747,7 +747,7 @@
         }
         const yearOptions = Array.from(years).sort();
         if (!yearOptions.includes(currentMaintYearFilter)) currentMaintYearFilter = "";
-        filterHtml += `<select id="maint-year-filter" class="maint-filter-select" style="margin-left: 8px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: inherit; cursor: pointer;">
+        filterHtml += `<select id="maint-year-filter" class="maint-filter-select" style="margin-left: 8px; padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border);">
           <option value="">全部年份</option>
           ${yearOptions.map(y => `<option value="${esc(y)}" ${y === currentMaintYearFilter ? "selected" : ""}>${esc(y)}</option>`).join("")}
         </select>`;

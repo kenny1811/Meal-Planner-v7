@@ -149,7 +149,7 @@
         const isRed = Array.isArray(redFlags) && !!redFlags[i];
         const styleParts = [];
         if (rowStyle) styleParts.push(rowStyle);
-        if (isRed) styleParts.push("color:#ff0000 !important;");
+        if (isRed) styleParts.push("color:#ff0000;");
         const attr = styleParts.length ? ` style="${styleParts.join("")}"` : "";
         return `<td class="nut"${attr}>${esc(fmtNut(v))}</td>`;
       }).join("");
@@ -968,6 +968,10 @@
       if (btn && btn.dataset.targetApplyBound !== "1") {
         btn.dataset.targetApplyBound = "1";
         btn.addEventListener("mousemove", (ev) => {
+          // 拖動進行中唔好set inline cursor，等 body.*-dragging 嘅全域 cursor 鎖生效。
+          if (document.body.classList.contains("is-dnd-dragging") ||
+              document.body.classList.contains("is-horizontal-dragging") ||
+              document.body.classList.contains("planner-offset-dragging")) return;
           btn.style.cursor = targetApplyPointerInResizeZone(btn, ev) ? "nwse-resize" : "";
         });
         btn.addEventListener("mouseleave", () => {
