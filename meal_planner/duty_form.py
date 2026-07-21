@@ -6,14 +6,13 @@
 
 核心：
 - 揀 form：更碼 V*/Lecole* → VCA form；其餘 → 其他 form。
-- 時間分工（用戶 22/07/2026 定案）：
-  - **Form 內容**＝更時表官方時間（計糧用；按「適用日」揀行再套加班表，shift_time.py，
-    同 Google Calendar 返工 event 共用同一份 resolver）。
-  - **實際發射時間**＝行位表「報開工/報收工」行 + 加班表 override（行位表先係當日
-    實際時間軸，同更時表未必一致）；行位表冇嗰行先回落更時表時間。
+- 時間（用戶 22/07/2026 定案）：Form 內容同自動發射一律用**實際時間**——
+  加班表 override＞行位表「報開工/報收工」行（行位表係當日實際時間軸）；
+  hold / send now 先會再改變（send now 用「而家」做實際收工）。
+  更時表（計糧官方時間）唔會出現喺 Form，喺呢度淨係用嚟判斷遲收工
+  寫唔寫加班表（late_off_send_now 嘅標準窗口 + >10.25 小時）。
 - 一日兩個 action：開工（填開工時間、收工留空）、收工（開工留空、填收工時間），各自獨立提交。
-- 交法：預設出預填連結（手機一 tap → 自己撳提交）；可選全自動 POST（auto_send）；
-  遲收工用 hold / send now 改變。
+- 交法：預設出預填連結（手機一 tap → 自己撳提交）；可選全自動 POST（auto_send）。
 """
 
 from __future__ import annotations
@@ -339,8 +338,7 @@ def _rearm_missed_actions(settings: AppSettings, biz_date: date) -> None:
     for action in plan.get("actions") or []:
         if action.get("status") != "missed" or not action.get("time"):
             continue
-        fire_text = str(action.get("fire_time") or "") or str(action["time"])
-        slot_dt = _slot_datetime(biz_date, fire_text, tz)
+        slot_dt = _slot_datetime(biz_date, str(action["time"]), tz)
         if now < slot_dt + timedelta(minutes=GRACE_MINUTES):
             clear_onoff_log_entry(settings, biz_date, str(action["kind"]))
 
@@ -607,15 +605,14 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
     due_seen = False
     for action in actions:
         kind = str(action.get("kind") or "")
-        time_text = str(action.get("time") or "")  # 更時表官方時間（Form 內容）
-        fire_text = str(action.get("fire_time") or "") or time_text  # 行位表+加班表（實際發射）
+        time_text = str(action.get("time") or "")  # 實際時間（加班表＞行位表報開工/報收工）
         if not kind or not time_text:
             continue
         entry = log.get(kind) or {}
         status = str(entry.get("status") or "")
         if status in {"sent", "opened", "missed", "hold"}:
             continue  # 已交／已自己開 form／已標 missed／hold 緊等真收工
-        slot_dt = _slot_datetime(biz_date, fire_text, tz)
+        slot_dt = _slot_datetime(biz_date, time_text, tz)
         if now < slot_dt:
             if auto_ready and (next_due is None or slot_dt < next_due):
                 next_due = slot_dt
@@ -694,20 +691,17 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
     form_key, post = mapping
     form = FORMS[form_key]
 
-    payroll_rows = (load_sheet_rows("payroll_times", settings).get("rows") or [])
-    holidays = _holiday_dates(settings)
+    # 時間一律用「實際時間」：加班表 override＞行位表「報開工/報收工」行。
+    # Form 內容同自動發射都係呢個時間（hold / send now 先會再改變）。
+    # 更時表係計糧官方時間，喺 OnOff_Duty 淨係用嚟判斷遲收工寫唔寫加班表
+    # （late_off_send_now 嘅標準窗口），唔會出現喺 Form。
     overtime_rows = load_sheet_rows("overtime", settings).get("rows") or []
     overtime_by_date = load_overtime_overrides_from_rows(overtime_rows)
-    start, end = resolve_shift_time(payroll_rows, roster_code, biz_date, holidays, overtime_by_date)
-
-    # 實際發射時間：行位表「報開工/報收工」行 + 加班表 override。
-    # 更時表（start/end）係計糧官方時間，淨係做 Form 內容；行位表先係當日實際時間軸，
-    # 兩者未必一致。行位表搵唔到嗰行先回落更時表。
     ot_start, ot_end = overtime_by_date.get(biz_date, (None, None))
     grid_rows = load_schedule_rows_from_rows(load_sheet_rows("schedule_grid", settings).get("rows") or [])
     grid_start, grid_end = report_start_end(rows_for_roster(grid_rows, roster_code, biz_date))
-    fire_start = next((t for t in (ot_start, grid_start, start) if t is not None), None)
-    fire_end = next((t for t in (ot_end, grid_end, end) if t is not None), None)
+    start = ot_start if ot_start is not None else grid_start
+    end = ot_end if ot_end is not None else grid_end
 
     result["form"] = form.key
     result["post"] = post
@@ -716,7 +710,7 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
     result["start_override"] = ot_start is not None
     result["end_override"] = ot_end is not None
     if start is None and end is None:
-        result["note"] = f"更碼 {roster_code} 喺更時表搵唔到時間"
+        result["note"] = f"更碼 {roster_code} 喺行位表搵唔到「報開工/報收工」行"
         return result
 
     log = load_onoff_log(settings, biz_date)
@@ -725,14 +719,12 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
             "kind": "start",
             "label": "On Duty",
             "time": start.strftime("%H:%M") if start else "",
-            "fire_time": fire_start.strftime("%H:%M") if fire_start else "",
             "url": build_prefill_url(form, post, biz_date, start=start, end=None),
         },
         {
             "kind": "end",
             "label": "Off Duty",
             "time": end.strftime("%H:%M") if end else "",
-            "fire_time": fire_end.strftime("%H:%M") if fire_end else "",
             "url": build_prefill_url(form, post, biz_date, start=None, end=end),
         },
     ]
