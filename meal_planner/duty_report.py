@@ -1,4 +1,4 @@
-"""報更（報平安更）：由行位表推導今日報更計劃。
+"""Report_Normal（報平安更）：由行位表推導今日報更計劃，經 WhatsApp 發送。
 
 核心原則：報更計劃係一層獨立 overlay，只影響報更，永不修改更表／Google Calendar
 （計糧用返原本更表更碼）。
@@ -19,6 +19,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from meal_planner.duty_common import GRACE_DETAIL, GRACE_MINUTES, POST_MAPPING, retry_backoff_active
 from meal_planner.maintenance_db import load_sheet_rows
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import ScheduleRow, load_schedule_rows_from_rows, rows_for_roster
@@ -40,7 +41,6 @@ DEFAULT_GROUP_MAPPING: dict[str, str] = {
     "PenA": "半島🕶🛍👗👠報更群組",
     "TSB": "時代廣場👗👜🕶CHANEL",
 }
-GRACE_MINUTES = 15
 EVENTS_KEEP = 50
 
 _RE_SUN_THU = re.compile(r"[（(]\s*日-四\s*[)）]")
@@ -475,8 +475,6 @@ def build_plan(
     sent_count = sum(1 for s in slots if s["status"] == "sent")
     next_slot = next((s for s in slots if s["status"] in {"pending", "due"}), None)
 
-    from meal_planner.duty_form import POST_MAPPING  # 全套已知更碼（電話 Change code pickup list 用）
-
     return {
         "known_codes": sorted(POST_MAPPING),
         "ok": True,
@@ -639,29 +637,37 @@ def send_slot(
         return build_plan(settings)
 
 
-def process_due_slots(settings: AppSettings | None = None) -> None:
-    """scheduler tick：auto_send 開 + mode=auto 先發；過咗 grace 未發標 missed。"""
+def process_due_slots(settings: AppSettings | None = None) -> datetime | None:
+    """scheduler tick：auto_send 開 + mode=auto 先發；過咗 grace 未發標 missed。
+
+    回傳下一個會自動發嘅時刻（scheduler 瞓到啱啱嗰刻醒，準時發）；冇就 None。
+    """
     settings = settings or get_settings()
+    tz = ZoneInfo(settings.dates.timezone)
     plan = build_plan(settings)
     biz_date = date.fromisoformat(plan["date_iso"])
+    auto_ready = bool(plan["auto_send"]) and plan["mode"] != "stop"
+    now = datetime.now(tz)
+    next_due: datetime | None = None
     for slot in plan["slots"]:
         if slot["status"] == "overdue":
             record_log(
                 settings, biz_date, slot["id"], "missed",
                 message=slot["message"], group_name=slot["group"],
-                detail=f"passed grace window ({GRACE_MINUTES} min)",
+                detail=GRACE_DETAIL,
             )
+            continue
+        if slot["status"] == "pending":
+            if auto_ready:
+                slot_dt = _slot_datetime(biz_date, slot["time"], tz)
+                if slot_dt > now and (next_due is None or slot_dt < next_due):
+                    next_due = slot_dt
             continue
         if slot["status"] != "due":
             continue
-        if not plan["auto_send"] or plan["mode"] == "stop":
+        if not auto_ready:
             continue
-        if slot.get("detail") and slot.get("sent_at"):
-            # 之前失敗過：等最少 60 秒先重試，唔好每 tick 狂試。
-            try:
-                last = datetime.fromisoformat(slot["sent_at"])
-                if (datetime.now(last.tzinfo) - last).total_seconds() < 60:
-                    continue
-            except ValueError:
-                pass
+        if slot.get("detail") and slot.get("sent_at") and retry_backoff_active(slot["sent_at"]):
+            continue  # 之前失敗過：等最少 RETRY_SECONDS 先重試，唔好每 tick 狂試
         send_slot(settings, slot["id"], manual=False, source="scheduler")
+    return next_due

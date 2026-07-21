@@ -30,7 +30,6 @@ from meal_planner.indicators import NUTRIENT_KEYS
 from meal_planner.maintenance_db import (
     MAINTENANCE_SHEETS,
     MaintenanceDatabaseError,
-    bootstrap_roster_code_definitions,
     bootstrap_sheet_from_workbook,
     list_maintenance_sheets,
     load_roster_code_definitions,
@@ -2383,7 +2382,7 @@ def api_onoffduty_config(body: OnOffDutyConfigRequest) -> dict[str, Any]:
 def main() -> None:
     import uvicorn
 
-    from meal_planner.duty_report_scheduler import start_scheduler
+    from meal_planner.duty_scheduler import start_scheduler
 
     # 0.0.0.0：同時聽 LAN（192.168.x）同 Tailscale（100.x），電話出街先連到。
     host = os.environ.get("MENU_API_HOST", "0.0.0.0")

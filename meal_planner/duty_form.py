@@ -1,13 +1,13 @@
-"""報開工／報收工：由更碼推導今日 Google Form 打卡計劃 + 砌預填連結。
+"""OnOff_Duty（報開工／報收工）：由更碼推導今日 Google Form 打卡計劃 + 砌預填連結。
 
-同 duty_report（報平安更 WhatsApp）係兩件事：
-- 報平安更 → 行位表「報平安更」rows（duty_report.py）。
-- 報開工／報收工 → 呢度，時間來源係 **更時表（payroll_times）**，唔係行位表。
+同 Report_Normal（報平安更 WhatsApp，duty_report.py）係兩件事：
+- Report_Normal → 行位表「報平安更」rows。
+- OnOff_Duty → 呢度，時間來源係 **更時表（payroll_times）**，唔係行位表。
 
 核心：
 - 揀 form：更碼 V*/Lecole* → VCA form；其餘 → 其他 form。
-- 時間：更時表按「適用日」揀行（先睇公眾假期，否則星期幾；同碼多行揀優先序最細），
-  再俾加班表按日期 override。同 Google Calendar 返工 event 一致嘅算法（但呢個識睇適用日）。
+- 時間：更時表按「適用日」揀行（先睇公眾假期，再星期幾，再每日；shift_time.py），
+  再俾加班表按日期 override。同 Google Calendar 返工 event 共用同一份 resolver。
 - 一日兩個 action：開工（填開工時間、收工留空）、收工（開工留空、填收工時間），各自獨立提交。
 - 交法：預設出預填連結（手機一 tap → 自己撳提交）；可選全自動 POST（auto_send）。
 """
@@ -21,7 +21,14 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from urllib.parse import quote_plus
 
-from meal_planner.maintenance_db import load_sheet_rows
+from meal_planner.duty_common import (
+    GRACE_DETAIL,
+    GRACE_MINUTES,
+    POST_MAPPING,
+    retry_backoff_active,
+)
+from meal_planner.duty_report import apply_override, build_plan as build_report_normal_plan, send_slot
+from meal_planner.maintenance_db import load_sheet_rows, save_sheet_rows
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import (
     load_overtime_overrides_from_rows,
@@ -72,50 +79,7 @@ FORMS: dict[str, FormDef] = {
     ),
 }
 
-# 更碼 → Post 崗位（用戶 15/07/2026 確認）。決定用邊條 form 亦睇 key 屬邊個 form。
-POST_MAPPING: dict[str, tuple[str, str]] = {
-    # key: 更碼 -> (form_key, Post option text)
-    "Lecole": ("vca", "L'ECOLE 珠寶學院"),
-    "Lecole Event": ("vca", "L'ECOLE-event 珠寶學院"),
-    "VCRA": ("vca", "V-CR/A 廣東道"),
-    "VCRB": ("vca", "V-CR/B 廣東道"),
-    "VLG": ("vca", "V-LG 利園"),
-    "VOC": ("vca", "V-OC 海港"),
-    "VPP": ("vca", "V-PP 金鐘太古廣場"),
-    "EleA": ("other", "ELEA - Chanel  圓方"),
-    "EleB": ("other", "ELEB - Chanel 圓方"),
-    "EleC1": ("other", "ELEC - Chanel  圓方"),
-    "EleC2": ("other", "ELEC - Chanel  圓方"),
-    "EleD": ("other", "ELED - Chanel  圓方"),
-    "EleM": ("other", "ELEM - Chanel  圓方"),
-    "IFCA1": ("other", "A1 - IFC 時裝"),
-    "IFCA2": ("other", "A2 - IFC 時裝"),
-    "IFCB1": ("other", "B1 - IFC 時裝"),
-    "IFCB2": ("other", "B2 - IFC 時裝"),
-    "IFCFJ1": ("other", "FJ-1 - IFC 珠寶"),
-    "IFCFJ2": ("other", "FJ-2 - IFC 珠寶"),
-    "IFCM1": ("other", "M1 - IFC 飯更"),
-    "IFCM2": ("other", "M2 - IFC ＆ OES 飯更"),
-    "IFCS1": ("other", "S1 - IFC 鞋店"),
-    "IFCS2": ("other", "S2 - IFC 鞋店"),
-    "OES1": ("other", "OES-1- 交易廣場"),
-    "OES2": ("other", "OES-2 - 交易廣場"),
-    "PenA": ("other", "PENA - 半島時裝"),
-    "PenB": ("other", "PENB - 半島時裝"),
-    "PenBB": ("other", "PENB - 半島時裝"),
-    "PenBM": ("other", "PENB - 半島時裝"),
-    "PenC": ("other", "PENC - 半島時裝"),
-    "PenC頂位": ("other", "PENC - 半島時裝"),
-    "PenFJ": ("other", "PEN-FJ - 半島珠寶"),
-    "PenM": ("other", "PENM -  半島時裝"),
-    "TSA": ("other", "TSA - Chanel 時代"),
-    "TSB": ("other", "TSB - Chanel 時代"),
-    "TSM": ("other", "TSM - Chanel 時代"),
-}
-
-
 _DB_LOCK = threading.Lock()
-GRACE_MINUTES = 15
 
 
 def _connect(settings: AppSettings) -> sqlite3.Connection:
@@ -299,9 +263,6 @@ def set_time_override(
     start/end：None=唔郁；""=清走該格（兩格都空成行刪走，還原跟更時表）；"21:30"/"2130"=設定。
     改完如果該格原本標咗 missed 而新時間重新趕得切，會清返個 log 俾 scheduler 重新處理。
     """
-    from meal_planner.maintenance_db import save_sheet_rows
-    from zoneinfo import ZoneInfo
-
     payload = load_sheet_rows("overtime", settings)
     rows = [list(r) if isinstance(r, list) else [] for r in (payload.get("rows") or [])]
     if not rows:
@@ -352,8 +313,14 @@ def set_time_override(
     if not str(target[c_start] or "").strip() and not str(target[c_end] or "").strip():
         rows = [rows[0]] + [r for r in rows[1:] if r is not target]
     save_sheet_rows("overtime", rows, settings)
+    _rearm_missed_actions(settings, biz_date)
 
-    # missed 重新武裝：新時間仲趕得切（未過 grace）就清 log，俾 scheduler／狀態重新計。
+
+def _rearm_missed_actions(settings: AppSettings, biz_date: date) -> None:
+    """missed 重新武裝：改完時間/更碼後，新時間仲趕得切（未過 grace）就清 log，
+    俾 scheduler／狀態重新計。"""
+    from zoneinfo import ZoneInfo
+
     tz = ZoneInfo(settings.dates.timezone)
     now = datetime.now(tz)
     plan = build_day_plan(settings, biz_date=biz_date)
@@ -413,9 +380,6 @@ def set_roster_code(settings: AppSettings, biz_date: date, code: str) -> None:
     改完如果該日 action 原本標咗 missed 而新更時間重新趕得切，會清返 log 俾 scheduler 重新處理
     （同 set_time_override 一樣嘅重新武裝邏輯）。
     """
-    from zoneinfo import ZoneInfo
-
-    from meal_planner.maintenance_db import save_sheet_rows
     from meal_planner.roster import parse_roster_line
 
     new_code = " ".join(str(code or "").split())
@@ -440,17 +404,7 @@ def set_roster_code(settings: AppSettings, biz_date: date, code: str) -> None:
     if not replaced:
         raise ValueError(f"更表搵唔到 {biz_date.year}年{biz_date.month}月")
     save_sheet_rows("roster", rows, settings)
-
-    # missed 重新武裝：新更嘅時間仲趕得切（未過 grace）就清 log。
-    tz = ZoneInfo(settings.dates.timezone)
-    now = datetime.now(tz)
-    plan = build_day_plan(settings, biz_date=biz_date)
-    for action in plan.get("actions") or []:
-        if action.get("status") != "missed" or not action.get("time"):
-            continue
-        slot_dt = _slot_datetime(biz_date, str(action["time"]), tz)
-        if now < slot_dt + timedelta(minutes=GRACE_MINUTES):
-            clear_onoff_log_entry(settings, biz_date, str(action["kind"]))
+    _rearm_missed_actions(settings, biz_date)
 
 
 def submit_form(
@@ -505,7 +459,6 @@ OVERTIME_MIN_TOTAL_MINUTES = int(10.25 * 60)  # 615
 
 def _find_report_off_slot(settings: AppSettings) -> dict[str, Any] | None:
     """今日 ReportNormal（報平安更）slots 入面，內容含「報收工」嘅最後一個。"""
-    from meal_planner.duty_report import build_plan as build_report_normal_plan
 
     plan = build_report_normal_plan(settings)
     slots = [s for s in plan.get("slots") or [] if "報收工" in str(s.get("content") or "")]
@@ -517,7 +470,6 @@ def late_off_hold(settings: AppSettings, hold: bool) -> dict[str, Any]:
     ReportNormal 嘅「報收工」slot skip 埋（唔會夠鐘自動出 WhatsApp）。"""
     from zoneinfo import ZoneInfo
 
-    from meal_planner.duty_report import apply_override
 
     now = datetime.now(ZoneInfo(settings.dates.timezone))
     biz_date = business_date(now)
@@ -554,7 +506,6 @@ def late_off_send_now(settings: AppSettings, *, note: str = "") -> dict[str, Any
     3) ReportNormal「報收工」slot 即發 WhatsApp。"""
     from zoneinfo import ZoneInfo
 
-    from meal_planner.duty_report import send_slot
 
     tz = ZoneInfo(settings.dates.timezone)
     now = datetime.now(tz)
@@ -615,10 +566,11 @@ def late_off_send_now(settings: AppSettings, *, note: str = "") -> dict[str, Any
     return result_plan
 
 
-def process_due_actions(settings: AppSettings | None = None) -> None:
+def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
     """scheduler tick：auto_send 開先自動交；過咗 grace 未交標 missed（只限今日）。
 
     有「opened」記錄嗰個 action 唔會自動交——當你已經自己開 form 交咗，防止交兩次。
+    回傳下一個會自動交嘅時刻（scheduler 瞓到啱啱嗰刻醒，準時交）；冇就 None。
     """
     from zoneinfo import ZoneInfo
 
@@ -630,13 +582,15 @@ def process_due_actions(settings: AppSettings | None = None) -> None:
     plan = build_day_plan(settings, biz_date=biz_date)
     actions = plan.get("actions") or []
     if not actions:
-        return
+        return None
     config = load_onoff_config(settings)
     log = load_onoff_log(settings, biz_date)
     form_key = plan.get("form")
     post = str(plan.get("post") or "")
     form = FORMS.get(str(form_key)) if form_key else None
+    auto_ready = bool(config["auto_send"]) and form is not None and bool(post)
 
+    next_due: datetime | None = None
     for action in actions:
         kind = str(action.get("kind") or "")
         time_text = str(action.get("time") or "")
@@ -648,24 +602,20 @@ def process_due_actions(settings: AppSettings | None = None) -> None:
             continue  # 已交／已自己開 form／已標 missed／hold 緊等真收工
         slot_dt = _slot_datetime(biz_date, time_text, tz)
         if now < slot_dt:
+            if auto_ready and (next_due is None or slot_dt < next_due):
+                next_due = slot_dt
             continue
         if now >= slot_dt + timedelta(minutes=GRACE_MINUTES):
             record_onoff_log(
                 settings, biz_date, kind, "missed",
                 time_text=time_text, source="scheduler",
-                detail=f"passed grace window ({GRACE_MINUTES} min)",
+                detail=GRACE_DETAIL,
             )
             continue
-        if not config["auto_send"] or form is None or not post:
+        if not auto_ready:
             continue
-        if status == "failed":
-            # 之前失敗過：等最少 60 秒先重試，唔好每 tick 狂試。
-            try:
-                last = datetime.fromisoformat(str(entry.get("recorded_at") or ""))
-                if (now - last).total_seconds() < 60:
-                    continue
-            except ValueError:
-                pass
+        if status == "failed" and retry_backoff_active(entry.get("recorded_at"), now):
+            continue  # 之前失敗過：等最少 RETRY_SECONDS 先重試，唔好每 tick 狂試
         hhmm = time_text.split(":")
         value = time(int(hhmm[0]), int(hhmm[1]))
         try:
@@ -681,6 +631,7 @@ def process_due_actions(settings: AppSettings | None = None) -> None:
             )
             continue
         record_onoff_log(settings, biz_date, kind, "sent", time_text=time_text, source="scheduler")
+    return next_due
 
 
 def roster_code_for(settings: AppSettings, biz_date: date) -> str:
