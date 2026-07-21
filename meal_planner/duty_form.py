@@ -21,20 +21,17 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from urllib.parse import quote_plus
 
-from meal_planner.google_calendar_sync import _normal_time, _roster_cell_texts
+from meal_planner.google_calendar_sync import _roster_cell_texts
 from meal_planner.maintenance_db import load_sheet_rows
 from meal_planner.roster import code_for_date, roster_for_month
 from meal_planner.schedule_grid import (
-    grid_row_matches_roster,
     load_overtime_overrides_from_rows,
     _to_date,
 )
 from meal_planner.settings import AppSettings, get_settings
+from meal_planner.shift_time import holiday_dates_from_rows, resolve_shift_time
 
 STAFF_NUMBER = "SAPP1801"
-
-# Mon=0 .. Sun=6 → 更時表「適用日」用嘅星期字。
-_WEEKDAY_CHAR = {0: "一", 1: "二", 2: "三", 3: "四", 4: "五", 5: "六", 6: "日"}
 
 
 @dataclass(frozen=True)
@@ -239,68 +236,7 @@ def load_onoff_log(settings: AppSettings, biz_date: date) -> dict[str, dict[str,
 def _holiday_dates(settings: AppSettings) -> set[date]:
     payload = load_sheet_rows("public_holidays", settings)
     rows = payload.get("rows") or [] if isinstance(payload, dict) else []
-    out: set[date] = set()
-    for row in rows[1:]:
-        if not isinstance(row, list) or not row:
-            continue
-        d = _to_date(row[0])
-        if d is not None:
-            out.add(d)
-    return out
-
-
-def _applicable_token(biz_date: date, holidays: set[date]) -> tuple[bool, str]:
-    """回傳 (係咪公眾假期, 今日星期字)。"""
-    is_holiday = biz_date in holidays
-    return is_holiday, _WEEKDAY_CHAR[biz_date.weekday()]
-
-
-def resolve_shift_time(
-    payroll_rows: list[list[Any]],
-    roster_code: str,
-    biz_date: date,
-    holidays: set[date],
-    overtime_by_date: dict[date, tuple[time | None, time | None]],
-) -> tuple[time | None, time | None]:
-    """更時表按適用日揀開工/收工，再套加班表 override。攞唔到回 (None, None)。"""
-    is_holiday, weekday_char = _applicable_token(biz_date, holidays)
-    cands: list[tuple[time, time, str, float]] = []
-    for row in (payroll_rows or [])[1:]:
-        if not isinstance(row, list) or not row:
-            continue
-        code = str(row[0] or "").strip()
-        if not grid_row_matches_roster(code, roster_code):
-            continue
-        start = _normal_time(row[1] if len(row) > 1 else None)
-        end = _normal_time(row[2] if len(row) > 2 else None)
-        if start is None or end is None:
-            continue
-        applies_day = str(row[3] or "").strip() if len(row) > 3 else ""
-        try:
-            priority = float(row[4]) if len(row) > 4 and str(row[4]).strip() else 99.0
-        except (TypeError, ValueError):
-            priority = 99.0
-        cands.append((start, end, applies_day, priority))
-
-    if not cands:
-        return None, None
-
-    def applies(applies_day: str) -> bool:
-        if applies_day in ("", "每日"):
-            return True
-        if is_holiday:
-            return applies_day == "公眾假期"
-        return applies_day != "公眾假期" and weekday_char in applies_day
-
-    matched = [c for c in cands if applies(c[2])]
-    if not matched:
-        # 冇啱今日適用日嘅行（例：假期但該碼冇公眾假期行）→ 退返每日行，
-        # 再唔係就用晒所有行（單行碼）由優先序決定。
-        matched = [c for c in cands if c[2] in ("", "每日")] or cands
-
-    start, end, _, _ = min(matched, key=lambda c: c[3])
-    ot_start, ot_end = overtime_by_date.get(biz_date, (None, None))
-    return (ot_start or start, ot_end or end)
+    return holiday_dates_from_rows(rows)
 
 
 def _fmt_mmdd(d: date) -> str:

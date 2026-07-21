@@ -1240,6 +1240,16 @@
       return [part("work", "更表"), part("alarm", "起身"), part("leave", "大假")].filter(Boolean).join("; ");
     }
 
+    function payrollCheckStatus(saveResult) {
+      const pc = saveResult && saveResult.payroll_check;
+      if (!pc || typeof pc !== "object") return "";
+      if (pc.status === "error") return `更時表檢查失敗: ${pc.detail || "unknown"}`;
+      const issues = Array.isArray(pc.issues) ? pc.issues : [];
+      if (!issues.length) return "";
+      const parts = issues.map((it) => `${it.code} 冇${it.uncovered_days}`);
+      return `更時表有日子 match 唔到: ${parts.join("; ")}`;
+    }
+
     function googleCalendarSyncStatus(saveResult) {
       const gc = saveResult && saveResult.google_calendar_sync;
       if (!gc || typeof gc !== "object") return "";
@@ -1282,6 +1292,8 @@
         let gcStatus = "";
         if (activeMaintSheetKey === "roster") {
           gcStatus = googleCalendarSyncStatus(result);
+        } else if (activeMaintSheetKey === "payroll_times") {
+          gcStatus = payrollCheckStatus(result);
         }
         setMaintStatus(`Save ${menuLabel(activeMaintSheetKey)} ${new Date().toLocaleTimeString("en-GB")}${gcStatus ? `; ${gcStatus}` : ""}`);
         await refreshMaintSheets();

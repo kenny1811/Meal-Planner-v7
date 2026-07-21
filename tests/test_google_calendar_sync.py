@@ -49,8 +49,8 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
         roster_rows = [["2026年6月 1 TSB 2 Pen 3 Zzz"]]
         payroll_rows = [
             ["更碼", "開工", "收工"],
-            ["TS*", "09:00", "18:00"],
-            ["Pen*", "10:00", "19:00"],
+            ["TSB", "09:00", "18:00"],
+            ["Pen", "10:00", "19:00"],
             ["Zzz", "08:00", "17:00"],
         ]
         mtr_door_rows = [
@@ -159,6 +159,28 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
         self.assertEqual(plan.alarm_events[0].end_at.isoformat(), "2026-07-01T10:00:00+08:00")
         self.assertEqual(plan.alarm_events[0].description, "起身")
 
+    def test_payroll_applicable_day_rows_pick_weekday_and_holiday_times(self):
+        # 2026-07-01 係星期三、2026-07-03 係星期五。
+        roster_rows = [["2026年7月 1 FJA 3 FJA"]]
+        payroll_rows = [
+            ["更碼", "開工", "收工", "適用日", "優先序"],
+            ["FJA", "09:00", "18:30", "公眾假期", 1],
+            ["FJA", "09:00", "19:30", "一二三四", 2],
+            ["FJA", "09:00", "20:30", "五六", 2],
+            ["FJA", "09:00", "18:30", "日", 2],
+        ]
+
+        plan = build_roster_calendar_plan(roster_rows, payroll_rows)
+        by_date = {event.roster_date: event for event in plan.work_events}
+        self.assertEqual(by_date[date(2026, 7, 1)].end_at.isoformat(), "2026-07-01T19:30:00+08:00")
+        self.assertEqual(by_date[date(2026, 7, 3)].end_at.isoformat(), "2026-07-03T20:30:00+08:00")
+
+        # 同一日如果係公眾假期 → 用「公眾假期」行，唔理星期幾。
+        plan_holiday = build_roster_calendar_plan(roster_rows, payroll_rows, holidays={date(2026, 7, 1)})
+        by_date_holiday = {event.roster_date: event for event in plan_holiday.work_events}
+        self.assertEqual(by_date_holiday[date(2026, 7, 1)].end_at.isoformat(), "2026-07-01T18:30:00+08:00")
+        self.assertEqual(by_date_holiday[date(2026, 7, 3)].end_at.isoformat(), "2026-07-03T20:30:00+08:00")
+
     def test_missing_payroll_time_is_skipped_without_event(self):
         plan = build_roster_calendar_plan([["2026年6月 1 EleB"]], [["更碼", "開工", "收工"]])
 
@@ -212,6 +234,7 @@ class GoogleCalendarSyncRuntimeTests(unittest.TestCase):
             "overtime": {"rows": [["日期", "開工", "收工", "備註"]]},
             "wake_alarms": {"rows": [["日期", "起身時間", "備註"]]},
             "mtr_doors": {"rows": [["更碼", "目的地", "上車卡門", "轉車", "轉車卡門", "落車出口"]]},
+            "public_holidays": {"rows": [["日期"]]},
         }
 
         with patch("meal_planner.google_calendar_sync.load_sheet_rows", side_effect=lambda key, settings: sheets[key]):

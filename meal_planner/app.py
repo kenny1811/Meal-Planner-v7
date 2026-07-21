@@ -66,6 +66,7 @@ from meal_planner.schedule_grid import (
     load_schedule_rows_from_rows,
     rows_for_roster,
 )
+from meal_planner.shift_time import payroll_coverage_issues
 from meal_planner.storage import (
     load_active_panel,
     load_active_config_view,
@@ -1611,6 +1612,16 @@ def api_save_maint_sheet(sheet_key: str, body: MaintenanceSheetRequest) -> dict[
     try:
         settings = get_settings()
         response = {"ok": True, **save_sheet_rows(sheet_key, body.rows, settings)}
+        if sheet_key == "payroll_times":
+            # Coverage 檢查：邊個更碼有星期字 resolve 唔到（唔阻止儲存，淨係 warning）。
+            try:
+                issues = payroll_coverage_issues(body.rows)
+                response["payroll_check"] = {
+                    "status": "warning" if issues else "ok",
+                    "issues": issues,
+                }
+            except Exception as e:
+                response["payroll_check"] = {"status": "error", "detail": str(e), "issues": []}
         if sheet_key == "roster":
             # 更碼檢查唔喺度做：前端離開每行更表時已經逐行問過（/api/maint/roster/check-line）。
             try:

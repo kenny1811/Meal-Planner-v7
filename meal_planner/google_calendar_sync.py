@@ -7,7 +7,6 @@ from datetime import date, datetime, time, timedelta
 import json
 import os
 from pathlib import Path
-import re
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -17,6 +16,7 @@ from meal_planner.roster import is_work_day, last_day_of_month, parse_roster_lin
 from meal_planner.schedule_grid import load_overtime_overrides_from_rows, load_wake_alarm_overrides_from_rows
 from meal_planner.atomic_io import write_text_atomic
 from meal_planner.settings import AppSettings
+from meal_planner.shift_time import holiday_dates_from_rows, parse_time as _normal_time, resolve_shift_time
 
 
 GC_ACCOUNT_EMAIL = "kenny1811@gmail.com"
@@ -28,14 +28,6 @@ SYNC_SOURCE = "meal_planner_roster"
 DEFAULT_TIME_ZONE = "Asia/Hong_Kong"
 ALARM_EVENT_DURATION = timedelta(hours=1, minutes=45)
 DEFAULT_WAKE_OFFSET_HOURS = 3.0
-
-
-@dataclass(frozen=True)
-class ShiftRule:
-    code_pattern: str
-    start: time
-    end: time
-    priority: float
 
 
 @dataclass(frozen=True)
@@ -131,51 +123,6 @@ def _roster_cell_texts(rows: list[list[Any]]) -> list[str | None]:
     return out
 
 
-_TIME_RE = re.compile(r"^\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*$")
-_COMPACT_TIME_RE = re.compile(r"^\s*(\d{1,2})(\d{2})\s*$")
-
-
-def _normal_time(value: Any) -> time | None:
-    if isinstance(value, time):
-        return time(value.hour, value.minute)
-    if isinstance(value, datetime):
-        return time(value.hour, value.minute)
-    raw = str(value or "")
-    match = _TIME_RE.match(raw) or _COMPACT_TIME_RE.match(raw)
-    if not match:
-        return None
-    hour = int(match.group(1))
-    minute = int(match.group(2))
-    if hour > 23 or minute > 59:
-        return None
-    return time(hour, minute)
-
-
-def payroll_shift_rules(rows: list[list[Any]]) -> list[ShiftRule]:
-    rules: list[ShiftRule] = []
-    for row in (rows or [])[1:]:
-        if not isinstance(row, list):
-            continue
-        pattern = str((row[0] if len(row) > 0 else "") or "").strip()
-        start = _normal_time(row[1] if len(row) > 1 else None)
-        end = _normal_time(row[2] if len(row) > 2 else None)
-        if not pattern or start is None or end is None:
-            continue
-        try:
-            priority = float(row[4] if len(row) > 4 else 0)
-        except (TypeError, ValueError):
-            priority = 0
-        rules.append(ShiftRule(pattern, start, end, priority))
-    return sorted(rules, key=lambda x: x.priority, reverse=True)
-
-
-def shift_rule_for_code(rules: list[ShiftRule], roster_code: str) -> ShiftRule | None:
-    for rule in rules:
-        if roster_matches_rule(rule.code_pattern, roster_code):
-            return rule
-    return None
-
-
 def mtr_door_lookup(rows: list[list[Any]] | None) -> list[tuple[str, str]]:
     """由「地鐵車門」表砌 (更碼pattern, location) 清單，保留原次序（先命中先用）。
 
@@ -240,10 +187,11 @@ def build_roster_calendar_plan(
     wake_offset_hours: float = DEFAULT_WAKE_OFFSET_HOURS,
     time_zone: str = DEFAULT_TIME_ZONE,
     from_date: date | None = None,
+    holidays: set[date] | None = None,
 ) -> RosterCalendarPlan:
     tz = ZoneInfo(time_zone)
     roster_map = roster_for_month(_roster_cell_texts(roster_rows))
-    shift_rules = payroll_shift_rules(payroll_rows)
+    holidays = holidays or set()
     overtime_by_date = load_overtime_overrides_from_rows(overtime_rows or [])
     wake_alarm_by_date = load_wake_alarm_overrides_from_rows(wake_alarm_rows or [])
     door_lookup = mtr_door_lookup(mtr_door_rows)
@@ -295,14 +243,11 @@ def build_roster_calendar_plan(
                         )
                     )
                 continue
-            rule = shift_rule_for_code(shift_rules, code)
-            if rule is None:
+            start_time, end_time = resolve_shift_time(payroll_rows, code, roster_day, holidays, overtime_by_date)
+            if start_time is None or end_time is None:
                 skipped.append({"date": roster_day.isoformat(), "code": code, "reason": "missing_shift_time"})
                 continue
 
-            overtime_start, overtime_end = overtime_by_date.get(roster_day, (None, None))
-            start_time = overtime_start or rule.start
-            end_time = overtime_end or rule.end
             start_at = _combine(roster_day, start_time, tz)
             end_at = _combine(roster_day, end_time, tz)
             if end_at <= start_at:
@@ -887,6 +832,8 @@ def sync_roster_to_google_calendar(
     wake_alarm_rows = wake_alarm_payload.get("rows", []) if isinstance(wake_alarm_payload, dict) else []
     mtr_door_payload = load_sheet_rows("mtr_doors", settings)
     mtr_door_rows = mtr_door_payload.get("rows", []) if isinstance(mtr_door_payload, dict) else []
+    holiday_payload = load_sheet_rows("public_holidays", settings)
+    holiday_rows = holiday_payload.get("rows", []) if isinstance(holiday_payload, dict) else []
     plan = build_roster_calendar_plan(
         roster_rows,
         payroll_rows if isinstance(payroll_rows, list) else [],
@@ -899,6 +846,7 @@ def sync_roster_to_google_calendar(
         wake_offset_hours=config.wake_offset_hours,
         time_zone=config.time_zone,
         from_date=datetime.now(ZoneInfo(config.time_zone)).date(),
+        holidays=holiday_dates_from_rows(holiday_rows if isinstance(holiday_rows, list) else []),
     )
     result: dict[str, Any] = {
         "enabled": config.enabled,
