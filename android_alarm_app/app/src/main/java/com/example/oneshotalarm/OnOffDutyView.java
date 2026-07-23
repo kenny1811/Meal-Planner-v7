@@ -20,12 +20,6 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 
 /**
  * OnOffDuty tab：每日 On Duty / Off Duty Google Form 打卡（同電腦 OnOffDuty panel 對齊）。
@@ -34,7 +28,6 @@ import java.nio.charset.StandardCharsets;
  */
 class OnOffDutyView {
 
-    private static final int HTTP_CONNECT_TIMEOUT_MS = 2500;
     private static final int HTTP_READ_TIMEOUT_MS = 30000;
 
     private final Activity activity;
@@ -44,7 +37,6 @@ class OnOffDutyView {
     private JSONObject plan;
     private boolean loading = false;
     private String lastError = "";
-    private int serverIndex = 0;
     private String viewDate = "";
 
     OnOffDutyView(Activity activity, LinearLayout container, Typeface regular, Typeface bold) {
@@ -67,7 +59,7 @@ class OnOffDutyView {
                 + (viewDate.isEmpty() ? "" : "?date_iso=" + viewDate);
         new Thread(() -> {
             try {
-                String body = requestWithFailover("GET", path, null);
+                String body = ApiClient.request(activity, "GET", path, null, HTTP_READ_TIMEOUT_MS);
                 JSONObject parsed = new JSONObject(body);
                 activity.runOnUiThread(() -> {
                     plan = parsed;
@@ -127,7 +119,7 @@ class OnOffDutyView {
         }
         new Thread(() -> {
             try {
-                String body = requestWithFailover("POST", "/api/onoffduty/log", payload.toString());
+                String body = ApiClient.request(activity, "POST", "/api/onoffduty/log", payload.toString(), HTTP_READ_TIMEOUT_MS);
                 JSONObject parsed = new JSONObject(body);
                 activity.runOnUiThread(() -> {
                     plan = parsed;
@@ -291,7 +283,7 @@ class OnOffDutyView {
         }
         new Thread(() -> {
             try {
-                String body = requestWithFailover("POST", "/api/onoffduty/roster-code", payload.toString());
+                String body = ApiClient.request(activity, "POST", "/api/onoffduty/roster-code", payload.toString(), HTTP_READ_TIMEOUT_MS);
                 JSONObject parsed = new JSONObject(body);
                 activity.runOnUiThread(() -> {
                     plan = parsed;
@@ -324,7 +316,7 @@ class OnOffDutyView {
         }
         new Thread(() -> {
             try {
-                String body = requestWithFailover("POST", "/api/onoffduty/override", payload.toString());
+                String body = ApiClient.request(activity, "POST", "/api/onoffduty/override", payload.toString(), HTTP_READ_TIMEOUT_MS);
                 JSONObject parsed = new JSONObject(body);
                 activity.runOnUiThread(() -> {
                     plan = parsed;
@@ -354,7 +346,7 @@ class OnOffDutyView {
         }
         new Thread(() -> {
             try {
-                String body = requestWithFailover("POST", "/api/onoffduty/config", payload.toString());
+                String body = ApiClient.request(activity, "POST", "/api/onoffduty/config", payload.toString(), HTTP_READ_TIMEOUT_MS);
                 JSONObject parsed = new JSONObject(body);
                 activity.runOnUiThread(() -> {
                     plan = parsed;
@@ -369,25 +361,6 @@ class OnOffDutyView {
                 });
             }
         }, "onoffduty-config").start();
-    }
-
-    /** 逐個 server 試（LAN → Meshnet），成功嗰個記住做首選。 */
-    private String requestWithFailover(String method, String path, String jsonBody) throws Exception {
-        String[] candidates = AlarmStore.getAutoSyncServerCandidates(activity);
-        Exception lastException = null;
-        for (int i = 0; i < candidates.length; i++) {
-            String base = candidates[(serverIndex + i) % candidates.length];
-            try {
-                String body = "POST".equals(method)
-                        ? httpPost(base + path, jsonBody)
-                        : httpGet(base + path);
-                serverIndex = (serverIndex + i) % candidates.length;
-                return body;
-            } catch (Exception e) {
-                lastException = e;
-            }
-        }
-        throw lastException != null ? lastException : new Exception("no server candidates");
     }
 
     // ---------------------------------------------------------------- render
@@ -623,7 +596,7 @@ class OnOffDutyView {
         }
         new Thread(() -> {
             try {
-                String body = requestWithFailover("POST", "/api/onoffduty/lateoff", payload.toString());
+                String body = ApiClient.request(activity, "POST", "/api/onoffduty/lateoff", payload.toString(), HTTP_READ_TIMEOUT_MS);
                 JSONObject parsed = new JSONObject(body);
                 activity.runOnUiThread(() -> {
                     plan = parsed;
@@ -705,80 +678,5 @@ class OnOffDutyView {
 
     private int dp(int value) {
         return Math.round(activity.getResources().getDisplayMetrics().density * value);
-    }
-
-    // ---------------------------------------------------------------- HTTP
-
-    private static String httpGet(String endpoint) throws Exception {
-        HttpURLConnection conn = null;
-        try {
-            conn = (HttpURLConnection) new URL(endpoint).openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-            conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-            return readResponse(conn, endpoint);
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-        }
-    }
-
-    private static String httpPost(String endpoint, String jsonBody) throws Exception {
-        HttpURLConnection conn = null;
-        try {
-            conn = (HttpURLConnection) new URL(endpoint).openConnection();
-            conn.setRequestMethod("POST");
-            conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-            conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            byte[] bytes = jsonBody.getBytes(StandardCharsets.UTF_8);
-            conn.setFixedLengthStreamingMode(bytes.length);
-            try (OutputStream out = conn.getOutputStream()) {
-                out.write(bytes);
-            }
-            return readResponse(conn, endpoint);
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-        }
-    }
-
-    private static String readResponse(HttpURLConnection conn, String endpoint) throws Exception {
-        int code = conn.getResponseCode();
-        if (code < 200 || code >= 300) {
-            String error = readStream(conn.getErrorStream());
-            String detail = "";
-            try {
-                JSONObject body = new JSONObject(error);
-                detail = body.optString("detail", "");
-                if (detail.trim().isEmpty()) {
-                    JSONObject errorBody = body.optJSONObject("error");
-                    if (errorBody != null) {
-                        detail = errorBody.optString("message", "");
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-            throw new Exception(!detail.trim().isEmpty()
-                    ? detail
-                    : "HTTP " + code + " " + endpoint);
-        }
-        return readStream(conn.getInputStream());
-    }
-
-    private static String readStream(InputStream stream) throws Exception {
-        if (stream == null) {
-            return "";
-        }
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        byte[] buffer = new byte[2048];
-        int read;
-        while ((read = stream.read(buffer)) >= 0) {
-            out.write(buffer, 0, read);
-        }
-        return out.toString("UTF-8");
     }
 }

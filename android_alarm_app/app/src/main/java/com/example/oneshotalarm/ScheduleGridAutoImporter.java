@@ -12,9 +12,6 @@ import org.w3c.dom.NodeList;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -24,7 +21,6 @@ import javax.xml.parsers.DocumentBuilderFactory;
 
 final class ScheduleGridAutoImporter {
     private static final String TAG = "ScheduleGridAutoImport";
-    private static final int HTTP_CONNECT_TIMEOUT_MS = 2500;
     private static final int HTTP_READ_TIMEOUT_MS = 12000;
 
     private ScheduleGridAutoImporter() {
@@ -34,25 +30,19 @@ final class ScheduleGridAutoImporter {
         if (!AlarmScheduler.canScheduleExactAlarm(context)) {
             return new ImportResult(false, 0, "", "", "no exact alarm permission");
         }
-        Exception lastError = null;
-        for (String candidate : AlarmStore.getAutoSyncServerCandidates(context)) {
-            String server = normalizeServer(candidate);
-            if (server.isEmpty()) {
-                continue;
-            }
-            try {
-                return importAllVariants(context, server);
-            } catch (Exception e) {
-                lastError = e;
-                Log.w(TAG, "Auto import failed at " + server, e);
-            }
+        try {
+            return importAllVariants(context);
+        } catch (Exception e) {
+            Log.w(TAG, "Auto import failed", e);
+            String message = e.getMessage() == null || e.getMessage().trim().isEmpty()
+                    ? "no usable server" : e.getMessage();
+            return new ImportResult(false, 0, "", "", message);
         }
-        String message = lastError == null ? "no usable server" : lastError.getMessage();
-        return new ImportResult(false, 0, "", "", message);
     }
 
-    private static ImportResult importAllVariants(Context context, String server) throws Exception {
-        String body = get(server + "/api/maint/sheets/schedule_grid/export-all-xml");
+    private static ImportResult importAllVariants(Context context) throws Exception {
+        String body = ApiClient.request(
+                context, "GET", "/api/maint/sheets/schedule_grid/export-all-xml", null, HTTP_READ_TIMEOUT_MS);
         JSONObject response = new JSONObject(body);
         if (!response.optBoolean("ok", false)) {
             return new ImportResult(false, 0, "", "", "all variants response not ok");
@@ -116,82 +106,6 @@ final class ScheduleGridAutoImporter {
                 storedVariants.length(),
                 totalAlarmCount
         );
-    }
-
-    private static String normalizeServer(String raw) {
-        String server = raw == null ? "" : raw.trim();
-        if (server.endsWith("/")) {
-            server = server.substring(0, server.length() - 1);
-        }
-        if (!server.startsWith("http://") && !server.startsWith("https://")) {
-            return "";
-        }
-        return server;
-    }
-
-    private static void post(String endpoint) throws Exception {
-        HttpURLConnection conn = null;
-        try {
-            conn = (HttpURLConnection) new URL(endpoint).openConnection();
-            conn.setRequestMethod("POST");
-            conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-            conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-            int code = conn.getResponseCode();
-            if (code < 200 || code >= 300) {
-                throw new Exception("HTTP " + code + " POST " + endpoint);
-            }
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-        }
-    }
-
-    private static String get(String endpoint) throws Exception {
-        HttpURLConnection conn = null;
-        try {
-            conn = (HttpURLConnection) new URL(endpoint).openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-            conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-            int code = conn.getResponseCode();
-            if (code < 200 || code >= 300) {
-                String error = readInputStreamText(conn.getErrorStream());
-                String detail = "";
-                try {
-                    JSONObject body = new JSONObject(error);
-                    detail = body.optString("detail", "");
-                    if (detail.trim().isEmpty()) {
-                        JSONObject errorBody = body.optJSONObject("error");
-                        if (errorBody != null) {
-                            detail = errorBody.optString("message", "");
-                        }
-                    }
-                } catch (Exception ignored) {
-                }
-                if (!detail.trim().isEmpty()) {
-                    throw new Exception(detail);
-                }
-                throw new Exception(error.trim().isEmpty()
-                        ? "HTTP " + code + " GET " + endpoint
-                        : "HTTP " + code + " " + error);
-            }
-            return readInputStreamText(conn.getInputStream());
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-        }
-    }
-
-    private static String readInputStreamText(InputStream inputStream) throws Exception {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        byte[] buffer = new byte[2048];
-        int read;
-        while ((read = inputStream.read(buffer)) >= 0) {
-            out.write(buffer, 0, read);
-        }
-        return out.toString("UTF-8");
     }
 
     private static ParsedScheduleGrid parse(String xml) throws Exception {
