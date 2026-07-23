@@ -25,6 +25,8 @@ public class WearAlarmListenerService extends WearableListenerService {
     private static final String WEAR_APK_CHANNEL_PATH = "/oneshotalarm/wear-apk";
     private static final String CAPTURE_REQUEST_PATH = "/oneshotalarm/capture-request";
     private static final String CAPTURE_RESULT_PATH = "/oneshotalarm/capture-result";
+    private static final String VERSION_REQUEST_PATH = "/oneshotalarm/version-request";
+    private static final String VERSION_RESULT_PATH = "/oneshotalarm/version-result";
     private static final String PREFS = "watch_alarm_listener";
     private static final String KEY_LAST_TILE_STATE_AT = "last_tile_state_at";
     private static final long DISMISS_FRESH_MS = 30 * 1000L;
@@ -69,6 +71,21 @@ public class WearAlarmListenerService extends WearableListenerService {
         if (CAPTURE_REQUEST_PATH.equals(messageEvent.getPath())) {
             String sourceNodeId = messageEvent.getSourceNodeId();
             new Thread(() -> sendCaptureResult(sourceNodeId), "watch-capture").start();
+            return;
+        }
+        if (VERSION_REQUEST_PATH.equals(messageEvent.getPath())) {
+            // 電話 update 前問一聲：我而家裝緊邊個 version（同版就唔使傳 APK 過嚟）。
+            String sourceNodeId = messageEvent.getSourceNodeId();
+            long version = 0;
+            try {
+                version = versionCodeOf(getPackageManager().getPackageInfo(getPackageName(), 0));
+            } catch (Exception e) {
+                Log.w(TAG, "Read own version failed", e);
+            }
+            byte[] payload = String.valueOf(version).getBytes(StandardCharsets.UTF_8);
+            com.google.android.gms.wearable.Wearable.getMessageClient(this)
+                    .sendMessage(sourceNodeId, VERSION_RESULT_PATH, payload)
+                    .addOnFailureListener(e -> Log.e(TAG, "Send version result failed", e));
             return;
         }
     }
@@ -243,6 +260,7 @@ public class WearAlarmListenerService extends WearableListenerService {
             long ownCode = versionCodeOf(own);
             if (incomingCode > 0 && incomingCode <= ownCode) {
                 Log.d(TAG, "Wear APK v" + incomingCode + " <= installed v" + ownCode + ", skip install");
+                deleteQuietly(apk);
                 return;
             }
         } catch (Exception e) {
@@ -253,6 +271,15 @@ public class WearAlarmListenerService extends WearableListenerService {
             installApk(apk);
         } catch (Exception e) {
             Log.e(TAG, "Install wear APK failed", e);
+        } finally {
+            // session 已抄走份 APK，cache 嗰份即刻清。
+            deleteQuietly(apk);
+        }
+    }
+
+    private static void deleteQuietly(java.io.File file) {
+        if (file != null && file.exists() && !file.delete()) {
+            Log.w(TAG, "Cannot delete " + file);
         }
     }
 

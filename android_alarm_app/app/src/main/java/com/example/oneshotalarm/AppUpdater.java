@@ -149,6 +149,10 @@ final class AppUpdater {
                 download(context, "/apk", apk, progress);
                 progress.update("Installing... confirm the system prompt.");
                 installApk(context, apk);
+                // session 已抄走份 APK，cache 嗰份即刻清。
+                if (!apk.delete()) {
+                    Log.w(TAG, "Cannot delete " + apk);
+                }
             } catch (Exception e) {
                 Log.e(TAG, "Phone update failed", e);
                 progress.update("Phone update failed: " + e.getMessage());
@@ -161,6 +165,19 @@ final class AppUpdater {
             try {
                 File apk = new File(context.getCacheDir(), "update-wear.apk");
                 download(context, "/apk/watch", apk, progress);
+                // download 完先對版本：問手錶而家裝緊邊個 version，一樣就唔使傳。
+                long incoming = archiveVersionCode(context, apk);
+                if (incoming > 0) {
+                    progress.update("Checking watch version...");
+                    long installed = WatchVersionBridge.requestVersion(context, 8000);
+                    if (installed > 0 && incoming <= installed) {
+                        progress.update("Watch already up to date (v" + installed + ").");
+                        if (!apk.delete()) {
+                            Log.w(TAG, "Cannot delete " + apk);
+                        }
+                        return;
+                    }
+                }
                 progress.update("Sending to watch over Bluetooth...");
                 sendApkToWatch(context, apk, progress);
             } catch (Exception e) {
@@ -168,6 +185,20 @@ final class AppUpdater {
                 progress.update("Watch update failed: " + e.getMessage());
             }
         }, "watch-update").start();
+    }
+
+    private static long archiveVersionCode(Context context, File apk) {
+        try {
+            android.content.pm.PackageInfo info = context.getPackageManager()
+                    .getPackageArchiveInfo(apk.getPath(), 0);
+            if (info == null) {
+                return 0;
+            }
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                    ? info.getLongVersionCode() : info.versionCode;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     /** Range 續傳下載：斷線由斷點繼續，逐次輪換 LAN/meshnet server。 */
@@ -279,14 +310,26 @@ final class AppUpdater {
                     channelClient.openChannel(watch.getId(), WATCH_APK_CHANNEL_PATH)
                             .addOnSuccessListener(channel -> channelClient
                                     .sendFile(channel, Uri.fromFile(apk))
-                                    .addOnSuccessListener(v -> progress.update(
-                                            "Sent to watch — confirm install ON THE WATCH."))
-                                    .addOnFailureListener(e -> progress.update(
-                                            "Send to watch failed: " + e.getMessage())))
-                            .addOnFailureListener(e -> progress.update(
-                                    "Open watch channel failed: " + e.getMessage()));
+                                    .addOnSuccessListener(v -> {
+                                        progress.update("Sent to watch — confirm install ON THE WATCH.");
+                                        deleteQuietly(apk);
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        progress.update("Send to watch failed: " + e.getMessage());
+                                        deleteQuietly(apk);
+                                    }))
+                            .addOnFailureListener(e -> {
+                                progress.update("Open watch channel failed: " + e.getMessage());
+                                deleteQuietly(apk);
+                            });
                 })
                 .addOnFailureListener(e -> progress.update("Find watch failed: " + e.getMessage()));
+    }
+
+    private static void deleteQuietly(File file) {
+        if (file != null && file.exists() && !file.delete()) {
+            Log.w(TAG, "Cannot delete " + file);
+        }
     }
 
     private static Node pickNode(List<Node> nodes) {

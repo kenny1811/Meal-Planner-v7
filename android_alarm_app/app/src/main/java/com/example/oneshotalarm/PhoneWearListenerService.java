@@ -50,6 +50,15 @@ public class PhoneWearListenerService extends WearableListenerService {
             WatchBridge.sendTileState(this);
             return;
         }
+        if (WatchVersionBridge.VERSION_RESULT_PATH.equals(messageEvent.getPath())) {
+            try {
+                WatchVersionBridge.deliver(Long.parseLong(
+                        new String(messageEvent.getData(), StandardCharsets.UTF_8).trim()));
+            } catch (Exception e) {
+                WatchVersionBridge.deliver(0);
+            }
+            return;
+        }
         if (!DISMISS_PATH.equals(messageEvent.getPath())) {
             return;
         }

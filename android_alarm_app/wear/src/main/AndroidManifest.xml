@@ -66,6 +66,10 @@
                     android:host="*"
                     android:path="/oneshotalarm/capture-request"
                     android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:path="/oneshotalarm/version-request"
+                    android:scheme="wear" />
             </intent-filter>
         </service>
 
