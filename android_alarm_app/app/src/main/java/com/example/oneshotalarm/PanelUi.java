@@ -81,4 +81,72 @@ final class PanelUi {
     int dp(int value) {
         return Math.round(activity.getResources().getDisplayMetrics().density * value);
     }
+
+    android.graphics.drawable.GradientDrawable roundedBg(
+            int fillColor, int radiusDp, int strokeColor, int strokeDp) {
+        android.graphics.drawable.GradientDrawable drawable =
+                new android.graphics.drawable.GradientDrawable();
+        drawable.setColor(fillColor);
+        drawable.setCornerRadius(dp(radiusDp));
+        if (strokeDp > 0) {
+            drawable.setStroke(dp(strokeDp), strokeColor);
+        }
+        return drawable;
+    }
+
+    /** 圓角 pill（狀態 chip）：11sp 粗體，實色底。 */
+    TextView chip(String text, int textColor, int bgColor) {
+        TextView view = new TextView(activity);
+        view.setText(text);
+        view.setTextSize(11);
+        view.setTextColor(textColor);
+        view.setTypeface(boldTypeface);
+        view.setBackground(roundedBg(bgColor, 99, bgColor, 0));
+        view.setPadding(dp(8), dp(3), dp(8), dp(3));
+        return view;
+    }
+
+    /** 圓角卡片（直排）。strokeDp=0 即淨色冇邊。 */
+    LinearLayout card(int fillColor, int strokeColor, int strokeDp) {
+        LinearLayout layout = new LinearLayout(activity);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setBackground(roundedBg(fillColor, 10, strokeColor, strokeDp));
+        layout.setPadding(dp(12), dp(10), dp(12), dp(10));
+        return layout;
+    }
+
+    LinearLayout.LayoutParams cardParams() {
+        LinearLayout.LayoutParams params = fullWidth();
+        params.setMargins(dp(8), dp(6), dp(8), 0);
+        return params;
+    }
+
+    /** 橙色警告條（轉code影響範圍嗰啲提示）。 */
+    TextView noteStrip(String text) {
+        TextView view = new TextView(activity);
+        view.setText(text);
+        view.setTextSize(10);
+        view.setTextColor(0xFF9A5B00);
+        view.setTypeface(boldTypeface);
+        view.setBackground(roundedBg(0xFFFAEEDA, 8, 0, 0));
+        view.setPadding(dp(10), dp(6), dp(10), dp(6));
+        return view;
+    }
+
+    /** 白底圓角框線掣（卡入面嘅主要動作）。 */
+    Button outlineButton(String label, int textColor, int strokeColor) {
+        Button button = actionButton(label);
+        button.setTextSize(12);
+        button.setTextColor(textColor);
+        button.setTypeface(boldTypeface);
+        button.setBackground(roundedBg(0xFFFFFFFF, 8, strokeColor, 1));
+        return button;
+    }
+
+    LinearLayout.LayoutParams chipParams() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(dp(4), 0, 0, 0);
+        return params;
+    }
 }

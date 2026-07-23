@@ -155,6 +155,7 @@ public class MainActivity extends Activity {
         handleTestDailyImportIntent(getIntent());
         NextAlarmWidgetProvider.updateAll(this);
         requestNotificationPermissionIfNeeded();
+        AppUpdater.autoCheck(this);
     }
 
     @Override
@@ -305,6 +306,11 @@ public class MainActivity extends Activity {
         scrollView.setScrollbarFadingEnabled(false);
         scrollView.setBackgroundColor(0xFFFFFFFF);
 
+        // outer = 固定頂部（標題+tab）+ 下面一個 ScrollView；tab 及以上唔捲。
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setBackgroundColor(0xFFFFFFFF);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(0, 0, 0, 0);
@@ -317,6 +323,8 @@ public class MainActivity extends Activity {
         title.setTypeface(mealBoldTypeface());
         title.setGravity(Gravity.CENTER);
         title.setPadding(dp(6), dp(0), dp(6), dp(1));
+        // 撳標題開 in-app updater（電話自己裝 / 推手錶裝，唔靠 adb）。
+        title.setOnClickListener(v -> AppUpdater.showUpdateDialog(this));
 
         // 標題行用 FrameLayout：status badge 疊喺右邊，唔佔額外高度。
         android.widget.FrameLayout titleBar = new android.widget.FrameLayout(this);
@@ -340,7 +348,7 @@ public class MainActivity extends Activity {
         );
         badgeParams.setMargins(0, 0, dp(10), 0);
         titleBar.addView(serverStatusView, badgeParams);
-        root.addView(titleBar, fullWidthWrapHeight());
+        outer.addView(titleBar, fullWidthWrapHeight());
 
         TextView versionTag = new TextView(this);
         versionTag.setText("");
@@ -349,7 +357,7 @@ public class MainActivity extends Activity {
         versionTag.setTypeface(mealTypeface());
         versionTag.setGravity(Gravity.CENTER);
         versionTag.setPadding(dp(6), 0, dp(6), dp(3));
-        root.addView(versionTag, fullWidthWrapHeight());
+        outer.addView(versionTag, fullWidthWrapHeight());
 
         LinearLayout tabRow = new LinearLayout(this);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -375,7 +383,7 @@ public class MainActivity extends Activity {
         tabRow.addView(shiftTabButton, weightedParams(1f));
         tabRow.addView(dutyTabButton, weightedParams(1f));
         tabRow.addView(onoffTabButton, weightedParams(1f));
-        root.addView(tabRow, fullWidthWrapHeight());
+        outer.addView(tabRow, fullWidthWrapHeight());
 
         mealSection = new LinearLayout(this);
         mealSection.setOrientation(LinearLayout.VERTICAL);
@@ -572,8 +580,10 @@ public class MainActivity extends Activity {
                     ScrollView.LayoutParams.WRAP_CONTENT
                 )
         );
-        applySafeAreaPadding(scrollView);
-        setContentView(scrollView);
+        outer.addView(scrollView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        applySafeAreaPadding(outer, scrollView);
+        setContentView(outer);
         switchPage(currentPage);
     }
 
@@ -1127,15 +1137,17 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void applySafeAreaPadding(ScrollView scrollView) {
-        scrollView.setOnApplyWindowInsetsListener((view, insets) -> {
+    private void applySafeAreaPadding(LinearLayout outer, ScrollView scrollView) {
+        // 頂 inset 落固定 header（outer），底 inset 落 ScrollView 內容。
+        outer.setOnApplyWindowInsetsListener((view, insets) -> {
             int top = Math.max(insets.getSystemWindowInsetTop(), systemBarHeight("status_bar_height"));
             int bottom = Math.max(insets.getSystemWindowInsetBottom(), systemBarHeight("navigation_bar_height"));
-            view.setPadding(0, top + dp(6), 0, bottom + dp(8));
+            view.setPadding(0, top + dp(6), 0, 0);
+            scrollView.setPadding(0, 0, 0, bottom + dp(8));
             return insets;
         });
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
-            scrollView.requestApplyInsets();
+            outer.requestApplyInsets();
         }
     }
 

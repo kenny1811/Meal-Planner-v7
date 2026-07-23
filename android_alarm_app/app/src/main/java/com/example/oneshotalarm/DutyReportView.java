@@ -39,6 +39,8 @@ class DutyReportView {
     private boolean loading = false;
     private String lastError = "";
     private String viewDate = "";
+    private boolean mappingExpanded = false;
+    private boolean logExpanded = false;
 
     DutyReportView(Activity activity, LinearLayout container, Typeface regular, Typeface bold) {
         this.activity = activity;
@@ -180,15 +182,19 @@ class DutyReportView {
         dateRow.addView(refreshButton, new LinearLayout.LayoutParams(dp(44), dp(30)));
         container.addView(dateRow);
 
-        // 第二行：健康 + auto-send 掣
+        // 第二行：健康 chip + auto-send pill
         LinearLayout chipRow = row();
-        TextView healthText = textView(
-                (cdpOk ? "CDP✓" : "CDP✗") + "  " + (waOk ? "WhatsApp✓" : "WhatsApp✗") + " · 30h day",
-                11, (cdpOk && waOk) ? 0xFF166534 : 0xFFB91C1C, true);
-        chipRow.addView(healthText, weighted(1f));
-        Button autoButton = actionButton("Auto-send: " + (autoSend ? "ON" : "OFF"));
-        autoButton.setTextColor(autoSend ? 0xFF0B3EA8 : 0xFF64748B);
+        chipRow.setPadding(dp(8), dp(4), dp(8), dp(2));
+        chipRow.addView(ui.chip(cdpOk ? "✓ CDP" : "✗ CDP",
+                cdpOk ? 0xFF085041 : 0xFF791F1F, cdpOk ? 0xFFE1F5EE : 0xFFFCEBEB));
+        chipRow.addView(ui.chip(waOk ? "✓ WhatsApp" : "✗ WhatsApp",
+                waOk ? 0xFF085041 : 0xFF791F1F, waOk ? 0xFFE1F5EE : 0xFFFCEBEB), ui.chipParams());
+        LinearLayout chipSpacer = new LinearLayout(activity);
+        chipRow.addView(chipSpacer, weighted(1f));
+        Button autoButton = actionButton("Auto-send " + (autoSend ? "ON" : "OFF"));
+        autoButton.setTextColor(autoSend ? 0xFF0C447C : 0xFF64748B);
         autoButton.setTypeface(boldTypeface);
+        autoButton.setBackground(ui.roundedBg(autoSend ? 0xFFE6F1FB : 0xFFF1F5F9, 99, 0, 0));
         autoButton.setOnClickListener(v -> new AlertDialog.Builder(activity)
                 .setTitle(autoSend ? "Turn auto-send off?" : "Turn auto-send on?")
                 .setMessage(autoSend ? "Only manual send will work while off." : "Reports are sent via WhatsApp automatically at each time.")
@@ -205,18 +211,58 @@ class DutyReportView {
         chipRow.addView(autoButton, buttonParams());
         container.addView(chipRow);
 
-        // 第三行：統計
+        // 第三行：摘要卡（code + 來源/next + sent 進度）
         String segText = segmentsText();
         String source = plan.optString("source", "");
         String sourceLabel = "override".equals(source) ? "override" : "roster".equals(source) ? "roster" : "—";
-        String statLine = "Code " + (segText.isEmpty() ? "—" : segText) + " (" + sourceLabel + ")"
-                + ("stop".equals(mode) ? " · stopped" : "")
-                + " · Sent " + plan.optInt("sent_count", 0) + "/" + plan.optInt("total_count", 0);
         String nextTime = plan.optString("next_time", "");
-        if (!nextTime.isEmpty()) {
-            statLine += " · next " + nextTime;
-        }
-        container.addView(textView(statLine, 12, 0xFF0F172A, true));
+        int sentCount = plan.optInt("sent_count", 0);
+        int totalCount = plan.optInt("total_count", 0);
+
+        LinearLayout summaryCard = ui.card(0xFFF1F5F9, 0, 0);
+        summaryCard.setOrientation(LinearLayout.HORIZONTAL);
+        summaryCard.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout summaryLeft = new LinearLayout(activity);
+        summaryLeft.setOrientation(LinearLayout.VERTICAL);
+        TextView codeText = textView(segText.isEmpty() ? "—" : segText, 16, 0xFF0F172A, true);
+        codeText.setPadding(0, 0, 0, 0);
+        summaryLeft.addView(codeText);
+        String subLine = sourceLabel
+                + ("stop".equals(mode) ? " · stopped" : "")
+                + (nextTime.isEmpty() ? "" : " · next " + nextTime);
+        TextView subText = textView(subLine, 11, "stop".equals(mode) ? 0xFFB91C1C : 0xFF64748B, false);
+        subText.setPadding(0, 0, 0, 0);
+        summaryLeft.addView(subText);
+        summaryCard.addView(summaryLeft, weighted(1f));
+
+        LinearLayout summaryRight = new LinearLayout(activity);
+        summaryRight.setOrientation(LinearLayout.VERTICAL);
+        summaryRight.setGravity(Gravity.END);
+        TextView sentText = textView(sentCount + "/" + totalCount, 16, 0xFF0F172A, true);
+        sentText.setPadding(0, 0, 0, 0);
+        sentText.setGravity(Gravity.END);
+        summaryRight.addView(sentText);
+        TextView sentLabel = textView("sent", 11, 0xFF64748B, false);
+        sentLabel.setPadding(0, 0, 0, 0);
+        sentLabel.setGravity(Gravity.END);
+        summaryRight.addView(sentLabel);
+        summaryCard.addView(summaryRight, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout progressTrack = new LinearLayout(activity);
+        progressTrack.setOrientation(LinearLayout.HORIZONTAL);
+        progressTrack.setBackground(ui.roundedBg(0xFFD8DEE6, 3, 0, 0));
+        int doneWeight = totalCount > 0 ? sentCount : 0;
+        int restWeight = totalCount > 0 ? totalCount - sentCount : 1;
+        android.view.View doneBar = new android.view.View(activity);
+        doneBar.setBackground(ui.roundedBg(0xFF1D9E75, 3, 0, 0));
+        progressTrack.addView(doneBar, new LinearLayout.LayoutParams(0, dp(6), doneWeight));
+        android.view.View restBar = new android.view.View(activity);
+        progressTrack.addView(restBar, new LinearLayout.LayoutParams(0, dp(6), restWeight));
+        LinearLayout.LayoutParams trackParams = new LinearLayout.LayoutParams(dp(44), dp(6));
+        trackParams.setMargins(dp(10), 0, 0, 0);
+        summaryCard.addView(progressTrack, trackParams);
+        container.addView(summaryCard, ui.cardParams());
 
         String dataError = plan.optString("data_error", "");
         if (!dataError.isEmpty()) {
@@ -226,16 +272,26 @@ class DutyReportView {
         // slot 列表
         JSONArray slots = plan.optJSONArray("slots");
         if (slots == null || slots.length() == 0) {
-            TextView emptyView = textView("No safety reports this day", 13, 0xFF64748B, true);
-            emptyView.setGravity(Gravity.CENTER_HORIZONTAL);
-            emptyView.setPadding(dp(8), dp(16), dp(8), dp(16));
-            container.addView(emptyView, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            LinearLayout emptyCard = ui.card(0xFFF8FAFC, 0xFFE2E8F0, 1);
+            emptyCard.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyCard.setPadding(dp(16), dp(24), dp(16), dp(24));
+            TextView emptyIcon = textView("🛡", 30, 0xFF94A3B8, false);
+            emptyIcon.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyCard.addView(emptyIcon, fullWidth());
+            TextView emptyTitle = textView("No safety reports this day", 15, 0xFF0F172A, true);
+            emptyTitle.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyCard.addView(emptyTitle, fullWidth());
+            TextView emptySub = textView(
+                    "Code " + (segText.isEmpty() ? "—" : segText) + " — nothing is scheduled to send.",
+                    12, 0xFF64748B, false);
+            emptySub.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyCard.addView(emptySub, fullWidth());
+            container.addView(emptyCard, ui.cardParams());
         } else {
             for (int i = 0; i < slots.length(); i++) {
                 JSONObject slot = slots.optJSONObject(i);
                 if (slot != null) {
-                    container.addView(slotRow(slot, relation));
+                    container.addView(slotRow(slot, relation), ui.cardParams());
                 }
             }
         }
@@ -243,48 +299,59 @@ class DutyReportView {
         // 全日操作（過去日唔俾改）
         if (!isPast) {
             container.addView(actionBar(mode, source));
-            container.addView(textView(
-                    "轉code只改報更行位——更表／餐單／報開工收工唔郁",
-                    10, 0xFF9A5B00, true));
+            container.addView(ui.noteStrip(
+                    "⚠ 轉code只改報更——更表／行位表／餐單／報開工收工唔郁"),
+                    ui.cardParams());
         } else {
             container.addView(textView("Past day is read-only.", 10, 0xFF9AA1A9, false));
         }
 
-        // 對照表 + template（撳一行即編輯，改完即儲存）
-        container.addView(sectionTitle("Code → WhatsApp group mapping"));
+        // 對照表 + template（預設摺埋，撳標題展開；撳一行即編輯，改完即儲存）
         JSONObject mapping = plan.optJSONObject("mapping");
+        List<String> codes = new ArrayList<>();
         if (mapping != null) {
             Iterator<String> keys = mapping.keys();
-            List<String> codes = new ArrayList<>();
             while (keys.hasNext()) {
                 codes.add(keys.next());
             }
             java.util.Collections.sort(codes);
+        }
+        container.addView(sectionHeader("Code → WhatsApp group mapping",
+                codes.size() + " codes", mappingExpanded, v -> {
+                    mappingExpanded = !mappingExpanded;
+                    render();
+                }));
+        if (mappingExpanded) {
             for (String code : codes) {
                 String group = mapping.optString(code, "");
                 TextView rowView = textView(code + " → " + group, 11, 0xFF374151, false);
-                rowView.setBackgroundColor(0xFFF8FAFC);
+                rowView.setBackground(ui.roundedBg(0xFFF8FAFC, 6, 0, 0));
                 rowView.setPadding(dp(10), dp(5), dp(10), dp(5));
                 LinearLayout.LayoutParams params = fullWidth();
                 params.setMargins(dp(8), dp(2), dp(8), 0);
                 rowView.setOnClickListener(v -> showMappingEditDialog(code, group));
                 container.addView(rowView, params);
             }
+            LinearLayout mapActions = row();
+            Button addCode = actionButton("+ Add code");
+            addCode.setOnClickListener(v -> showMappingEditDialog("", ""));
+            mapActions.addView(addCode, weighted(1f));
+            Button templateButton = actionButton("Template...");
+            templateButton.setOnClickListener(v -> showTemplateDialog());
+            mapActions.addView(templateButton, weighted(1f));
+            container.addView(mapActions);
+            container.addView(textView("Template: " + plan.optString("message_template", ""), 10, 0xFF9AA1A9, false));
         }
-        LinearLayout mapActions = row();
-        Button addCode = actionButton("+ Add code");
-        addCode.setOnClickListener(v -> showMappingEditDialog("", ""));
-        mapActions.addView(addCode, weighted(1f));
-        Button templateButton = actionButton("Template...");
-        templateButton.setOnClickListener(v -> showTemplateDialog());
-        mapActions.addView(templateButton, weighted(1f));
-        container.addView(mapActions);
-        container.addView(textView("Template: " + plan.optString("message_template", ""), 10, 0xFF9AA1A9, false));
 
-        // Control log
+        // Control log（預設摺埋）
         JSONArray events = plan.optJSONArray("events");
-        if (events != null && events.length() > 0) {
-            container.addView(sectionTitle("Control log"));
+        int eventCount = events != null ? events.length() : 0;
+        container.addView(sectionHeader("Control log",
+                eventCount + " events", logExpanded, v -> {
+                    logExpanded = !logExpanded;
+                    render();
+                }));
+        if (logExpanded && events != null) {
             int shown = Math.min(events.length(), 8);
             for (int i = 0; i < shown; i++) {
                 JSONObject ev = events.optJSONObject(i);
@@ -297,6 +364,21 @@ class DutyReportView {
                 container.addView(textView(line, 10, 0xFF64748B, false));
             }
         }
+    }
+
+    /** 可摺疊 section 標題行：左標題、右數量+箭咀，撳一下 toggle。 */
+    private LinearLayout sectionHeader(String title, String count, boolean expanded,
+            android.view.View.OnClickListener onClick) {
+        LinearLayout header = row();
+        header.setPadding(dp(8), dp(8), dp(8), dp(4));
+        TextView titleView = textView(title, 12, 0xFF334155, true);
+        titleView.setPadding(0, 0, 0, 0);
+        header.addView(titleView, weighted(1f));
+        TextView countView = textView(count + " " + (expanded ? "▴" : "▾"), 11, 0xFF94A3B8, false);
+        countView.setPadding(0, 0, 0, 0);
+        header.addView(countView);
+        header.setOnClickListener(onClick);
+        return header;
     }
 
     private LinearLayout actionBar(String mode, String source) {
@@ -345,8 +427,10 @@ class DutyReportView {
         boolean editable = !isPast && !"sent".equals(status) && !"stopped".equals(status);
 
         LinearLayout rowLayout = row();
-        rowLayout.setBackgroundColor("due".equals(status) ? 0xFFEEF4FF : 0xFFFFFFFF);
-        rowLayout.setPadding(dp(8), dp(4), dp(8), dp(4));
+        rowLayout.setBackground("due".equals(status)
+                ? ui.roundedBg(0xFFE6F1FB, 10, 0xFF378ADD, 2)
+                : ui.roundedBg(0xFFFFFFFF, 10, 0xFFD8DEE6, 1));
+        rowLayout.setPadding(dp(10), dp(6), dp(10), dp(6));
 
         LinearLayout textColumn = new LinearLayout(activity);
         textColumn.setOrientation(LinearLayout.VERTICAL);
@@ -355,7 +439,7 @@ class DutyReportView {
         if (!timeText.equals(slot.optString("original_time", timeText))) {
             timeText += "*";
         }
-        TextView time = textView(timeText, 15, editable ? 0xFF0B3EA8 : 0xFF0F172A, true);
+        TextView time = textView(timeText, 18, editable ? 0xFF0B3EA8 : 0xFF64748B, true);
         time.setPadding(0, 0, dp(10), 0);
         if (editable) {
             time.setOnClickListener(v -> showTimeDialog(slot));
@@ -405,44 +489,27 @@ class DutyReportView {
     }
 
     private TextView statusView(JSONObject slot, String status) {
-        String text;
-        int color;
         switch (status) {
             case "sent":
-                text = "✓ sent " + timeOnly(slot.optString("sent_at", ""))
-                        + (slot.optBoolean("manual", false) ? " (manual)" : "");
-                color = 0xFF166534;
-                break;
+                return ui.chip("✓ " + timeOnly(slot.optString("sent_at", ""))
+                        + (slot.optBoolean("manual", false) ? " (manual)" : ""),
+                        0xFF085041, 0xFFE1F5EE);
             case "failed":
-                text = "✗ failed";
-                color = 0xFFB91C1C;
-                break;
+                return ui.chip("✗ failed", 0xFF791F1F, 0xFFFCEBEB);
             case "missed":
-                text = "✗ missed";
-                color = 0xFFB91C1C;
-                break;
+                return ui.chip("✗ missed", 0xFF791F1F, 0xFFFCEBEB);
             case "skipped":
-                text = "skipped";
-                color = 0xFF9AA1A9;
-                break;
+                return ui.chip("skipped", 0xFF5F5E5A, 0xFFF1EFE8);
             case "stopped":
-                text = "stopped";
-                color = 0xFF9AA1A9;
-                break;
+                return ui.chip("stopped", 0xFF5F5E5A, 0xFFF1EFE8);
             case "no_record":
-                text = "—";
-                color = 0xFF9AA1A9;
-                break;
+                return textView("—", 11, 0xFF9AA1A9, false);
             case "due":
-                text = plan.optBoolean("auto_send", false) ? "\u23f3 sending..." : "due (auto-send off)";
-                color = 0xFF0B3EA8;
-                break;
+                return textView(plan.optBoolean("auto_send", false)
+                        ? "\u23f3 sending..." : "due (auto-send off)", 11, 0xFF0C447C, true);
             default:
-                text = "⏱ " + countdownText(slot);
-                color = 0xFF9AA1A9;
-                break;
+                return textView("⏱ " + countdownText(slot), 11, 0xFF9AA1A9, false);
         }
-        return textView(text, 11, color, false);
     }
 
     private String countdownText(JSONObject slot) {

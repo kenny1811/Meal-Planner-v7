@@ -13,7 +13,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -394,7 +393,7 @@ class OnOffDutyView {
         LinearLayout dateRow = row();
         String relationLabel = isToday ? "Today" : isPast ? "Past" : "Future";
         TextView dateLabel = textView(
-                plan.optString("date_iso", "") + " (" + relationLabel + ") · 30h day",
+                plan.optString("date_iso", "") + " (" + relationLabel + ")",
                 13, 0xFF0F172A, true);
         dateLabel.setGravity(Gravity.CENTER_VERTICAL);
         dateRow.addView(dateLabel, weighted(1f));
@@ -412,24 +411,29 @@ class OnOffDutyView {
         dateRow.addView(refreshButton, new LinearLayout.LayoutParams(dp(44), dp(30)));
         container.addView(dateRow);
 
-        // 第二行：Semi ⇄ Auto 掣（左=半自動出連結，右=夠鐘自動交）
+        // 第二行：30h chip + Semi ⇄ Auto segmented 掣（左=半自動出連結，右=夠鐘自動交）
         boolean autoSend = plan.optBoolean("auto_send", false);
         LinearLayout modeRow = row();
-        TextView modeLabel = textView(
-                autoSend ? "Auto: submits at the shift time" : "Semi: open link, submit yourself",
-                11, autoSend ? 0xFF0B3EA8 : 0xFF64748B, true);
-        modeLabel.setGravity(Gravity.CENTER_VERTICAL);
-        modeRow.addView(modeLabel, weighted(1f));
-        TextView semiText = textView("Semi", 10, autoSend ? 0xFF9AA1A9 : 0xFF0B3EA8, !autoSend);
-        modeRow.addView(semiText, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        Switch autoSwitch = new Switch(activity);
-        autoSwitch.setChecked(autoSend);
-        autoSwitch.setOnClickListener(v -> {
-            autoSwitch.setChecked(autoSend); // 等 API 成功先反映
+        modeRow.setPadding(dp(8), dp(4), dp(8), dp(2));
+        modeRow.addView(ui.chip("30h day", 0xFF444441, 0xFFF1EFE8));
+        LinearLayout modeSpacer = new LinearLayout(activity);
+        modeRow.addView(modeSpacer, weighted(1f));
+        LinearLayout segmented = row();
+        segmented.setBackground(ui.roundedBg(0xFFFFFFFF, 99, 0xFFD8DEE6, 1));
+        TextView semiText = textView("Semi", 11, autoSend ? 0xFF94A3B8 : 0xFF0C447C, !autoSend);
+        semiText.setBackground(autoSend ? null : ui.roundedBg(0xFFE6F1FB, 99, 0, 0));
+        semiText.setPadding(dp(12), dp(4), dp(12), dp(4));
+        semiText.setOnClickListener(v -> {
             if (autoSend) {
                 postConfig(false);
-            } else {
+            }
+        });
+        segmented.addView(semiText);
+        TextView autoText = textView("Auto", 11, autoSend ? 0xFF0C447C : 0xFF94A3B8, autoSend);
+        autoText.setBackground(autoSend ? ui.roundedBg(0xFFE6F1FB, 99, 0, 0) : null);
+        autoText.setPadding(dp(12), dp(4), dp(12), dp(4));
+        autoText.setOnClickListener(v -> {
+            if (!autoSend) {
                 new AlertDialog.Builder(activity)
                         .setTitle("Turn full-auto on?")
                         .setMessage("On/Off Duty forms will be submitted automatically at the shift times.")
@@ -438,129 +442,166 @@ class OnOffDutyView {
                         .show();
             }
         });
-        modeRow.addView(autoSwitch, buttonParams());
-        TextView autoText = textView("Auto", 10, autoSend ? 0xFF0B3EA8 : 0xFF9AA1A9, autoSend);
-        modeRow.addView(autoText, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        segmented.addView(autoText);
+        modeRow.addView(segmented);
         container.addView(modeRow);
 
-        // 第三行：更碼（Spinner pickup list，揀即轉更——寫入更表）/ form
+        // 第三行：更碼摘要卡（Spinner pickup list，揀即轉更——寫入更表）
         String code = plan.optString("roster_code", "");
         String form = plan.optString("form", "");
         String formLabel = "vca".equals(form) ? "VCA form" : "other".equals(form) ? "其他 form" : "—";
         String post = plan.optString("post", "");
-        LinearLayout codeRow = row();
-        TextView codeLabel = textView("Code", 12, 0xFF0F172A, true);
-        codeRow.addView(codeLabel, new LinearLayout.LayoutParams(
+        LinearLayout codeCard = ui.card(0xFFF1F5F9, 0, 0);
+        codeCard.setOrientation(LinearLayout.HORIZONTAL);
+        codeCard.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout codeColumn = new LinearLayout(activity);
+        codeColumn.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout codeLine = row();
+        codeLine.addView(buildCodeSpinner(code), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        codeRow.addView(buildCodeSpinner(code), new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        TextView formView = textView("· " + formLabel, 12, 0xFF0F172A, true);
-        codeRow.addView(formView, weighted(1f));
-        container.addView(codeRow);
-        container.addView(textView(
-                "揀code轉更：會寫入更表——報更／餐單／日曆全部跟住變",
-                10, 0xFF9A5B00, true));
-        if (!post.isEmpty()) {
-            container.addView(textView(post + " · Staff " + plan.optString("staff_number", ""),
-                    11, 0xFF374151, false));
-        }
+        codeColumn.addView(codeLine);
+        String codeSub = formLabel
+                + (post.isEmpty() ? "" : " · " + post)
+                + (plan.optString("staff_number", "").isEmpty()
+                        ? "" : " · Staff " + plan.optString("staff_number", ""));
+        TextView codeSubView = textView(codeSub, 11, 0xFF64748B, false);
+        codeSubView.setPadding(0, 0, 0, 0);
+        codeColumn.addView(codeSubView);
+        codeCard.addView(codeColumn, weighted(1f));
+        codeCard.addView(ui.chip(autoSend ? "auto at time" : "semi",
+                autoSend ? 0xFF0C447C : 0xFF5F5E5A, autoSend ? 0xFFE6F1FB : 0xFFF1EFE8));
+        container.addView(codeCard, ui.cardParams());
+        container.addView(ui.noteStrip(
+                "⚠ 揀code轉更會寫入更表——報更／餐單／日曆全部跟住變"),
+                ui.cardParams());
 
         String note = plan.optString("note", "");
         JSONArray actions = plan.optJSONArray("actions");
         if (actions == null || actions.length() == 0) {
-            TextView emptyView = textView(note.isEmpty() ? "No report this day" : note, 13, 0xFF64748B, true);
-            emptyView.setGravity(Gravity.CENTER_HORIZONTAL);
-            emptyView.setPadding(dp(8), dp(16), dp(8), dp(16));
-            container.addView(emptyView, fullWidth());
+            LinearLayout emptyCard = ui.card(0xFFF8FAFC, 0xFFE2E8F0, 1);
+            emptyCard.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyCard.setPadding(dp(16), dp(24), dp(16), dp(24));
+            TextView emptyIcon = textView("🛌", 30, 0xFF94A3B8, false);
+            emptyIcon.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyCard.addView(emptyIcon, fullWidth());
+            TextView emptyTitle = textView("No report this day", 15, 0xFF0F172A, true);
+            emptyTitle.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyCard.addView(emptyTitle, fullWidth());
+            TextView emptySub = textView(
+                    note.isEmpty() ? code + " — no on/off duty forms." : note,
+                    12, 0xFF64748B, false);
+            emptySub.setGravity(Gravity.CENTER_HORIZONTAL);
+            emptyCard.addView(emptySub, fullWidth());
+            container.addView(emptyCard, ui.cardParams());
             return;
         }
         if (!note.isEmpty()) {
             container.addView(textView(note, 10, 0xFFB91C1C, false));
         }
 
+        // 下一個未報嘅 action（今日先有）藍框 highlight
+        int highlightIndex = -1;
+        if (isToday) {
+            for (int i = 0; i < actions.length(); i++) {
+                JSONObject action = actions.optJSONObject(i);
+                String status = action != null ? action.optString("status", "") : "";
+                if (!"sent".equals(status) && !"opened".equals(status)) {
+                    highlightIndex = i;
+                    break;
+                }
+            }
+        }
         for (int i = 0; i < actions.length(); i++) {
             JSONObject action = actions.optJSONObject(i);
             if (action != null) {
-                container.addView(actionCard(action));
+                container.addView(actionCard(action, i == highlightIndex), ui.cardParams());
             }
         }
     }
 
-    private LinearLayout actionCard(JSONObject action) {
+    private LinearLayout actionCard(JSONObject action, boolean highlight) {
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackgroundColor(0xFFF8FAFC);
-        card.setPadding(dp(10), dp(8), dp(10), dp(10));
-        LinearLayout.LayoutParams cardParams = fullWidth();
-        cardParams.setMargins(dp(8), dp(6), dp(8), 0);
-        card.setLayoutParams(cardParams);
+        card.setBackground(highlight
+                ? ui.roundedBg(0xFFF5FAFF, 12, 0xFF378ADD, 2)
+                : ui.roundedBg(0xFFFFFFFF, 12, 0xFFD8DEE6, 1));
+        card.setPadding(dp(12), dp(10), dp(12), dp(12));
 
-        card.addView(textView(action.optString("label", ""), 11, 0xFF64748B, true));
+        String status = action.optString("status", "");
+        String loggedAt = action.optString("logged_at", "");
+        String source = action.optString("log_source", "");
+
+        // 卡頭：label + 狀態 chip
+        LinearLayout headRow = row();
+        TextView labelView = textView(action.optString("label", ""), 12,
+                highlight ? 0xFF0C447C : 0xFF334155, true);
+        labelView.setPadding(0, 0, 0, 0);
+        headRow.addView(labelView, weighted(1f));
+        if ("sent".equals(status) || "opened".equals(status)) {
+            headRow.addView(ui.chip("✓ " + status + " " + formatLoggedAt(loggedAt) + " · " + source,
+                    0xFF085041, 0xFFE1F5EE));
+        } else if ("failed".equals(status)) {
+            headRow.addView(ui.chip("✗ failed " + formatLoggedAt(loggedAt) + " · retrying",
+                    0xFF791F1F, 0xFFFCEBEB));
+        } else if ("missed".equals(status)) {
+            headRow.addView(ui.chip("✗ missed — open the form yourself",
+                    0xFF791F1F, 0xFFFCEBEB));
+        } else if ("hold".equals(status)) {
+            headRow.addView(ui.chip("⏸ holding — 真收工先撳 Send now",
+                    0xFF9A5B00, 0xFFFAEEDA));
+        } else {
+            headRow.addView(textView("not reported yet", 11,
+                    highlight ? 0xFF0C447C : 0xFF9AA1A9, highlight));
+        }
+        card.addView(headRow);
+
         String time = action.optString("time", "");
         String kind = action.optString("kind", "");
         boolean overridden = plan != null && plan.optBoolean(
                 "start".equals(kind) ? "start_override" : "end_override", false);
         TextView timeView = textView(
                 (time.isEmpty() ? "—" : time) + (overridden ? " *" : "") + "  ✎",
-                22, overridden ? 0xFF9A5B00 : 0xFF0F172A, true);
+                26, overridden ? 0xFF9A5B00 : 0xFF0F172A, true);
+        timeView.setPadding(0, dp(2), 0, 0);
         timeView.setOnClickListener(v -> showTimeEditDialog(action));
         card.addView(timeView);
-        card.addView(textView(
+        TextView hintView = textView(
                 overridden ? "加班表 override · 撳時間改" : "撳時間現場改（寫入加班表）",
-                9, 0xFF9AA1A9, false));
+                9, overridden ? 0xFF9A5B00 : 0xFF9AA1A9, false);
+        hintView.setPadding(0, 0, 0, 0);
+        card.addView(hintView);
 
-        String status = action.optString("status", "");
-        String loggedAt = action.optString("logged_at", "");
-        String source = action.optString("log_source", "");
-        String statusText;
-        int statusColor;
-        if ("sent".equals(status) || "opened".equals(status)) {
-            statusText = "✓ " + status + " " + formatLoggedAt(loggedAt) + " · " + source;
-            statusColor = 0xFF166534;
-        } else if ("failed".equals(status)) {
-            statusText = "✗ failed " + formatLoggedAt(loggedAt) + " · retrying";
-            statusColor = 0xFFB91C1C;
-        } else if ("missed".equals(status)) {
-            statusText = "✗ missed — open the form yourself";
-            statusColor = 0xFFB91C1C;
-        } else if ("hold".equals(status)) {
-            statusText = "⏸ holding — 真收工先撳齊發";
-            statusColor = 0xFF9A5B00;
-        } else {
-            statusText = "not reported yet";
-            statusColor = 0xFF9AA1A9;
-        }
-        card.addView(textView(statusText, 10, statusColor, false));
-
+        // 掣行：Open form（＋收工卡今日加 Hold / Send now）
         String url = action.optString("url", "");
-        if (!url.isEmpty()) {
-            Button open = actionButton("Open form ↗");
-            open.setTypeface(boldTypeface);
-            open.setTextColor(0xFF0B3EA8);
-            open.setOnClickListener(v -> openForm(action));
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(38));
-            params.setMargins(0, dp(6), 0, 0);
-            card.addView(open, params);
-        }
-
-        // 收工卡（今日）：遲收工 Hold（兩邊一齊 hold）＋ 真收工齊發。
         boolean isToday = plan != null && "today".equals(plan.optString("relation", "today"));
-        if ("end".equals(kind) && isToday && !"sent".equals(status)) {
+        boolean showLate = "end".equals(kind) && isToday && !"sent".equals(status);
+        LinearLayout buttonRow = row();
+        boolean hasButton = false;
+        if (!url.isEmpty()) {
+            Button open = ui.outlineButton("Open form ↗", 0xFF0C447C, 0xFF378ADD);
+            open.setOnClickListener(v -> openForm(action));
+            buttonRow.addView(open, new LinearLayout.LayoutParams(0, dp(38), showLate ? 1.2f : 1f));
+            hasButton = true;
+        }
+        if (showLate) {
             boolean holding = "hold".equals(status);
-            LinearLayout lateRow = row();
-            Button holdButton = actionButton(holding ? "取消 Hold" : "遲收工 Hold");
+            Button holdButton = ui.outlineButton(holding ? "Cancel hold" : "Hold",
+                    0xFF334155, 0xFFD8DEE6);
             holdButton.setOnClickListener(v -> postLateOff(holding ? "release" : "hold", ""));
-            lateRow.addView(holdButton, weighted(1f));
-            Button sendButton = actionButton("真收工 · 齊發");
-            sendButton.setTypeface(boldTypeface);
-            sendButton.setTextColor(0xFFB91C1C);
+            LinearLayout.LayoutParams holdParams = new LinearLayout.LayoutParams(0, dp(38), 1f);
+            holdParams.setMargins(dp(6), 0, 0, 0);
+            buttonRow.addView(holdButton, holdParams);
+            Button sendButton = ui.outlineButton("Send now", 0xFFA32D2D, 0xFFF0B9B9);
             sendButton.setOnClickListener(v -> showLateSendDialog());
-            lateRow.addView(sendButton, weighted(1f));
-            LinearLayout.LayoutParams lateParams = fullWidth();
-            lateParams.setMargins(0, dp(4), 0, 0);
-            card.addView(lateRow, lateParams);
+            LinearLayout.LayoutParams sendParams = new LinearLayout.LayoutParams(0, dp(38), 1f);
+            sendParams.setMargins(dp(6), 0, 0, 0);
+            buttonRow.addView(sendButton, sendParams);
+            hasButton = true;
+        }
+        if (hasButton) {
+            LinearLayout.LayoutParams rowParams = fullWidth();
+            rowParams.setMargins(0, dp(8), 0, 0);
+            card.addView(buttonRow, rowParams);
         }
         return card;
     }
