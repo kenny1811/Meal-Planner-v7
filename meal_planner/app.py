@@ -1240,27 +1240,29 @@ _WEB_VERSION_CACHE: tuple[float, str] | None = None
 
 
 def _web_version_name() -> str:
-    """網頁版 versionName：最近 v* tag 做 base（v7.0 起），
-    之後每個改到 meal_planner/ 嘅 commit，minor 自動 +1（唔使人手掹）。"""
+    """網頁版 versionName X.Y.Z：最近 v* tag 做 base（v7.0.0 起）。
+    Z（patch）＝tag 之後每個改到 meal_planner/ 嘅 commit 自動 +1；
+    Y（feature）＝功能級改動，commit 時打新 tag vX.(Y+1).0；
+    X（major）＝大改版先郁，打 tag v(X+1).0.0。"""
     global _WEB_VERSION_CACHE
     now = time.time()
     if _WEB_VERSION_CACHE is not None and now - _WEB_VERSION_CACHE[0] < 60.0:
         return _WEB_VERSION_CACHE[1]
-    version = "7.0"
+    version = "7.0.0"
     repo_root = _WEB_DIR.parent.parent
     try:
         described = subprocess.run(
             ["git", "describe", "--tags", "--match", "v[0-9]*", "--abbrev=0"],
             capture_output=True, text=True, cwd=repo_root, timeout=5,
         )
-        match = re.fullmatch(r"v(\d+)\.(\d+)", described.stdout.strip()) if described.returncode == 0 else None
+        match = re.fullmatch(r"v(\d+)\.(\d+)(?:\.(\d+))?", described.stdout.strip()) if described.returncode == 0 else None
         if match:
             counted = subprocess.run(
                 ["git", "rev-list", "--count", f"{described.stdout.strip()}..HEAD", "--", "meal_planner"],
                 capture_output=True, text=True, cwd=repo_root, timeout=5,
             )
             bump = int(counted.stdout.strip()) if counted.returncode == 0 else 0
-            version = f"{match.group(1)}.{int(match.group(2)) + bump}"
+            version = f"{match.group(1)}.{match.group(2)}.{int(match.group(3) or 0) + bump}"
     except (OSError, ValueError, subprocess.SubprocessError):
         pass
     _WEB_VERSION_CACHE = (now, version)
