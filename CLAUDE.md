@@ -6,6 +6,14 @@
 - `android_watchface_app/`：自訂 Wear OS 錶面。
 - Live 資料庫：專案根目錄 `meal_planner.sqlite3`（`.gitignore` 已排除，備份亦然）。
 
+## 版本號 & Changelog（每個 session 都要跟）
+- 網頁 sidebar 版本號 X.Y.Z 嘅 source of truth 係根目錄 `CHANGELOG.md` 最頂嘅 `## X.Y.Z` 標題
+  （`app.py` `_web_version_name()` 讀，跟檔案 mtime 即時生效，**唔使 commit、唔使 restart**）。
+- **凡改到 `meal_planner/` 嘅嘢（code／UI／行為），完成嗰個改動時必須喺 `CHANGELOG.md` 頂
+  加一條新 entry 並跳 version**：Z=修補／執靚／微調、Y=功能級改動（Z 歸零）、X=大改版（好少郁）。
+  一個邏輯改動一條 entry（唔係逐個 file 一條）；entry 用英文（app UI 係英文）、日期 dd/mm/yyyy。
+- Sidebar 版本號 click 落去會開 changelog dialog（`/api/changelog`）。
+
 ## 測試
 - `pytest`（需 venv 裝齊 fastapi / pulp / openpyxl / pyyaml）。
 - 不依賴 fastapi/pulp 的模組可用 `python -m unittest tests.<name>` 單獨跑。

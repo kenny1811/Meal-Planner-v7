@@ -2275,6 +2275,48 @@
     .duty-block table.duty-table td.duty-td-actions .duty-btn { height: 18px; line-height: 15px; padding: 0 7px; margin: 0; }
     .duty-block table.duty-table td.duty-plain { padding: 1px 4px; line-height: 1.1; }
     .duty-block table.duty-table tbody th { padding: 1px 4px; }
+    /* Changelog dialog（sidebar 版本號 click 開） */
+    .sidebar .brand-name { cursor: pointer; }
+    .modal-dialog.changelog-dialog {
+      width: min(560px, calc(100vw - 32px));
+      max-height: 78vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .changelog-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 0 8px;
+    }
+    .changelog-head h2 { margin: 0; }
+    .changelog-close {
+      border: 0;
+      background: transparent;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      color: var(--muted);
+      padding: 0 4px;
+    }
+    .changelog-close:hover { color: var(--text); }
+    .changelog-body {
+      overflow-y: auto;
+      min-height: 0;
+      font-size: 12px;
+    }
+    .changelog-body h3 { margin: 10px 0 4px; font-size: 13px; }
+    .changelog-body h3:first-child { margin-top: 0; }
+    .changelog-item {
+      position: relative;
+      padding: 1px 0 1px 14px;
+    }
+    .changelog-item::before {
+      content: "•";
+      position: absolute;
+      left: 3px;
+      color: var(--muted);
+    }
     /* ---- 拖動狀態全域 cursor 鎖 ----
        放喺檔案最尾 + :not(#specificity-boost) 抬高 specificity（#specificity-boost 冇元素用，
        純粹借 id 權重），確保拖動期間蓋過所有元素自己嘅 cursor／user-select 規則，毋須 !important。 */

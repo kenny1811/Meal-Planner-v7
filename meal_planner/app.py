@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import hashlib
-import subprocess
 import json
 import copy
 import time
@@ -1236,36 +1235,30 @@ def _apk_path(module: str) -> Path:
             / "outputs" / "apk" / "debug" / f"{name}-debug.apk")
 
 
+_CHANGELOG_PATH = _WEB_DIR.parent.parent / "CHANGELOG.md"
 _WEB_VERSION_CACHE: tuple[float, str] | None = None
 
 
 def _web_version_name() -> str:
-    """網頁版 versionName X.Y.Z：最近 v* tag 做 base（v7.0.0 起）。
-    Z（patch）＝tag 之後每個改到 meal_planner/ 嘅 commit 自動 +1；
-    Y（feature）＝功能級改動，commit 時打新 tag vX.(Y+1).0；
-    X（major）＝大改版先郁，打 tag v(X+1).0.0。"""
+    """網頁版 versionName X.Y.Z：讀 CHANGELOG.md 最頂 `## X.Y.Z` 標題（source of truth，唔靠 git）。
+    每次改動（唔使 commit）要喺 CHANGELOG.md 頂加一條：Z=修補/微調、Y=功能級、X=大改版。"""
     global _WEB_VERSION_CACHE
-    now = time.time()
-    if _WEB_VERSION_CACHE is not None and now - _WEB_VERSION_CACHE[0] < 60.0:
+    try:
+        mtime = _CHANGELOG_PATH.stat().st_mtime
+    except OSError:
+        return "7.0.0"
+    if _WEB_VERSION_CACHE is not None and _WEB_VERSION_CACHE[0] == mtime:
         return _WEB_VERSION_CACHE[1]
     version = "7.0.0"
-    repo_root = _WEB_DIR.parent.parent
     try:
-        described = subprocess.run(
-            ["git", "describe", "--tags", "--match", "v[0-9]*", "--abbrev=0"],
-            capture_output=True, text=True, cwd=repo_root, timeout=5,
-        )
-        match = re.fullmatch(r"v(\d+)\.(\d+)(?:\.(\d+))?", described.stdout.strip()) if described.returncode == 0 else None
-        if match:
-            counted = subprocess.run(
-                ["git", "rev-list", "--count", f"{described.stdout.strip()}..HEAD", "--", "meal_planner"],
-                capture_output=True, text=True, cwd=repo_root, timeout=5,
-            )
-            bump = int(counted.stdout.strip()) if counted.returncode == 0 else 0
-            version = f"{match.group(1)}.{match.group(2)}.{int(match.group(3) or 0) + bump}"
-    except (OSError, ValueError, subprocess.SubprocessError):
+        for line in _CHANGELOG_PATH.read_text(encoding="utf-8").splitlines():
+            found = re.match(r"##\s*v?(\d+\.\d+\.\d+)\b", line)
+            if found:
+                version = found.group(1)
+                break
+    except OSError:
         pass
-    _WEB_VERSION_CACHE = (now, version)
+    _WEB_VERSION_CACHE = (mtime, version)
     return version
 
 
@@ -1300,6 +1293,16 @@ def app_version() -> dict:
             "mtime": int(path.stat().st_mtime) if path.is_file() else 0,
         }
     return out
+
+
+@app.get("/api/changelog")
+def api_changelog() -> Response:
+    # sidebar 版本號 click 用：回原文 markdown，前端自己 render。
+    try:
+        text = _CHANGELOG_PATH.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    return Response(content=text, media_type="text/markdown; charset=utf-8", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/apk/watch")

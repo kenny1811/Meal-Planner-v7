@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Meal Planner v7</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260709-bowl" />
-  <link rel="stylesheet" href="style.css?v=20260723-oos-resolve-v2" />
+  <link rel="stylesheet" href="style.css?v=20260723-changelog-v1" />
 </head>
 <body>
   <div id="clock-top-right" class="clock-top-right">--/--/---- --- --:--:--</div>
@@ -23,10 +23,41 @@
         <span class="brand-name">餐單生成v7</span>
       </h2>
       <script>
-        fetch("/api/health").then((r) => r.json()).then((d) => {
-          const el = document.querySelector(".brand-name");
-          if (el && d && d.web_version) el.textContent = "餐單生成v" + d.web_version;
-        }).catch(() => {});
+        (() => {
+          const brand = document.querySelector(".brand-name");
+          fetch("/api/health").then((r) => r.json()).then((d) => {
+            if (brand && d && d.web_version) brand.textContent = "餐單生成v" + d.web_version;
+          }).catch(() => {});
+          if (!brand) return;
+          brand.title = "Show changelog";
+          brand.addEventListener("click", async () => {
+            const dialog = document.getElementById("changelog-dialog");
+            const body = document.getElementById("changelog-body");
+            if (!dialog || !body) return;
+            let text = "";
+            try { text = await (await fetch("/api/changelog")).text(); } catch { text = ""; }
+            body.textContent = "";
+            text.split(/\r?\n/).forEach((line) => {
+              if (/^##\s/.test(line)) {
+                const h = document.createElement("h3");
+                h.textContent = line.replace(/^##\s*/, "");
+                body.appendChild(h);
+              } else if (/^-\s/.test(line)) {
+                const item = document.createElement("div");
+                item.className = "changelog-item";
+                item.textContent = line.replace(/^-\s*/, "");
+                body.appendChild(item);
+              }
+            });
+            if (!body.firstChild) body.textContent = "No changelog entries yet.";
+            dialog.hidden = false;
+          });
+          document.addEventListener("click", (e) => {
+            const dialog = document.getElementById("changelog-dialog");
+            if (!dialog || dialog.hidden) return;
+            if (e.target === dialog || e.target.closest("#changelog-close")) dialog.hidden = true;
+          });
+        })();
       </script>
       <button type="button" class="menu-add-button" id="menu-add" title="Create menu item" aria-label="Create menu item">+</button>
     </div>
@@ -322,6 +353,15 @@
         <button type="button" class="btn btn-quiet" id="unsaved-ignore">Ignore</button>
         <button type="button" class="btn btn-quiet" id="unsaved-cancel">Cancel</button>
       </div>
+    </div>
+  </div>
+  <div id="changelog-dialog" class="modal-backdrop" hidden>
+    <div class="modal-dialog changelog-dialog" role="dialog" aria-modal="true" aria-labelledby="changelog-title">
+      <div class="changelog-head">
+        <h2 id="changelog-title">Changelog</h2>
+        <button type="button" class="changelog-close" id="changelog-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="changelog-body" id="changelog-body"></div>
     </div>
   </div>
     <script defer src="api.js?v=20260723-celledit-shared-v1"></script>
