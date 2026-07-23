@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import hashlib
+import subprocess
 import json
 import copy
 import time
@@ -1236,30 +1237,45 @@ def _apk_path(module: str) -> Path:
 
 
 _CHANGELOG_PATH = _WEB_DIR.parent.parent / "CHANGELOG.md"
-_WEB_VERSION_CACHE: tuple[float, str] | None = None
+_CHANGELOG_CACHE: tuple[float, str] | None = None
+
+
+def _changelog_text() -> str:
+    """committed 版 changelog（git show HEAD:CHANGELOG.md）：改動 commit 咗先算數，
+    未 commit 嘅 WIP 唔會跳 version、唔會喺 dialog 出現。冇 git 先 fallback 讀 working copy。"""
+    global _CHANGELOG_CACHE
+    now = time.time()
+    if _CHANGELOG_CACHE is not None and now - _CHANGELOG_CACHE[0] < 5.0:
+        return _CHANGELOG_CACHE[1]
+    text = ""
+    try:
+        shown = subprocess.run(
+            ["git", "show", "HEAD:CHANGELOG.md"],
+            capture_output=True, text=True, encoding="utf-8",
+            cwd=_WEB_DIR.parent.parent, timeout=5,
+        )
+        if shown.returncode == 0:
+            text = shown.stdout
+    except (OSError, subprocess.SubprocessError):
+        pass
+    if not text:
+        try:
+            text = _CHANGELOG_PATH.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+    _CHANGELOG_CACHE = (now, text)
+    return text
 
 
 def _web_version_name() -> str:
-    """網頁版 versionName X.Y.Z：讀 CHANGELOG.md 最頂 `## X.Y.Z` 標題（source of truth，唔靠 git）。
-    每次改動（唔使 commit）要喺 CHANGELOG.md 頂加一條：Z=修補/微調、Y=功能級、X=大改版。"""
-    global _WEB_VERSION_CACHE
-    try:
-        mtime = _CHANGELOG_PATH.stat().st_mtime
-    except OSError:
-        return "7.0.0"
-    if _WEB_VERSION_CACHE is not None and _WEB_VERSION_CACHE[0] == mtime:
-        return _WEB_VERSION_CACHE[1]
-    version = "7.0.0"
-    try:
-        for line in _CHANGELOG_PATH.read_text(encoding="utf-8").splitlines():
-            found = re.match(r"##\s*v?(\d+\.\d+\.\d+)\b", line)
-            if found:
-                version = found.group(1)
-                break
-    except OSError:
-        pass
-    _WEB_VERSION_CACHE = (mtime, version)
-    return version
+    """網頁版 versionName X.Y.Z：committed CHANGELOG.md 最頂 `## X.Y.Z` 標題。
+    完成改動 commit 時先加 entry 跳 version（entry 同 code 同一 commit）：
+    Z=修補/微調、Y=功能級、X=大改版。"""
+    for line in _changelog_text().splitlines():
+        found = re.match(r"##\s*v?(\d+\.\d+\.\d+)\b", line)
+        if found:
+            return found.group(1)
+    return "7.0.0"
 
 
 def _gradle_version(module: str) -> tuple[int, str]:
@@ -1297,12 +1313,8 @@ def app_version() -> dict:
 
 @app.get("/api/changelog")
 def api_changelog() -> Response:
-    # sidebar 版本號 click 用：回原文 markdown，前端自己 render。
-    try:
-        text = _CHANGELOG_PATH.read_text(encoding="utf-8")
-    except OSError:
-        text = ""
-    return Response(content=text, media_type="text/markdown; charset=utf-8", headers={"Cache-Control": "no-store"})
+    # sidebar 版本號 click 用：回 committed 版 markdown，前端自己 render。
+    return Response(content=_changelog_text(), media_type="text/markdown; charset=utf-8", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/apk/watch")

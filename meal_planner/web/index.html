@@ -47,6 +47,8 @@
                 item.className = "changelog-item";
                 item.textContent = line.replace(/^-\s*/, "");
                 body.appendChild(item);
+              } else if (/^\s+\S/.test(line) && body.lastElementChild && body.lastElementChild.classList.contains("changelog-item")) {
+                body.lastElementChild.textContent += " " + line.trim();
               }
             });
             if (!body.firstChild) body.textContent = "No changelog entries yet.";
