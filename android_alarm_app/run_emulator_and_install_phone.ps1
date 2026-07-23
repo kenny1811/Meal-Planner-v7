@@ -1,39 +1,14 @@
-param(
+﻿param(
     [string]$AvdName = "",
     [switch]$NoBuild,
     [int]$BootTimeoutSeconds = 180
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Definition) "..\adb_common.ps1")
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $projectRoot
-
-function Resolve-AdbPath {
-    $candidates = @()
-    if ($env:ANDROID_HOME) {
-        $candidates += Join-Path $env:ANDROID_HOME "platform-tools\adb.exe"
-    }
-    if ($env:ANDROID_SDK_ROOT) {
-        $candidates += Join-Path $env:ANDROID_SDK_ROOT "platform-tools\adb.exe"
-    }
-    $candidates += "C:\Users\Kenny\AppData\Local\Android\Sdk\platform-tools\adb.exe"
-    if ($env:LOCALAPPDATA) {
-        $candidates += Join-Path $env:LOCALAPPDATA "Android\Sdk\platform-tools\adb.exe"
-    }
-
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) {
-            return $candidate
-        }
-    }
-
-    $fromCmd = Get-Command adb -ErrorAction SilentlyContinue
-    if ($fromCmd) {
-        return $fromCmd.Source
-    }
-    return $null
-}
 
 function Resolve-EmulatorPath {
     $candidates = @(

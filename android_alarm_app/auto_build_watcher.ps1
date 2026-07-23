@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Continue"
+﻿$ErrorActionPreference = "Continue"
 $appDir  = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $trigger = Join-Path $appDir ".autobuild_trigger"
 $phone   = Join-Path $appDir "build_and_install_phone.ps1"
