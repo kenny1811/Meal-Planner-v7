@@ -1724,6 +1724,17 @@
       background: #dbeafe;
       outline: 0;
     }
+    #oos-menu .oos-menu-title {
+      padding: 4px 8px;
+      font-size: 11px;
+      color: #64748b;
+      white-space: nowrap;
+    }
+    #oos-menu .oos-menu-none {
+      margin-top: 2px;
+      border-top: 1px solid var(--grid);
+      color: #2563eb;
+    }
     table.catalog-table input[type="checkbox"] {
       width: 14px;
       height: 14px;

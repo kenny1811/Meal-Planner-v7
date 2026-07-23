@@ -8,8 +8,15 @@
         showMenuContextMenu(ev, menuItem);
         return;
       }
+      const mealCell = ev.target.closest("td.editable-content[data-date][data-meal]");
+      if (mealCell) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        showOosMenu(ev, mealCell);
+        return;
+      }
       const customContextMenuArea = ev.target.closest(
-        "#maint-editor, #catalog-editor, #detail-code-definitions, #maint-row-menu, #catalog-row-menu, #detail-row-menu"
+        "#maint-editor, #catalog-editor, #detail-code-definitions, #maint-row-menu, #catalog-row-menu, #detail-row-menu, #oos-menu"
       );
       if (customContextMenuArea) return;
       const insideApp = ev.target.closest(".app-shell") || ev.target.closest("#menu-context-menu");
@@ -174,6 +181,7 @@
         }
         currentFocusedDate = targetDate;
         await saveMemoryPayload();
+        playGenerateChime();
       } catch (x) {
         err.textContent = String(x);
         err.style.display = "block";
@@ -188,6 +196,128 @@
       renderFromMemory(anchor);
       await persistColumnWidths();
     });
+
+    // ---- 冇貨標記 + partial-day re-solve（右 click 餐格）----
+    // 唔理時間：right click 邊餐就由嗰餐起重算，之前嘅餐鎖住原封不動。
+    // （後端會自動略過該日冇顯示嘅餐名。）
+    function lockedMealsBefore(meal) {
+      const idx = MEALS.indexOf(meal);
+      return idx > 0 ? MEALS.slice(0, idx) : [];
+    }
+
+    function hideOosMenu() {
+      const menu = document.getElementById("oos-menu");
+      if (menu) menu.remove();
+    }
+
+    function oosMenuNote(menu, text) {
+      const note = document.createElement("div");
+      note.className = "oos-menu-title";
+      note.textContent = text;
+      menu.appendChild(note);
+    }
+
+    function showOosMenu(ev, cell) {
+      hideOosMenu();
+      const dateIso = cell.getAttribute("data-date");
+      const meal = cell.getAttribute("data-meal");
+      const day = storedMealPlanDay(dateIso);
+      const mealPlan = day && day.meal_plan ? day.meal_plan : null;
+      if (!mealPlan) return;
+      const items = (mealPlan.meal_items && Array.isArray(mealPlan.meal_items[meal]) ? mealPlan.meal_items[meal] : [])
+        .filter((it) => it && it.row != null);
+      const menu = document.createElement("div");
+      menu.id = "oos-menu";
+      menu.className = "catalog-row-menu";
+      oosMenuNote(menu, "Out of stock → Re-Generate");
+      if (!items.length) {
+        oosMenuNote(menu, "No markable item in this meal");
+      } else {
+        for (const it of items) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = String(it.name || "");
+          btn.addEventListener("click", async () => {
+            hideOosMenu();
+            await runOosResolve(dateIso, meal, it);
+          });
+          menu.appendChild(btn);
+        }
+      }
+      const resolveOnly = document.createElement("button");
+      resolveOnly.type = "button";
+      resolveOnly.className = "oos-menu-none";
+      resolveOnly.textContent = "Re-Generate only";
+      resolveOnly.addEventListener("click", async () => {
+        hideOosMenu();
+        await runOosResolve(dateIso, meal, null);
+      });
+      menu.appendChild(resolveOnly);
+      document.body.appendChild(menu);
+      const pad = 6;
+      const left = Math.min(ev.clientX, window.innerWidth - menu.offsetWidth - pad);
+      const top = Math.min(ev.clientY, window.innerHeight - menu.offsetHeight - pad);
+      menu.style.left = `${Math.max(pad, left)}px`;
+      menu.style.top = `${Math.max(pad, top)}px`;
+    }
+
+    document.addEventListener("click", (ev) => {
+      if (!ev.target || !ev.target.closest || !ev.target.closest("#oos-menu")) hideOosMenu();
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") hideOosMenu();
+    });
+
+    async function runOosResolve(dateIso, meal, item) {
+      const err = document.getElementById("err");
+      err.style.display = "none";
+      err.textContent = "";
+      const day = storedMealPlanDay(dateIso);
+      if (!day || !day.meal_plan) return;
+      const locked = lockedMealsBefore(meal);
+      const beforePanel = document.querySelector(".panel-bottom");
+      const prevTop = beforePanel ? beforePanel.scrollTop : 0;
+      const prevLeft = beforePanel ? beforePanel.scrollLeft : 0;
+      try {
+        const r = await fetch("/api/oos-resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateIso,
+            row_index: item ? Number(item.row) : null,
+            locked_meals: locked,
+            nutrient_indicators: day.nutrient_indicators || {},
+            meal_plan: day.meal_plan || {},
+          }),
+        });
+        const data = await parseJsonSafe(r);
+        if (!r.ok) {
+          err.textContent = apiErrorMessage(data, "Out-of-stock re-solve failed.", r.status);
+          err.style.display = "block";
+          return;
+        }
+        if (data && data.meal_plan) {
+          data.meal_plan.summary_timestamp = hkTimestamp();
+          day.meal_plan = data.meal_plan;
+        }
+        renderFromMemory(null);
+        const afterPanel = document.querySelector(".panel-bottom");
+        if (afterPanel) {
+          afterPanel.scrollTop = prevTop;
+          afterPanel.scrollLeft = prevLeft;
+        }
+        currentFocusedDate = dateIso;
+        await saveMemoryPayload();
+        playGenerateChime();
+        // 後端已暫停該食材；靜靜重載營養清單，令 Catalog 頁「暫停」剔號同步。
+        try {
+          renderNutritionCatalog(await loadNutritionCatalog());
+        } catch (_) {}
+      } catch (x) {
+        err.textContent = String(x);
+        err.style.display = "block";
+      }
+    }
     function isCleanMaintBaselineEvent(target) {
       if (!target || !target.closest || !target.closest("#maint-editor") || !target.dataset) return false;
       if (!Object.prototype.hasOwnProperty.call(target.dataset, "maintSavedValue")) return false;

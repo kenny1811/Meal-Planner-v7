@@ -221,6 +221,7 @@ def choose_ingredients_for_meals(
     fixed_meals: set[str] | None = None,
     reroll_nonce: int = 0,
     nutrition_entries: list[Any] | None = None,
+    bound_overrides: dict[int, dict[str, float]] | None = None,
 ) -> tuple[
     dict[str, list[str]],
     dict[str, dict[str, float]],
@@ -298,6 +299,7 @@ def choose_ingredients_for_meals(
             day_offset=day_offset,
             reroll_nonce=int(reroll_nonce or 0),
             fixed_nutrients=extra_fixed_nutrients,
+            bound_overrides=bound_overrides,
         )
         if solved is not None:
             for meal in fixed_meal_set:
@@ -416,6 +418,8 @@ def build_day_meal_plan(
     indicators: DayIndicatorProfile | None = None,
     reroll_nonce: int = 0,
     cache: MealPlanningCache | None = None,
+    locked_meals: dict[str, dict[str, Any]] | None = None,
+    bound_overrides: dict[int, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     """組合飯時主規則、各餐 Pattern、返工日午餐餐廳（第一命中）；可選 `day` 以解析行位表實際用餐時間。"""
     if not roster_code:
@@ -505,6 +509,19 @@ def build_day_meal_plan(
             for k in NUTRIENT_KEYS
         }
         solver_visible_meals.discard("午餐")
+
+    # 已食餐（partial-day re-solve）：當成固定營養，剔出求解範圍，內容原封不動。
+    locked = {m: v for m, v in (locked_meals or {}).items() if m in visible_meals and isinstance(v, dict)}
+    for meal, data in locked.items():
+        if meal not in solver_visible_meals:
+            # 例如餐廳午餐已經以固定營養處理，locked 數值同佢一致，唔好重複計。
+            continue
+        solver_visible_meals.discard(meal)
+        if fixed_nutrients is None:
+            fixed_nutrients = {k: 0.0 for k in NUTRIENT_KEYS}
+        nut = data.get("nutrients") if isinstance(data.get("nutrients"), dict) else {}
+        for k in NUTRIENT_KEYS:
+            fixed_nutrients[k] += float(nut.get(k, 0.0) or 0.0)
     by_meal = {m: (pattern_table.get(m) if m in solver_visible_meals else None) for m in MEAL_LABELS}
     fixed_meals = {
         meal
@@ -524,6 +541,7 @@ def build_day_meal_plan(
         fixed_meals=fixed_meals,
         reroll_nonce=reroll_nonce,
         nutrition_entries=cache.nutrition_entries if cache is not None else None,
+        bound_overrides=bound_overrides,
     )
     if rest and isinstance(rest.get("nutrients"), dict):
         meal_nutrients["午餐"] = {
@@ -540,6 +558,15 @@ def build_day_meal_plan(
             meal_ingredients["午餐"] = [label]
         else:
             meal_ingredients["午餐"] = ["Lunch — restaurant meal"]
+
+    # locked 餐內容以傳入為準（放喺餐廳覆寫之後，locked 贏）。
+    for meal, data in locked.items():
+        items_in = data.get("items")
+        ings_in = data.get("ingredients")
+        nut_in = data.get("nutrients") if isinstance(data.get("nutrients"), dict) else {}
+        meal_items[meal] = list(items_in) if isinstance(items_in, list) else []
+        meal_ingredients[meal] = [str(x) for x in ings_in] if isinstance(ings_in, list) else []
+        meal_nutrients[meal] = {k: float(nut_in.get(k, 0.0) or 0.0) for k in NUTRIENT_KEYS}
 
     return {
         "primary_rule": primary_dict,

@@ -379,6 +379,28 @@ def save_catalog_entries(
     return load_catalog_entries(settings)
 
 
+def set_catalog_paused(
+    row_index: int,
+    paused: bool,
+    settings: AppSettings | None = None,
+) -> str:
+    """單一食材改「暫停」旗；回傳食材名。"""
+    settings = settings or get_settings()
+    with closing(_connect(settings)) as conn:
+        _ensure_schema(conn)
+        row = conn.execute(
+            "SELECT name FROM nutrition_catalog WHERE row_index = ?", (int(row_index),)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Nutrition catalog row {row_index} not found.")
+        conn.execute(
+            "UPDATE nutrition_catalog SET paused = ? WHERE row_index = ?",
+            (int(bool(paused)), int(row_index)),
+        )
+        conn.commit()
+    return str(row["name"])
+
+
 def load_target_rows(
     settings: AppSettings | None = None,
     wb: Workbook | None = None,

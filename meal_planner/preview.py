@@ -527,6 +527,89 @@ def recalc_days_from_edits(days_payload: list[dict[str, Any]]) -> dict[str, Any]
     return {"days": out_days}
 
 
+def resolve_day_out_of_stock(
+    day_payload: dict[str, Any],
+    locked_meal_names: list[str],
+) -> dict[str, Any]:
+    """
+    Partial-day re-solve：鎖住已食餐（原內容當固定營養），只對其餘餐次重跑 MILP。
+    營養清單嘅「暫停」旗喺呼叫前已更新，所以缺貨食材自然唔會再入候選。
+    DayMax 會扣減已食餐消耗咗嘅克數。
+    """
+    settings = get_settings()
+    # 單日 on-demand 重解，用 full-mode 求解機制（replacement search／auto-retry／
+    # relaxation simulation）盡力達標；解唔到先回退最少違規方案。
+    settings = replace(
+        settings,
+        optimizer=replace(
+            settings.optimizer,
+            replacement_search_enabled=True,
+            auto_retry_enabled=True,
+            relaxation_simulation_enabled=True,
+        ),
+    )
+    date_s = str(day_payload.get("date") or "")
+    d = date.fromisoformat(date_s)
+    meal_plan_in = day_payload.get("meal_plan") if isinstance(day_payload.get("meal_plan"), dict) else {}
+    indicators_json = day_payload.get("nutrient_indicators") if isinstance(day_payload.get("nutrient_indicators"), dict) else {}
+    indicators = profile_from_json_map(indicators_json)
+
+    planning_cache = build_meal_planning_cache(settings)
+    roster = load_roster_map(settings)
+    rm = roster.get((d.year, d.month))
+    code = code_for_date(rm, d) if rm else None
+    if code is None:
+        raise ValueError(f"無 {date_s} 更表更碼，無法重解。")
+    is_wd = is_work_day(code)
+
+    old_items = meal_plan_in.get("meal_items", {}) if isinstance(meal_plan_in.get("meal_items"), dict) else {}
+    old_ings = meal_plan_in.get("meal_ingredients", {}) if isinstance(meal_plan_in.get("meal_ingredients"), dict) else {}
+    old_nut = meal_plan_in.get("meal_nutrients", {}) if isinstance(meal_plan_in.get("meal_nutrients"), dict) else {}
+    locked: dict[str, dict[str, Any]] = {}
+    for meal in _MEAL_NAMES:
+        if meal not in set(locked_meal_names or []):
+            continue
+        base = old_nut.get(meal, {}) if isinstance(old_nut.get(meal), dict) else {}
+        locked[meal] = {
+            "items": list(old_items.get(meal, []) or []),
+            "ingredients": list(old_ings.get(meal, []) or []),
+            "nutrients": {k: float(base.get(k, 0.0) or 0.0) for k in NUTRIENT_KEYS},
+        }
+
+    # DayMax 扣已食：locked 餐消耗咗嘅克數唔會再喺 solver 度計，要由每日上限扣走。
+    eaten_by_row: dict[int, float] = {}
+    for data in locked.values():
+        for it in data["items"]:
+            row = it.get("row") if isinstance(it, dict) else None
+            grams = it.get("grams") if isinstance(it, dict) else None
+            try:
+                row_i = int(row) if row is not None else None
+            except (TypeError, ValueError):
+                row_i = None
+            if row_i is not None and isinstance(grams, (int, float)):
+                eaten_by_row[row_i] = eaten_by_row.get(row_i, 0.0) + float(grams)
+    entries_by_row = {e.row_index: e for e in planning_cache.nutrition_entries}
+    bound_overrides: dict[int, dict[str, float]] = {}
+    for row_i, grams in eaten_by_row.items():
+        entry = entries_by_row.get(row_i)
+        if entry is not None and entry.daymax_g is not None:
+            bound_overrides[row_i] = {"daymax_g": max(0.0, float(entry.daymax_g) - grams)}
+
+    meal_plan = build_day_meal_plan(
+        settings,
+        None,
+        code,
+        is_wd,
+        d,
+        indicators=indicators,
+        cache=planning_cache,
+        locked_meals=locked,
+        bound_overrides=bound_overrides or None,
+    )
+    meal_plan["summary"] = _calc_day_summary(meal_plan, indicators, settings)
+    return {"date": date_s, "meal_plan": meal_plan}
+
+
 def refresh_payload_with_latest_indicators(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Refresh saved memory payload with latest SQLite indicator rows.

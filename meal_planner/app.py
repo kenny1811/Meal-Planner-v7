@@ -258,6 +258,14 @@ class RecalcRequest(BaseModel):
     days: list[RecalcDayRequest] = Field(default_factory=list)
 
 
+class OutOfStockResolveRequest(BaseModel):
+    date: str
+    row_index: int | None = None  # None＝唔標記冇貨，齋做 partial re-solve
+    locked_meals: list[str] = Field(default_factory=list)
+    nutrient_indicators: dict[str, Any] = Field(default_factory=dict)
+    meal_plan: dict[str, Any] = Field(default_factory=dict)
+
+
 class UiStateRequest(BaseModel):
     column_widths: dict[str, float] | None = None
     sidebar_width: float | None = None
@@ -1498,6 +1506,31 @@ def api_recalc(body: RecalcRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Recalculation failed: {e}") from e
+
+
+@app.post("/api/oos-resolve")
+def api_oos_resolve(body: OutOfStockResolveRequest) -> dict[str, Any]:
+    """標記食材冇貨（營養清單暫停）並對未食嘅餐次做 partial-day re-solve。"""
+    from meal_planner.nutrition_db import set_catalog_paused
+    from meal_planner.preview import resolve_day_out_of_stock
+
+    try:
+        paused_name = set_catalog_paused(body.row_index, True) if body.row_index is not None else None
+        day = resolve_day_out_of_stock(
+            {
+                "date": body.date,
+                "nutrient_indicators": body.nutrient_indicators,
+                "meal_plan": body.meal_plan,
+            },
+            body.locked_meals,
+        )
+        return {"paused_name": paused_name, **day}
+    except IndicatorDataError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Out-of-stock resolve failed: {e}") from e
 
 
 @app.get("/api/memory-list")
