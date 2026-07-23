@@ -1220,6 +1220,51 @@ document.getElementById("btn").addEventListener("click", run);
     return Response(content=html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
 
 
+def _apk_path(module: str) -> Path:
+    name = "app" if module == "app" else "wear"
+    return (_WEB_DIR.parent.parent / "android_alarm_app" / name / "build"
+            / "outputs" / "apk" / "debug" / f"{name}-debug.apk")
+
+
+def _gradle_version_code(module: str) -> int:
+    # 由 build.gradle 讀 versionCode（source of truth；免拆 APK）。
+    gradle = _WEB_DIR.parent.parent / "android_alarm_app" / module / "build.gradle"
+    try:
+        match = re.search(r"versionCode\s+(\d+)", gradle.read_text(encoding="utf-8"))
+        return int(match.group(1)) if match else 0
+    except OSError:
+        return 0
+
+
+@app.get("/api/app-version")
+def app_version() -> dict:
+    # 電話 in-app updater 用：報最新 build 嘅 versionCode + APK 檔案資料。
+    out: dict = {}
+    for module in ("app", "wear"):
+        path = _apk_path(module)
+        out[module] = {
+            "version_code": _gradle_version_code(module),
+            "apk_ready": path.is_file(),
+            "size": path.stat().st_size if path.is_file() else 0,
+            "mtime": int(path.stat().st_mtime) if path.is_file() else 0,
+        }
+    return out
+
+
+@app.get("/apk/watch")
+def watch_apk() -> FileResponse:
+    # 手錶 APK：電話 updater 下載後經 ChannelClient 推去手錶安裝。
+    path = _apk_path("wear")
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Cannot find wear-debug.apk (build first)")
+    return FileResponse(
+        path,
+        media_type="application/vnd.android.package-archive",
+        filename="oneshotalarm-wear.apk",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/{asset_name}")
 def web_asset(asset_name: str) -> FileResponse:
     if asset_name not in {

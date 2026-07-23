@@ -15,6 +15,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -57,6 +58,9 @@
         </receiver>
         <receiver
             android:name=".AlarmAutoSyncReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".InstallResultReceiver"
             android:exported="false" />
 
         <receiver

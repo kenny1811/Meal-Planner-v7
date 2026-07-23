@@ -22,6 +22,7 @@ public class WearAlarmListenerService extends WearableListenerService {
     private static final String WATCH_DISMISS_PATH = "/oneshotalarm/watch-dismiss";
     private static final String WATCH_DISMISS_DATA_PATH = "/oneshotalarm/watch-dismiss-data";
     private static final String TILE_STATE_PATH = "/oneshotalarm/tile-state";
+    private static final String WEAR_APK_CHANNEL_PATH = "/oneshotalarm/wear-apk";
     private static final String PREFS = "watch_alarm_listener";
     private static final String KEY_LAST_TILE_STATE_AT = "last_tile_state_at";
     private static final long DISMISS_FRESH_MS = 30 * 1000L;
@@ -171,6 +172,77 @@ public class WearAlarmListenerService extends WearableListenerService {
             return new JSONObject(raw);
         } catch (Exception ignored) {
             return new JSONObject();
+        }
+    }
+
+    // ---------------- in-app update：電話推 APK 過嚟（ChannelClient），收齊即裝 ----------------
+
+    @Override
+    public void onChannelOpened(com.google.android.gms.wearable.ChannelClient.Channel channel) {
+        if (channel == null || !WEAR_APK_CHANNEL_PATH.equals(channel.getPath())) {
+            return;
+        }
+        java.io.File dest = updateApkFile();
+        if (dest.exists() && !dest.delete()) {
+            Log.w(TAG, "Cannot delete old update apk");
+        }
+        Log.d(TAG, "Receiving wear APK from phone...");
+        com.google.android.gms.wearable.Wearable.getChannelClient(this)
+                .receiveFile(channel, android.net.Uri.fromFile(dest), false)
+                .addOnFailureListener(e -> Log.e(TAG, "Receive wear APK failed", e));
+    }
+
+    @Override
+    public void onInputClosed(com.google.android.gms.wearable.ChannelClient.Channel channel,
+            int closeReason, int appSpecificErrorCode) {
+        if (channel == null || !WEAR_APK_CHANNEL_PATH.equals(channel.getPath())) {
+            return;
+        }
+        java.io.File apk = updateApkFile();
+        if (closeReason != com.google.android.gms.wearable.ChannelClient.ChannelCallback.CLOSE_REASON_NORMAL
+                || !apk.isFile() || apk.length() == 0) {
+            Log.e(TAG, "Wear APK transfer incomplete, reason=" + closeReason);
+            return;
+        }
+        Log.d(TAG, "Wear APK received (" + apk.length() + " bytes), installing...");
+        try {
+            installApk(apk);
+        } catch (Exception e) {
+            Log.e(TAG, "Install wear APK failed", e);
+        }
+    }
+
+    private java.io.File updateApkFile() {
+        return new java.io.File(getCacheDir(), "update-wear.apk");
+    }
+
+    /** PackageInstaller session；確認框喺手錶螢幕撳。 */
+    private void installApk(java.io.File apk) throws Exception {
+        android.content.pm.PackageInstaller installer = getPackageManager().getPackageInstaller();
+        android.content.pm.PackageInstaller.SessionParams params =
+                new android.content.pm.PackageInstaller.SessionParams(
+                        android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        params.setSize(apk.length());
+        int sessionId = installer.createSession(params);
+        try (android.content.pm.PackageInstaller.Session session = installer.openSession(sessionId)) {
+            try (java.io.OutputStream out = session.openWrite("wear.apk", 0, apk.length());
+                    java.io.InputStream in = new java.io.FileInputStream(apk)) {
+                byte[] buffer = new byte[65536];
+                int read;
+                while ((read = in.read(buffer)) >= 0) {
+                    out.write(buffer, 0, read);
+                }
+                session.fsync(out);
+            }
+            Intent intent = new Intent(this, WatchInstallResultReceiver.class)
+                    .setAction(WatchInstallResultReceiver.ACTION_INSTALL_RESULT);
+            int flags = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                flags |= android.app.PendingIntent.FLAG_MUTABLE;
+            }
+            android.app.PendingIntent pending =
+                    android.app.PendingIntent.getBroadcast(this, sessionId, intent, flags);
+            session.commit(pending.getIntentSender());
         }
     }
 
