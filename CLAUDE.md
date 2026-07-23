@@ -9,11 +9,11 @@
 ## 版本號 & Changelog（每個 session 都要跟）
 - 網頁 sidebar 版本號 X.Y.Z 讀 **committed 版**根目錄 `CHANGELOG.md`（`git show HEAD:CHANGELOG.md`）
   最頂嘅 `## X.Y.Z` 標題：**commit 咗先至跳 version**，未 commit 嘅 entry／WIP 唔會喺 app 出現。
-- **凡改到 `meal_planner/` 嘅嘢（code／UI／行為），整埋好、commit 嗰陣必須喺 `CHANGELOG.md` 頂
-  加一條新 entry 並跳 version，entry 同 code 落同一個 commit**：
+- **凡改到 `meal_planner/` 嘅嘢（code／UI／行為），完成改動時喺 `CHANGELOG.md` 頂加一條新 entry
+  並跳 version，但唔好自己 commit——出版由用戶把關**：改動 + entry 留喺 working copy 排隊，
+  **用戶開聲話 commit 先至 commit**（entry 同 code 同一個 commit 出街，嗰陣 sidebar 版本先跳）。
   Z=修補／執靚／微調、Y=功能級改動（Z 歸零）、X=大改版（好少郁）。
   一個邏輯改動一條 entry（唔係逐個 file 一條）；entry 用英文（app UI 係英文）、日期 dd/mm/yyyy。
-  半路 WIP 唔好 commit——整完先 commit，成個改動連 entry 一齊出街。
 - Sidebar 版本號 click 落去會開 changelog dialog（`/api/changelog`，都係 committed 版）。
 
 ## 測試
