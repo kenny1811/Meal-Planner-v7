@@ -1,5 +1,14 @@
 /* API and persistence helpers for the meal planner UI. */
     // 共用：安全解析 JSON response（失敗回退空物件），取代重覆嘅 r.json().catch(() => ({}))。
+    /** Excel/TSV 剪貼簿文字 → 二維陣列（行×格）。target/catalog/maint 三個表格共用。 */
+    function clipboardMatrix(text) {
+      return String(text || "")
+        .replace(/\r/g, "")
+        .replace(/\n$/, "")
+        .split("\n")
+        .map((line) => line.split("\t"));
+    }
+
     async function parseJsonSafe(r) {
       try {
         return await r.json();

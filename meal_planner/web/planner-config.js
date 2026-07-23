@@ -392,16 +392,8 @@
       if (input.value !== oldValue) markTargetCellChanged(input);
     }
 
-    function targetClipboardMatrix(text) {
-      return String(text || "")
-        .replace(/\r/g, "")
-        .replace(/\n$/, "")
-        .split("\n")
-        .map((line) => line.split("\t"));
-    }
-
     function pasteTargetClipboard(startInput, text) {
-      const matrix = targetClipboardMatrix(text);
+      const matrix = clipboardMatrix(text);
       if (!matrix.length) return;
       let lastInput = startInput;
       matrix.forEach((values, rowIdx) => {
@@ -2410,16 +2402,8 @@
       setUnsavedChanges("營養清單");
     }
 
-    function catalogClipboardMatrix(text) {
-      return String(text || "")
-        .replace(/\r/g, "")
-        .replace(/\n$/, "")
-        .split("\n")
-        .map((line) => line.split("\t"));
-    }
-
     function pasteCatalogClipboard(startInput, text) {
-      const matrix = catalogClipboardMatrix(text);
+      const matrix = clipboardMatrix(text);
       if (!matrix.length) return;
       let lastInput = startInput;
       matrix.forEach((values, rowIdx) => {

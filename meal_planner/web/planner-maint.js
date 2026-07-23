@@ -292,7 +292,8 @@
       return top;
     }
 
-    function maintTextareaShouldKeepArrow(input, key) {
+    // roster 編輯器（planner-maint-editor.js）都共用呢對 caret helper。
+    function textareaShouldKeepArrow(input, key) {
       if (!input || !input.tagName || input.tagName.toLowerCase() !== "textarea") return false;
       if (input.selectionStart !== input.selectionEnd) return true;
       const pos = Number.isInteger(input.selectionStart) ? input.selectionStart : 0;
@@ -312,14 +313,6 @@
       return input ? String(input.value ?? "") : "";
     }
 
-    function maintClipboardMatrix(text) {
-      return String(text || "")
-        .replace(/\r/g, "")
-        .replace(/\n$/, "")
-        .split("\n")
-        .map((line) => line.split("\t"));
-    }
-
     function pasteMaintInputValue(input, value) {
       if (!input) return false;
       input.value = value == null ? "" : String(value);
@@ -333,7 +326,7 @@
     }
 
     function pasteMaintClipboard(startInput, text) {
-      const matrix = maintClipboardMatrix(text);
+      const matrix = clipboardMatrix(text);
       if (!matrix.length) return;
       let lastInput = startInput;
       matrix.forEach((values, rowIdx) => {
@@ -452,7 +445,7 @@
           endMaintCellEdit(input);
           focusMaintCell(next || input, true);
         } else if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
-          if (maintTextareaShouldKeepArrow(input, ev.key)) return;
+          if (textareaShouldKeepArrow(input, ev.key)) return;
           ev.preventDefault();
           const next = maintCellInputFrom(input, ev.key === "ArrowUp" ? -1 : 1, 0);
           if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";

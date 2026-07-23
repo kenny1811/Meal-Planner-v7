@@ -181,57 +181,13 @@
     }
     const rosterDirectKeyTimers = new WeakMap();
 
-    function rosterTextareaCaretTop(input, position) {
-      const style = window.getComputedStyle(input);
-      const mirror = document.createElement("div");
-      [
-        "boxSizing", "fontFamily", "fontSize", "fontWeight", "fontStyle", "letterSpacing",
-        "lineHeight", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-        "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
-        "textTransform", "wordSpacing", "textIndent", "tabSize", "wordBreak", "overflowWrap",
-      ].forEach((name) => {
-        mirror.style[name] = style[name];
-      });
-      mirror.style.position = "absolute";
-      mirror.style.visibility = "hidden";
-      mirror.style.left = "-9999px";
-      mirror.style.top = "0";
-      mirror.style.width = `${input.clientWidth}px`;
-      mirror.style.whiteSpace = "pre-wrap";
-      mirror.style.overflow = "hidden";
-      mirror.textContent = String(input.value || "").slice(0, position).replace(/\n$/, "\n ");
-      const marker = document.createElement("span");
-      marker.textContent = "\u200b";
-      mirror.appendChild(marker);
-      document.body.appendChild(mirror);
-      const top = marker.offsetTop;
-      mirror.remove();
-      return top;
-    }
-
-    function rosterTextareaShouldKeepArrow(input, key) {
-      if (!input || !input.tagName || input.tagName.toLowerCase() !== "textarea") return false;
-      if (input.selectionStart !== input.selectionEnd) return true;
-      const pos = Number.isInteger(input.selectionStart) ? input.selectionStart : 0;
-      const firstTop = rosterTextareaCaretTop(input, 0);
-      const caretTop = rosterTextareaCaretTop(input, pos);
-      const lastTop = rosterTextareaCaretTop(input, String(input.value || "").length);
-      const style = window.getComputedStyle(input);
-      const fontSize = parseFloat(style.fontSize) || 16;
-      const lineHeight = parseFloat(style.lineHeight) || fontSize * 1.2;
-      const tolerance = Math.max(2, lineHeight * 0.25);
-      if (key === "ArrowUp") return caretTop > firstTop + tolerance;
-      if (key === "ArrowDown") return caretTop < lastTop - tolerance;
-      return false;
-    }
-
     function handleRosterCellKeydown(ev) {
       const input = ev.currentTarget;
       const rowIdx = Number(input.getAttribute("data-maint-roster-row"));
       const isLastRosterCell = rowIdx === lastRosterCellIndex();
       if (input.dataset.maintEditing === "1") {
         if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
-          if (rosterTextareaShouldKeepArrow(input, ev.key)) return;
+          if (textareaShouldKeepArrow(input, ev.key)) return;
         }
         if (ev.key === "Enter" || ev.key === "Escape" || ev.key === "ArrowUp" || ev.key === "ArrowDown" || ev.key === "Tab") {
           ev.preventDefault();
