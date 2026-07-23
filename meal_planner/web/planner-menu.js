@@ -466,46 +466,44 @@
       item.classList.add("is-menu-dragging");
       document.body.classList.add("is-dnd-dragging");
       const ghost = createMenuDragGhost(item, ev);
-      const onMove = (mv) => {
-        mv.preventDefault();
-        moveMenuDragGhost(ghost, mv);
-        const hit = document.elementFromPoint(mv.clientX, mv.clientY);
-        const next = hit && hit.closest ? hit.closest(".menu-item[data-menu-group][data-menu-key]") : null;
-        const container = hit && hit.closest ? hit.closest("[data-menu-drop-group]") : null;
-        if (next) {
-          targetItem = next;
-          targetGroup = next.getAttribute("data-menu-group");
-          targetKey = next.getAttribute("data-menu-key");
-          targetPosition = menuDropPosition(next, mv.clientY, fromKey);
-          if (targetPosition === "inside") openMenuTreeForGroup(targetKey, false);
-          if (targetPosition === "none") {
-            targetGroup = group;
-            targetKey = fromKey;
+      startWindowDrag({
+        onMove: (mv) => {
+          mv.preventDefault();
+          moveMenuDragGhost(ghost, mv);
+          const hit = document.elementFromPoint(mv.clientX, mv.clientY);
+          const next = hit && hit.closest ? hit.closest(".menu-item[data-menu-group][data-menu-key]") : null;
+          const container = hit && hit.closest ? hit.closest("[data-menu-drop-group]") : null;
+          if (next) {
+            targetItem = next;
+            targetGroup = next.getAttribute("data-menu-group");
+            targetKey = next.getAttribute("data-menu-key");
+            targetPosition = menuDropPosition(next, mv.clientY, fromKey);
+            if (targetPosition === "inside") openMenuTreeForGroup(targetKey, false);
+            if (targetPosition === "none") {
+              targetGroup = group;
+              targetKey = fromKey;
+            }
+            markMenuDropTarget(next, targetPosition);
+          } else if (container) {
+            targetItem = null;
+            targetGroup = container.getAttribute("data-menu-drop-group") || "top";
+            targetKey = null;
+            targetPosition = "before";
+            markMenuDropContainer(container);
           }
-          markMenuDropTarget(next, targetPosition);
-        } else if (container) {
-          targetItem = null;
-          targetGroup = container.getAttribute("data-menu-drop-group") || "top";
-          targetKey = null;
-          targetPosition = "before";
-          markMenuDropContainer(container);
-        }
-      };
-      const onUp = (up) => {
-        up.preventDefault();
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-        document.querySelectorAll(".menu-item.is-menu-dragging,.menu-item.is-menu-drag-over,.menu-item.is-menu-drop-after,.menu-item.is-menu-drop-inside").forEach((el) => {
-          el.classList.remove("is-menu-dragging", "is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside");
-        });
-        document.querySelectorAll(".is-menu-drop-zone-active").forEach((el) => el.classList.remove("is-menu-drop-zone-active"));
-        ghost.remove();
-        menuDragState = null;
-        document.body.classList.remove("is-dnd-dragging");
-        moveMenuItem(fromKey, targetGroup, targetKey, targetPosition);
-      };
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
+        },
+        onUp: (up) => {
+          up.preventDefault();
+          document.querySelectorAll(".menu-item.is-menu-dragging,.menu-item.is-menu-drag-over,.menu-item.is-menu-drop-after,.menu-item.is-menu-drop-inside").forEach((el) => {
+            el.classList.remove("is-menu-dragging", "is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside");
+          });
+          document.querySelectorAll(".is-menu-drop-zone-active").forEach((el) => el.classList.remove("is-menu-drop-zone-active"));
+          ghost.remove();
+          menuDragState = null;
+          document.body.classList.remove("is-dnd-dragging");
+          moveMenuItem(fromKey, targetGroup, targetKey, targetPosition);
+        },
+      });
     }
 
     function attachMenuDropContainers(root = document) {
@@ -853,21 +851,18 @@
           : null;
         if (interactive) return;
         ev.preventDefault();
-        document.body.classList.add("is-horizontal-dragging");
         const startX = ev.clientX;
         const startOffset = formOffsetPx(key);
-        const onMove = (mv) => {
-          formColumnWidths[key] = startOffset + (mv.clientX - startX);
-          applyFn();
-        };
-        const onUp = () => {
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("mouseup", onUp);
-          document.body.classList.remove("is-horizontal-dragging");
-          persistColumnWidths();
-        };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
+        startWindowDrag({
+          bodyClass: "is-horizontal-dragging",
+          onMove: (mv) => {
+            formColumnWidths[key] = startOffset + (mv.clientX - startX);
+            applyFn();
+          },
+          onUp: () => {
+            persistColumnWidths();
+          },
+        });
       });
       handle.addEventListener("dblclick", () => {
         formColumnWidths[key] = 0;
@@ -904,21 +899,19 @@
           ev.stopPropagation();
           const startX = ev.clientX;
           const startW = cell.getBoundingClientRect().width;
-          const onMove = (mv) => {
-            formColumnWidths[key] = Math.max(0, startW + (mv.clientX - startX));
-            applyFormColumnWidths(root);
-            if (typeof applyDetailBlockLayout === "function") applyDetailBlockLayout(root);
-            if (typeof applyShiftCodeAnalysisBlockLayout === "function") applyShiftCodeAnalysisBlockLayout(root);
-            if (typeof applyDutyBlockLayout === "function") applyDutyBlockLayout();
-            autoResizeTextareas(root);
-          };
-          const onUp = () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            persistColumnWidths();
-          };
-          window.addEventListener("mousemove", onMove);
-          window.addEventListener("mouseup", onUp);
+          startWindowDrag({
+            onMove: (mv) => {
+              formColumnWidths[key] = Math.max(0, startW + (mv.clientX - startX));
+              applyFormColumnWidths(root);
+              if (typeof applyDetailBlockLayout === "function") applyDetailBlockLayout(root);
+              if (typeof applyShiftCodeAnalysisBlockLayout === "function") applyShiftCodeAnalysisBlockLayout(root);
+              if (typeof applyDutyBlockLayout === "function") applyDutyBlockLayout();
+              autoResizeTextareas(root);
+            },
+            onUp: () => {
+              persistColumnWidths();
+            },
+          });
         });
         cell.appendChild(grip);
       });

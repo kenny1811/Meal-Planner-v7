@@ -282,18 +282,16 @@
       grip.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
         const rect = split.getBoundingClientRect();
-        const onMove = (mv) => {
-          const topHeight = Math.max(0, Math.min(rect.height - 6, mv.clientY - rect.top));
-          formColumnWidths.maint_roster_top_height = topHeight;
-          split.style.gridTemplateRows = `${topHeight}px 6px 1fr`;
-        };
-        const onUp = () => {
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("mouseup", onUp);
-          persistColumnWidths();
-        };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
+        startWindowDrag({
+          onMove: (mv) => {
+            const topHeight = Math.max(0, Math.min(rect.height - 6, mv.clientY - rect.top));
+            formColumnWidths.maint_roster_top_height = topHeight;
+            split.style.gridTemplateRows = `${topHeight}px 6px 1fr`;
+          },
+          onUp: () => {
+            persistColumnWidths();
+          },
+        });
       });
     }
 

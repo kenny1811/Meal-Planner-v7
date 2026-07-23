@@ -359,22 +359,19 @@
         const startY = ev.clientY;
         const startLeft = rect.left;
         const startTop = rect.top;
-        document.body.classList.add("is-dnd-dragging");
-        const onMove = (mv) => {
-          const maxLeft = Math.max(0, window.innerWidth - el.offsetWidth - 4);
-          const maxTop = Math.max(0, window.innerHeight - el.offsetHeight - 4);
-          formColumnWidths.clock_left = Math.max(4, Math.min(maxLeft, startLeft + mv.clientX - startX));
-          formColumnWidths.clock_top = Math.max(4, Math.min(maxTop, startTop + mv.clientY - startY));
-          applyClockPosition();
-        };
-        const onUp = () => {
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("mouseup", onUp);
-          document.body.classList.remove("is-dnd-dragging");
-          persistColumnWidths();
-        };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
+        startWindowDrag({
+          bodyClass: "is-dnd-dragging",
+          onMove: (mv) => {
+            const maxLeft = Math.max(0, window.innerWidth - el.offsetWidth - 4);
+            const maxTop = Math.max(0, window.innerHeight - el.offsetHeight - 4);
+            formColumnWidths.clock_left = Math.max(4, Math.min(maxLeft, startLeft + mv.clientX - startX));
+            formColumnWidths.clock_top = Math.max(4, Math.min(maxTop, startTop + mv.clientY - startY));
+            applyClockPosition();
+          },
+          onUp: () => {
+            persistColumnWidths();
+          },
+        });
       });
       el.addEventListener("dblclick", resetClockPosition);
       window.addEventListener("resize", applyClockPosition);
@@ -622,17 +619,15 @@
       grip.addEventListener("mousedown", (ev) => {
         ev.preventDefault();
         const shellRect = shell.getBoundingClientRect();
-        const onMove = (mv) => {
-          sidebarWidth = Math.max(120, Math.min(520, mv.clientX - shellRect.left));
-          applySidebarWidth();
-        };
-        const onUp = () => {
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("mouseup", onUp);
-          persistColumnWidths();
-        };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
+        startWindowDrag({
+          onMove: (mv) => {
+            sidebarWidth = Math.max(120, Math.min(520, mv.clientX - shellRect.left));
+            applySidebarWidth();
+          },
+          onUp: () => {
+            persistColumnWidths();
+          },
+        });
       });
     }
 
@@ -675,17 +670,15 @@
           ev.preventDefault();
           const startX = ev.clientX;
           const startW = colWidthPx(key);
-          const onMove = (mv) => {
-            columnWidths[key] = Math.max(36, startW + (mv.clientX - startX));
-            applyColumnWidths();
-          };
-          const onUp = () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            persistColumnWidths();
-          };
-          window.addEventListener("mousemove", onMove);
-          window.addEventListener("mouseup", onUp);
+          startWindowDrag({
+            onMove: (mv) => {
+              columnWidths[key] = Math.max(36, startW + (mv.clientX - startX));
+              applyColumnWidths();
+            },
+            onUp: () => {
+              persistColumnWidths();
+            },
+          });
         });
         cell.appendChild(grip);
       });

@@ -1007,33 +1007,31 @@
           const startH = targetApplySizePx("h", 28);
           const moveBlocks = resizeMode ? null : moveTargetBlocksFromPointer(blockKey, startX, startY);
           let changed = resizeMode;
-          const onMove = (mv) => {
-            const dx = mv.clientX - startX;
-            const dy = mv.clientY - startY;
-            if (!changed && Math.abs(dx) <= 2 && Math.abs(dy) <= 2) return;
-            changed = true;
-            if (resizeMode) {
-              formColumnWidths.target_apply_w = Math.max(48, startW + dx);
-              formColumnWidths.target_apply_h = Math.max(22, startH + dy);
-              applyTargetApplyButtonLayout();
-              applyTargetBlockLayout();
-            } else if (moveBlocks) {
-              moveBlocks(mv);
-            }
-          };
-          const onUp = () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            document.body.classList.remove("is-dnd-dragging");
-            btn.style.cursor = "";
-            if (changed) {
-              btn.dataset.targetApplySuppressClick = "1";
-              targetBlockSuppressNextClickClear = true;
-              persistColumnWidths();
-            }
-          };
-          window.addEventListener("mousemove", onMove);
-          window.addEventListener("mouseup", onUp, { once: true });
+          startWindowDrag({
+            onMove: (mv) => {
+              const dx = mv.clientX - startX;
+              const dy = mv.clientY - startY;
+              if (!changed && Math.abs(dx) <= 2 && Math.abs(dy) <= 2) return;
+              changed = true;
+              if (resizeMode) {
+                formColumnWidths.target_apply_w = Math.max(48, startW + dx);
+                formColumnWidths.target_apply_h = Math.max(22, startH + dy);
+                applyTargetApplyButtonLayout();
+                applyTargetBlockLayout();
+              } else if (moveBlocks) {
+                moveBlocks(mv);
+              }
+            },
+            onUp: () => {
+              document.body.classList.remove("is-dnd-dragging");
+              btn.style.cursor = "";
+              if (changed) {
+                btn.dataset.targetApplySuppressClick = "1";
+                targetBlockSuppressNextClickClear = true;
+                persistColumnWidths();
+              }
+            },
+          });
         });
       }
       applyTargetApplyButtonLayout();
@@ -1557,7 +1555,6 @@
           const startX = ev.clientX;
           const startY = ev.clientY;
           let dragMoved = false;
-          document.body.classList.add("is-dnd-dragging");
           const startOffsets = new Map();
           dragKeys.forEach((key) => {
             const target = document.querySelector(`.target-section-block[data-target-block="${key}"]`);
@@ -1566,25 +1563,23 @@
               y: targetBlockOffsetPx(key, "y", target?.offsetTop || 0),
             });
           });
-          const onMove = (mv) => {
-            const dx = mv.clientX - startX;
-            const dy = mv.clientY - startY;
-            dragMoved = dragMoved || Math.abs(dx) > 2 || Math.abs(dy) > 2;
-            startOffsets.forEach((start, key) => {
-              formColumnWidths[`target_block_${key}_x`] = start.x + dx;
-              formColumnWidths[`target_block_${key}_y`] = start.y + dy;
-            });
-            applyTargetBlockLayout();
-          };
-          const onUp = () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            document.body.classList.remove("is-dnd-dragging");
-            if (dragMoved) targetBlockSuppressNextClickClear = true;
-            persistColumnWidths();
-          };
-          window.addEventListener("mousemove", onMove);
-          window.addEventListener("mouseup", onUp);
+          startWindowDrag({
+            bodyClass: "is-dnd-dragging",
+            onMove: (mv) => {
+              const dx = mv.clientX - startX;
+              const dy = mv.clientY - startY;
+              dragMoved = dragMoved || Math.abs(dx) > 2 || Math.abs(dy) > 2;
+              startOffsets.forEach((start, key) => {
+                formColumnWidths[`target_block_${key}_x`] = start.x + dx;
+                formColumnWidths[`target_block_${key}_y`] = start.y + dy;
+              });
+              applyTargetBlockLayout();
+            },
+            onUp: () => {
+              if (dragMoved) targetBlockSuppressNextClickClear = true;
+              persistColumnWidths();
+            },
+          });
         });
         handle.addEventListener("click", (ev) => {
           if (!ev.ctrlKey) return;
@@ -1637,17 +1632,15 @@
           const key = cell.getAttribute("data-target-col-key");
           const startX = ev.clientX;
           const startWidth = cell.getBoundingClientRect().width;
-          const onMove = (mv) => {
-            targetColumnWidths[key] = Math.max(28, startWidth + (mv.clientX - startX));
-            applyTargetEditorLayout();
-          };
-          const onUp = () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            persistColumnWidths();
-          };
-          window.addEventListener("mousemove", onMove);
-          window.addEventListener("mouseup", onUp);
+          startWindowDrag({
+            onMove: (mv) => {
+              targetColumnWidths[key] = Math.max(28, startWidth + (mv.clientX - startX));
+              applyTargetEditorLayout();
+            },
+            onUp: () => {
+              persistColumnWidths();
+            },
+          });
         });
       });
       });
@@ -1839,20 +1832,17 @@
           const startY = ev.clientY;
           const startOffsetX = detailBlockOffsetPx(blockKey, "x");
           const startOffsetY = detailBlockOffsetPx(blockKey, "y");
-          document.body.classList.add("is-dnd-dragging");
-          const onMove = (mv) => {
-            formColumnWidths[`detail_block_${blockKey}_x`] = startOffsetX + (mv.clientX - startX);
-            formColumnWidths[`detail_block_${blockKey}_y`] = startOffsetY + (mv.clientY - startY);
-            applyDetailBlockLayout();
-          };
-          const onUp = () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            document.body.classList.remove("is-dnd-dragging");
-            persistColumnWidths();
-          };
-          window.addEventListener("mousemove", onMove);
-          window.addEventListener("mouseup", onUp);
+          startWindowDrag({
+            bodyClass: "is-dnd-dragging",
+            onMove: (mv) => {
+              formColumnWidths[`detail_block_${blockKey}_x`] = startOffsetX + (mv.clientX - startX);
+              formColumnWidths[`detail_block_${blockKey}_y`] = startOffsetY + (mv.clientY - startY);
+              applyDetailBlockLayout();
+            },
+            onUp: () => {
+              persistColumnWidths();
+            },
+          });
         });
         handle.addEventListener("dblclick", () => {
           const block = handle.closest(".detail-section-block[data-detail-block]");
@@ -2210,17 +2200,15 @@
           const key = cell.getAttribute("data-catalog-col-key");
           const startX = ev.clientX;
           const startW = cell.getBoundingClientRect().width;
-          const onMove = (mv) => {
-            catalogColumnWidths[key] = Math.max(0, startW + (mv.clientX - startX));
-            applyCatalogColumnWidths();
-          };
-          const onUp = () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            persistColumnWidths();
-          };
-          window.addEventListener("mousemove", onMove);
-          window.addEventListener("mouseup", onUp);
+          startWindowDrag({
+            onMove: (mv) => {
+              catalogColumnWidths[key] = Math.max(0, startW + (mv.clientX - startX));
+              applyCatalogColumnWidths();
+            },
+            onUp: () => {
+              persistColumnWidths();
+            },
+          });
         });
       });
     }

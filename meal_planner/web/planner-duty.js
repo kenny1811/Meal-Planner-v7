@@ -368,21 +368,18 @@
             const startY = ev.clientY;
             const start = { x: block.offsetLeft, y: block.offsetTop };
             dutyBlockDragging = true;
-            document.body.classList.add("is-dnd-dragging");
-            const onMove = (mv) => {
-              formColumnWidths[`duty_block_${key}_x`] = start.x + (mv.clientX - startX);
-              formColumnWidths[`duty_block_${key}_y`] = Math.max(0, start.y + (mv.clientY - startY));
-              applyDutyBlockLayout();
-            };
-            const onUp = () => {
-              window.removeEventListener("mousemove", onMove);
-              window.removeEventListener("mouseup", onUp);
-              document.body.classList.remove("is-dnd-dragging");
-              dutyBlockDragging = false;
-              persistColumnWidths();
-            };
-            window.addEventListener("mousemove", onMove);
-            window.addEventListener("mouseup", onUp);
+            startWindowDrag({
+              bodyClass: "is-dnd-dragging",
+              onMove: (mv) => {
+                formColumnWidths[`duty_block_${key}_x`] = start.x + (mv.clientX - startX);
+                formColumnWidths[`duty_block_${key}_y`] = Math.max(0, start.y + (mv.clientY - startY));
+                applyDutyBlockLayout();
+              },
+              onUp: () => {
+                dutyBlockDragging = false;
+                persistColumnWidths();
+              },
+            });
           });
           title.addEventListener("dblclick", () => {
             ["x", "y", "w", "h"].forEach((axis) => delete formColumnWidths[`duty_block_${key}_${axis}`]);
@@ -411,32 +408,30 @@
               h: rect.height,
             };
             dutyBlockDragging = true;
-            const onMove = (mv) => {
-              const dx = mv.clientX - startX;
-              const dy = mv.clientY - startY;
-              if (edge === "e") {
-                formColumnWidths[`duty_block_${key}_w`] = Math.max(120, start.w + dx);
-              } else if (edge === "w") {
-                const width = Math.max(120, start.w - dx);
-                formColumnWidths[`duty_block_${key}_w`] = width;
-                formColumnWidths[`duty_block_${key}_x`] = start.x + (start.w - width);
-              } else if (edge === "s") {
-                formColumnWidths[`duty_block_${key}_h`] = Math.max(60, start.h + dy);
-              } else if (edge === "n") {
-                const height = Math.max(60, start.h - dy);
-                formColumnWidths[`duty_block_${key}_h`] = height;
-                formColumnWidths[`duty_block_${key}_y`] = Math.max(0, start.y + (start.h - height));
-              }
-              applyDutyBlockLayout();
-            };
-            const onUp = () => {
-              window.removeEventListener("mousemove", onMove);
-              window.removeEventListener("mouseup", onUp);
-              dutyBlockDragging = false;
-              persistColumnWidths();
-            };
-            window.addEventListener("mousemove", onMove);
-            window.addEventListener("mouseup", onUp);
+            startWindowDrag({
+              onMove: (mv) => {
+                const dx = mv.clientX - startX;
+                const dy = mv.clientY - startY;
+                if (edge === "e") {
+                  formColumnWidths[`duty_block_${key}_w`] = Math.max(120, start.w + dx);
+                } else if (edge === "w") {
+                  const width = Math.max(120, start.w - dx);
+                  formColumnWidths[`duty_block_${key}_w`] = width;
+                  formColumnWidths[`duty_block_${key}_x`] = start.x + (start.w - width);
+                } else if (edge === "s") {
+                  formColumnWidths[`duty_block_${key}_h`] = Math.max(60, start.h + dy);
+                } else if (edge === "n") {
+                  const height = Math.max(60, start.h - dy);
+                  formColumnWidths[`duty_block_${key}_h`] = height;
+                  formColumnWidths[`duty_block_${key}_y`] = Math.max(0, start.y + (start.h - height));
+                }
+                applyDutyBlockLayout();
+              },
+              onUp: () => {
+                dutyBlockDragging = false;
+                persistColumnWidths();
+              },
+            });
           });
           block.appendChild(grip);
         });

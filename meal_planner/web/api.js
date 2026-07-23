@@ -8,6 +8,21 @@
       }
     }
 
+    /** mousedown drag 繩纜：掛 window mousemove/mouseup，mouseup 自動拆兩個 listener。
+     * opts: { onMove(ev), onUp(ev), bodyClass } — bodyClass 喺開始加落 document.body、完自動除。 */
+    function startWindowDrag(opts) {
+      const onMove = (ev) => { if (opts.onMove) opts.onMove(ev); };
+      const onUp = (ev) => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        if (opts.bodyClass) document.body.classList.remove(opts.bodyClass);
+        if (opts.onUp) opts.onUp(ev);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+      if (opts.bodyClass) document.body.classList.add(opts.bodyClass);
+    }
+
     function apiErrorMessage(data, fallback, status = null) {
       const envelopeMessage = data && data.error && data.error.message;
       if (envelopeMessage) return String(envelopeMessage);

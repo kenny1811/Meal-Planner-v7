@@ -31,17 +31,15 @@
           ev.preventDefault();
           const startX = ev.clientX;
           const startW = shopColWidthPx(key);
-          const onMove = (mv) => {
-            columnWidths[key] = Math.max(80, startW + (mv.clientX - startX));
-            applyColumnWidths();
-          };
-          const onUp = () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            persistColumnWidths();
-          };
-          window.addEventListener("mousemove", onMove);
-          window.addEventListener("mouseup", onUp);
+          startWindowDrag({
+            onMove: (mv) => {
+              columnWidths[key] = Math.max(80, startW + (mv.clientX - startX));
+              applyColumnWidths();
+            },
+            onUp: () => {
+              persistColumnWidths();
+            },
+          });
         });
         cell.appendChild(grip);
       });

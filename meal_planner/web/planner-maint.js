@@ -1581,7 +1581,6 @@
           const startX = ev.clientX;
           const startY = ev.clientY;
           let dragMoved = false;
-          document.body.classList.add("is-dnd-dragging");
           const startOffsets = new Map();
           dragKeys.forEach((key) => {
             const target = document.querySelector(`.shift-analysis-block[data-shift-analysis-block="${key}"]`);
@@ -1590,27 +1589,25 @@
               y: shiftAnalysisBlockOffsetPx(key, "y", target?.offsetTop || 0),
             });
           });
-        const onMove = (mv) => {
-          const dx = mv.clientX - startX;
-          let dy = mv.clientY - startY;
-          const minStartY = Math.min(...Array.from(startOffsets.values()).map((item) => item.y));
-          if (Number.isFinite(minStartY) && minStartY + dy < 0) dy = -minStartY;
-          dragMoved = dragMoved || Math.abs(dx) > 2 || Math.abs(dy) > 2;
-          startOffsets.forEach((start, key) => {
-            formColumnWidths[`shift_analysis_block_${key}_x`] = start.x + dx;
-              formColumnWidths[`shift_analysis_block_${key}_y`] = start.y + dy;
-            });
-            applyShiftCodeAnalysisBlockLayout(root);
-          };
-          const onUp = () => {
-            window.removeEventListener("mousemove", onMove);
-            window.removeEventListener("mouseup", onUp);
-            document.body.classList.remove("is-dnd-dragging");
-            if (dragMoved) shiftAnalysisSuppressNextClickClear = true;
-            persistColumnWidths();
-          };
-          window.addEventListener("mousemove", onMove);
-          window.addEventListener("mouseup", onUp);
+          startWindowDrag({
+            bodyClass: "is-dnd-dragging",
+            onMove: (mv) => {
+              const dx = mv.clientX - startX;
+              let dy = mv.clientY - startY;
+              const minStartY = Math.min(...Array.from(startOffsets.values()).map((item) => item.y));
+              if (Number.isFinite(minStartY) && minStartY + dy < 0) dy = -minStartY;
+              dragMoved = dragMoved || Math.abs(dx) > 2 || Math.abs(dy) > 2;
+              startOffsets.forEach((start, key) => {
+                formColumnWidths[`shift_analysis_block_${key}_x`] = start.x + dx;
+                formColumnWidths[`shift_analysis_block_${key}_y`] = start.y + dy;
+              });
+              applyShiftCodeAnalysisBlockLayout(root);
+            },
+            onUp: () => {
+              if (dragMoved) shiftAnalysisSuppressNextClickClear = true;
+              persistColumnWidths();
+            },
+          });
         });
         handle.addEventListener("click", (ev) => {
           if (!ev.ctrlKey && !ev.metaKey) return;
@@ -1967,19 +1964,16 @@
         ev.preventDefault();
         const startX = ev.clientX;
         const startOffset = rosterReportOffsetPx();
-        document.body.classList.add("is-horizontal-dragging");
-        const onMove = (mv) => {
-          formColumnWidths.maint_roster_report_offset = startOffset + (mv.clientX - startX);
-          applyRosterReportOffset();
-        };
-        const onUp = () => {
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("mouseup", onUp);
-          document.body.classList.remove("is-horizontal-dragging");
-          persistColumnWidths();
-        };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
+        startWindowDrag({
+          bodyClass: "is-horizontal-dragging",
+          onMove: (mv) => {
+            formColumnWidths.maint_roster_report_offset = startOffset + (mv.clientX - startX);
+            applyRosterReportOffset();
+          },
+          onUp: () => {
+            persistColumnWidths();
+          },
+        });
       };
       pane.querySelector(".maint-pane-title")?.addEventListener("mousedown", startDrag);
     }
