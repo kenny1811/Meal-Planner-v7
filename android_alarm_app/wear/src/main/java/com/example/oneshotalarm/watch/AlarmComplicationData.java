@@ -23,7 +23,7 @@ final class AlarmComplicationData {
         String text = labelLine(safe(label, "沒有資料"), 0);
         return new ShortTextComplicationData.Builder(text(text), text(title))
                 .setTitle(text(title))
-                .setTapAction(openScheduleIntent(context, next ? 10 : 20))
+                .setTapAction(tapIntent(context, next, next ? 10 : 20))
                 .build();
     }
 
@@ -32,7 +32,7 @@ final class AlarmComplicationData {
         String label = prefs.getString(next ? AlarmScheduleState.KEY_NEXT_LABEL : AlarmScheduleState.KEY_PREV_LABEL, "等待電話資料");
         String text = labelLine(safe(label, "沒有資料"), lineIndex);
         return new ShortTextComplicationData.Builder(text(text), text(text))
-                .setTapAction(openScheduleIntent(context, (next ? 100 : 200) + lineIndex))
+                .setTapAction(tapIntent(context, next, (next ? 100 : 200) + lineIndex))
                 .build();
     }
 
@@ -56,8 +56,9 @@ final class AlarmComplicationData {
         return new PlainComplicationText.Builder(value).build();
     }
 
-    private static PendingIntent openScheduleIntent(Context context, int requestCode) {
-        Intent intent = new Intent(context, ScheduleGridTileActivity.class)
+    /** 右邊（next）撳開行位表；左邊（prev）撳開 About（version 畫面）。 */
+    private static PendingIntent tapIntent(Context context, boolean next, int requestCode) {
+        Intent intent = new Intent(context, next ? ScheduleGridTileActivity.class : AboutActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

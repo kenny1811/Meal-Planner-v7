@@ -74,13 +74,13 @@ final class AppUpdater {
                 JSONObject phone = info.optJSONObject("app");
                 JSONObject wear = info.optJSONObject("wear");
                 int phoneServer = phone != null ? phone.optInt("version_code", 0) : 0;
-                int wearServer = wear != null ? wear.optInt("version_code", 0) : 0;
                 boolean phoneReady = phone != null && phone.optBoolean("apk_ready", false);
                 boolean wearReady = wear != null && wear.optBoolean("apk_ready", false);
-                text = "Phone: v" + current + " installed, server v" + phoneServer
+                text = "Phone: v" + currentVersionName(activity) + " installed, server v"
+                        + serverVersionLabel(phone)
                         + (phoneReady ? "" : " (APK not built)")
                         + (phoneServer > current ? " — update available" : " — up to date")
-                        + "\nWatch: server v" + wearServer
+                        + "\nWatch: server v" + serverVersionLabel(wear)
                         + (wearReady ? "" : " (APK not built)");
             } catch (Exception e) {
                 text = "Cannot reach PC: " + e.getMessage();
@@ -101,7 +101,7 @@ final class AppUpdater {
                 boolean ready = phone != null && phone.optBoolean("apk_ready", false);
                 if (ready && server > currentVersionCode(activity)) {
                     activity.runOnUiThread(() -> new AlertDialog.Builder(activity)
-                            .setTitle("New version v" + server)
+                            .setTitle("New version v" + serverVersionLabel(phone))
                             .setMessage("Download and install now?")
                             .setPositiveButton("Update", (d, w) -> {
                                 Toast.makeText(activity, "Downloading update...", Toast.LENGTH_SHORT).show();
@@ -115,6 +115,30 @@ final class AppUpdater {
                 // PC 唔喺度就算，下次先再查。
             }
         }, "app-update-autocheck").start();
+    }
+
+    static String currentVersionName(Context context) {
+        try {
+            String name = context.getPackageManager()
+                    .getPackageInfo(context.getPackageName(), 0).versionName;
+            return name != null ? name : "?";
+        } catch (Exception e) {
+            return "?";
+        }
+    }
+
+    /** Server 報嘅版本顯示名：有 version_name 用佢，冇（舊 server）就 fallback versionCode。 */
+    private static String serverVersionLabel(JSONObject module) {
+        if (module == null) {
+            return "?";
+        }
+        String name = module.optString("version_name", "");
+        return name.isEmpty() ? String.valueOf(module.optInt("version_code", 0)) : name;
+    }
+
+    /** versionCode 還原做 major.minor（700 → 7.0）；舊制細數字照出。 */
+    private static String codeToName(long code) {
+        return code >= 100 ? (code / 100) + "." + (code % 100) : String.valueOf(code);
     }
 
     static long currentVersionCode(Context context) {
@@ -139,7 +163,8 @@ final class AppUpdater {
                     JSONObject phone = info.optJSONObject("app");
                     int server = phone != null ? phone.optInt("version_code", 0) : 0;
                     if (server > 0 && server <= current) {
-                        progress.update("Already up to date (v" + current + ") — nothing to install.");
+                        progress.update("Already up to date (v" + currentVersionName(context)
+                                + ") — nothing to install.");
                         return;
                     }
                 } catch (Exception ignored) {
@@ -171,7 +196,7 @@ final class AppUpdater {
                     progress.update("Checking watch version...");
                     long installed = WatchVersionBridge.requestVersion(context, 8000);
                     if (installed > 0 && incoming <= installed) {
-                        progress.update("Watch already up to date (v" + installed + ").");
+                        progress.update("Watch already up to date (v" + codeToName(installed) + ").");
                         if (!apk.delete()) {
                             Log.w(TAG, "Cannot delete " + apk);
                         }

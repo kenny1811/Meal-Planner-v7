@@ -317,7 +317,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(0xFFFFFFFF);
 
         TextView title = new TextView(this);
-        title.setText("門前直樹");
+        title.setText("門前直樹v" + AppUpdater.currentVersionName(this));
         title.setTextSize(15);
         title.setTextColor(0xFF053B24);
         title.setTypeface(mealBoldTypeface());

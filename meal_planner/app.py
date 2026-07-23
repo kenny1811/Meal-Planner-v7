@@ -1226,24 +1226,32 @@ def _apk_path(module: str) -> Path:
             / "outputs" / "apk" / "debug" / f"{name}-debug.apk")
 
 
-def _gradle_version_code(module: str) -> int:
-    # 由 build.gradle 讀 versionCode（source of truth；免拆 APK）。
+def _gradle_version(module: str) -> tuple[int, str]:
+    # 由 build.gradle 讀 versionName（source of truth；免拆 APK）。
+    # versionCode 同 gradle 一樣由 versionName 計：major*100 + minor（7.0 → 700）。
     gradle = _WEB_DIR.parent.parent / "android_alarm_app" / module / "build.gradle"
     try:
-        match = re.search(r"versionCode\s+(\d+)", gradle.read_text(encoding="utf-8"))
-        return int(match.group(1)) if match else 0
+        text = gradle.read_text(encoding="utf-8")
     except OSError:
-        return 0
+        return 0, ""
+    match = re.search(r'versionName\s+"(\d+)\.(\d+)"', text)
+    if match:
+        major, minor = int(match.group(1)), int(match.group(2))
+        return major * 100 + minor, f"{major}.{minor}"
+    match = re.search(r"versionCode\s+(\d+)", text)
+    return (int(match.group(1)) if match else 0), ""
 
 
 @app.get("/api/app-version")
 def app_version() -> dict:
-    # 電話 in-app updater 用：報最新 build 嘅 versionCode + APK 檔案資料。
+    # 電話 in-app updater 用：報最新 build 嘅 version + APK 檔案資料。
     out: dict = {}
     for module in ("app", "wear"):
         path = _apk_path(module)
+        code, name = _gradle_version(module)
         out[module] = {
-            "version_code": _gradle_version_code(module),
+            "version_code": code,
+            "version_name": name,
             "apk_ready": path.is_file(),
             "size": path.stat().st_size if path.is_file() else 0,
             "mtime": int(path.stat().st_mtime) if path.is_file() else 0,
