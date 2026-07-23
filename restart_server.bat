@@ -18,7 +18,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 
 timeout /t 1 /nobreak >nul
 
-start "Meal Planner Server v7" cmd /k "cd /d ""%ROOT%"" && set ""MENU_PROJECT_ROOT=%ROOT%"" && set ""MENU_API_HOST=%MENU_API_HOST%"" && set ""MENU_API_PORT=%MENU_API_PORT%"" && python -m meal_planner.app"
+rem hidden 啟動（唔再彈 cmd 視窗）；env 由本 bat 繼承落 python。log 要睇就用 start_website.bat 或手動行。
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -WindowStyle Hidden -FilePath 'python' -ArgumentList @('-m','meal_planner.app') -WorkingDirectory '%ROOT%'"
 
 echo Restarted Meal Planner Server v7 on http://%MENU_API_HOST%:%MENU_API_PORT%/
 echo Browser tab was not opened.
