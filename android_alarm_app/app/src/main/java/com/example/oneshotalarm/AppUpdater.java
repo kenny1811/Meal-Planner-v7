@@ -131,6 +131,20 @@ final class AppUpdater {
     private static void runPhoneUpdate(Context context, Progress progress) {
         new Thread(() -> {
             try {
+                // 同 version 唔使裝：先問 server 版本先落手。
+                long current = currentVersionCode(context);
+                try {
+                    JSONObject info = new JSONObject(
+                            ApiClient.request(context, "GET", "/api/app-version", null, 10000));
+                    JSONObject phone = info.optJSONObject("app");
+                    int server = phone != null ? phone.optInt("version_code", 0) : 0;
+                    if (server > 0 && server <= current) {
+                        progress.update("Already up to date (v" + current + ") — nothing to install.");
+                        return;
+                    }
+                } catch (Exception ignored) {
+                    // 查唔到版本照落手下載（server 舊版未有 endpoint 都照用得）。
+                }
                 File apk = new File(context.getCacheDir(), "update-phone.apk");
                 download(context, "/apk", apk, progress);
                 progress.update("Installing... confirm the system prompt.");

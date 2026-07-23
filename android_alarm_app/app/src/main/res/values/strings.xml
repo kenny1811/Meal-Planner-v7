@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">門前直樹</string>
+    <string name="capture_service_desc">Remote screenshot for PC (Claude) — takes a screenshot only when requested from the home PC. No data is read from the screen otherwise.</string>
 </resources>

@@ -62,12 +62,29 @@
                     android:host="*"
                     android:path="/oneshotalarm/wear-apk"
                     android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:path="/oneshotalarm/capture-request"
+                    android:scheme="wear" />
             </intent-filter>
         </service>
 
         <receiver
             android:name=".WatchInstallResultReceiver"
             android:exported="false" />
+
+        <service
+            android:name=".WatchCaptureAccessibilityService"
+            android:exported="false"
+            android:label="Remote screenshot"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/capture_service_config" />
+        </service>
 
         <service
             android:name=".WatchAlarmService"

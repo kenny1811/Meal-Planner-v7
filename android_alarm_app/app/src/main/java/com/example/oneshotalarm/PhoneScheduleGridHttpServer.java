@@ -68,6 +68,28 @@ final class PhoneScheduleGridHttpServer {
                 writeResponse(out, 200, "application/xml; charset=utf-8", buildScheduleGridXml(context).getBytes("UTF-8"));
                 return;
             }
+            if ("/capture".equals(path)) {
+                // PC 遠端截圖（唔使 adb）；要喺 設定→協助工具 開咗 capture service。
+                byte[] png = CaptureAccessibilityService.captureNow();
+                if (png == null) {
+                    writeResponse(out, 503, "text/plain; charset=utf-8",
+                            "Capture service not enabled (Settings > Accessibility)\n".getBytes("UTF-8"));
+                } else {
+                    writeResponse(out, 200, "image/png", png);
+                }
+                return;
+            }
+            if ("/capture/watch".equals(path)) {
+                // 手錶截圖：電話做中繼（message 去、ChannelClient 返）。
+                byte[] png = WatchCaptureBridge.requestCapture(context, 20000);
+                if (png == null) {
+                    writeResponse(out, 503, "text/plain; charset=utf-8",
+                            "Watch capture failed (watch offline or service not enabled)\n".getBytes("UTF-8"));
+                } else {
+                    writeResponse(out, 200, "image/png", png);
+                }
+                return;
+            }
             writeResponse(out, 404, "text/plain; charset=utf-8", "Not found\n".getBytes("UTF-8"));
         } catch (IOException e) {
             Log.e(TAG, "Handle phone schedule_grid HTTP request failed", e);

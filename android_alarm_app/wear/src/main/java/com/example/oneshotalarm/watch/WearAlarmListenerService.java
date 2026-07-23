@@ -23,6 +23,8 @@ public class WearAlarmListenerService extends WearableListenerService {
     private static final String WATCH_DISMISS_DATA_PATH = "/oneshotalarm/watch-dismiss-data";
     private static final String TILE_STATE_PATH = "/oneshotalarm/tile-state";
     private static final String WEAR_APK_CHANNEL_PATH = "/oneshotalarm/wear-apk";
+    private static final String CAPTURE_REQUEST_PATH = "/oneshotalarm/capture-request";
+    private static final String CAPTURE_RESULT_PATH = "/oneshotalarm/capture-result";
     private static final String PREFS = "watch_alarm_listener";
     private static final String KEY_LAST_TILE_STATE_AT = "last_tile_state_at";
     private static final long DISMISS_FRESH_MS = 30 * 1000L;
@@ -63,6 +65,33 @@ public class WearAlarmListenerService extends WearableListenerService {
         if (TILE_STATE_PATH.equals(messageEvent.getPath())) {
             saveTileState(new String(messageEvent.getData(), StandardCharsets.UTF_8));
             return;
+        }
+        if (CAPTURE_REQUEST_PATH.equals(messageEvent.getPath())) {
+            String sourceNodeId = messageEvent.getSourceNodeId();
+            new Thread(() -> sendCaptureResult(sourceNodeId), "watch-capture").start();
+            return;
+        }
+    }
+
+    /** 影一張全螢幕 PNG，經 ChannelClient 回傳俾電話（空 byte＝失敗）。 */
+    private void sendCaptureResult(String nodeId) {
+        byte[] png = WatchCaptureAccessibilityService.captureNow();
+        byte[] payload = png != null ? png : new byte[0];
+        try {
+            com.google.android.gms.wearable.ChannelClient channelClient =
+                    com.google.android.gms.wearable.Wearable.getChannelClient(this);
+            com.google.android.gms.wearable.ChannelClient.Channel channel =
+                    com.google.android.gms.tasks.Tasks.await(
+                            channelClient.openChannel(nodeId, CAPTURE_RESULT_PATH),
+                            10, java.util.concurrent.TimeUnit.SECONDS);
+            try (java.io.OutputStream out = com.google.android.gms.tasks.Tasks.await(
+                    channelClient.getOutputStream(channel),
+                    10, java.util.concurrent.TimeUnit.SECONDS)) {
+                out.write(payload);
+            }
+            Log.d(TAG, "Sent capture result (" + payload.length + " bytes)");
+        } catch (Exception e) {
+            Log.e(TAG, "Send capture result failed", e);
         }
     }
 
@@ -204,12 +233,32 @@ public class WearAlarmListenerService extends WearableListenerService {
             Log.e(TAG, "Wear APK transfer incomplete, reason=" + closeReason);
             return;
         }
+        // 同 version 唔使裝：解 APK 版本對返自己，一樣就 skip。
+        try {
+            android.content.pm.PackageInfo incoming = getPackageManager()
+                    .getPackageArchiveInfo(apk.getPath(), 0);
+            android.content.pm.PackageInfo own = getPackageManager()
+                    .getPackageInfo(getPackageName(), 0);
+            long incomingCode = incoming != null ? versionCodeOf(incoming) : 0;
+            long ownCode = versionCodeOf(own);
+            if (incomingCode > 0 && incomingCode <= ownCode) {
+                Log.d(TAG, "Wear APK v" + incomingCode + " <= installed v" + ownCode + ", skip install");
+                return;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Version check failed, installing anyway", e);
+        }
         Log.d(TAG, "Wear APK received (" + apk.length() + " bytes), installing...");
         try {
             installApk(apk);
         } catch (Exception e) {
             Log.e(TAG, "Install wear APK failed", e);
         }
+    }
+
+    private static long versionCodeOf(android.content.pm.PackageInfo info) {
+        return android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P
+                ? info.getLongVersionCode() : info.versionCode;
     }
 
     private java.io.File updateApkFile() {

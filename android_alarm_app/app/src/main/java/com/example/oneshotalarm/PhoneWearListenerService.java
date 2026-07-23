@@ -96,4 +96,32 @@ public class PhoneWearListenerService extends WearableListenerService {
             return new JSONObject();
         }
     }
+
+    /** 手錶截圖回傳（ChannelClient）：讀晒 PNG 交返俾 WatchCaptureBridge。 */
+    @Override
+    public void onChannelOpened(com.google.android.gms.wearable.ChannelClient.Channel channel) {
+        if (channel == null || !WatchCaptureBridge.CAPTURE_RESULT_PATH.equals(channel.getPath())) {
+            return;
+        }
+        com.google.android.gms.wearable.Wearable.getChannelClient(this)
+                .getInputStream(channel)
+                .addOnSuccessListener(in -> new Thread(() -> {
+                    try (java.io.InputStream stream = in) {
+                        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                        byte[] buffer = new byte[65536];
+                        int read;
+                        while ((read = stream.read(buffer)) >= 0) {
+                            out.write(buffer, 0, read);
+                        }
+                        WatchCaptureBridge.deliver(out.toByteArray());
+                    } catch (Exception e) {
+                        Log.e(TAG, "Read watch capture failed", e);
+                        WatchCaptureBridge.deliver(null);
+                    }
+                }, "watch-capture-read").start())
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Open watch capture stream failed", e);
+                    WatchCaptureBridge.deliver(null);
+                });
+    }
 }
