@@ -1868,8 +1868,6 @@
       };
       const systemFolder = document.getElementById("detail-system-folder");
       const dataFolder = document.getElementById("detail-data-folder");
-      const brown = document.getElementById("detail-rice-brown");
-      const other = document.getElementById("detail-rice-other");
       const gcClientSecret = document.getElementById("detail-gc-client-secret");
       const gcTokenFile = document.getElementById("detail-gc-token-file");
       const gcNonworkCalendar = document.getElementById("detail-gc-nonwork-calendar");
@@ -1878,14 +1876,13 @@
       const gcWakeOffset = document.getElementById("detail-gc-wake-offset");
       if (systemFolder) systemFolder.value = folders.system_folder ?? "";
       if (dataFolder) dataFolder.value = folders.data_folder ?? "";
-      if (brown) brown.value = rice.cooked_to_raw_brown ?? "";
-      if (other) other.value = rice.cooked_to_raw_other ?? "";
       if (gcClientSecret) gcClientSecret.value = googleCalendarSync.client_secret_file || "";
       if (gcTokenFile) gcTokenFile.value = googleCalendarSync.token_file || "";
       if (gcNonworkCalendar) gcNonworkCalendar.value = googleCalendarSync.nonwork_calendar_id || "";
       if (gcWorkCalendar) gcWorkCalendar.value = googleCalendarSync.work_calendar_id || "";
       if (gcAlarmCalendar) gcAlarmCalendar.value = googleCalendarSync.alarm_calendar_id || "";
       if (gcWakeOffset) gcWakeOffset.value = googleCalendarSync.wake_offset_hours ?? 3;
+      renderRiceConversions(rice);
       renderRosterCodeDefinitions(defs);
       const detailEditor = document.querySelector(".detail-editor");
       if (detailEditor) {
@@ -1897,6 +1894,82 @@
         attachTableDragHandles();
       }
       refreshRosterMaintReport();
+    }
+
+    function renderRiceConversions(rice) {
+      const box = document.getElementById("detail-rice-conversions");
+      if (!box) return;
+      const conversions = Array.isArray(rice && rice.conversions) ? rice.conversions : [];
+      const rows = conversions.map((row, idx) => `
+        <tr data-detail-rice-row="${idx}">
+          <td data-form-col-key="detail_rice_label"><input type="text" data-detail-rice-field="name_contains" data-detail-rice-index="${idx}" spellcheck="false" placeholder="Rice name contains" value="${esc(row && row.name_contains != null ? row.name_contains : "")}" /></td>
+          <td data-form-col-key="detail_rice_value"><input type="number" data-detail-rice-field="ratio" data-detail-rice-index="${idx}" min="0.001" step="0.001" value="${esc(row && row.ratio != null ? row.ratio : "")}" /></td>
+        </tr>
+      `).join("");
+      box.innerHTML = `<table class="detail-field-table" data-form-table>
+        <colgroup>
+          <col data-form-col-key="detail_rice_label" data-form-col-default="454" />
+          <col data-form-col-key="detail_rice_value" data-form-col-default="290" />
+        </colgroup>
+        <thead><tr><th data-form-col-key="detail_rice_label">Rice name contains</th><th data-form-col-key="detail_rice_value">Cooked/raw ratio</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="2" class="maint-empty">No conversion rows</td></tr>'}</tbody>
+      </table>`;
+      applyFormColumnWidths(box);
+      attachFormColumnResizers(box);
+      applyTableOffsets(box);
+      attachTableDragHandles();
+      box.querySelectorAll("input").forEach((input) => {
+        input.addEventListener("input", () => setUnsavedChanges("系統參數"));
+      });
+    }
+
+    function collectRiceConversions(includeEmpty = false) {
+      const rows = [];
+      document.querySelectorAll("#detail-rice-conversions [data-detail-rice-index]").forEach((input) => {
+        const idx = Number(input.getAttribute("data-detail-rice-index"));
+        const field = input.getAttribute("data-detail-rice-field");
+        if (!Number.isInteger(idx) || idx < 0 || !field) return;
+        while (rows.length <= idx) rows.push({ name_contains: "", ratio: "" });
+        rows[idx][field] = input.value.trim();
+      });
+      // includeEmpty：row action 要保留空行，等 DOM index 同 array index 對齊
+      if (includeEmpty) return rows;
+      return rows.filter((row) => row.name_contains !== "" || row.ratio !== "");
+    }
+
+    function hideDetailRiceRowMenu() {
+      const menu = document.getElementById("detail-rice-row-menu");
+      if (!menu) return;
+      menu.hidden = true;
+      menu.removeAttribute("data-detail-rice-row-index");
+    }
+
+    function showDetailRiceRowMenu(ev, rowIndex) {
+      const menu = document.getElementById("detail-rice-row-menu");
+      if (!menu) return;
+      ev.preventDefault();
+      menu.hidden = false;
+      menu.setAttribute("data-detail-rice-row-index", Number.isInteger(rowIndex) ? String(rowIndex) : "-1");
+      const rect = menu.getBoundingClientRect();
+      const left = Math.max(2, Math.min(ev.clientX, window.innerWidth - rect.width - 2));
+      const top = Math.max(2, Math.min(ev.clientY, window.innerHeight - rect.height - 2));
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+    }
+
+    function applyDetailRiceRowAction(action, rowIndex) {
+      const rows = collectRiceConversions(true);
+      const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
+      if (action === "insert") {
+        rows.splice(Math.min(idx, rows.length), 0, { name_contains: "", ratio: "" });
+      } else if (action === "delete") {
+        if (idx < rows.length) rows.splice(idx, 1);
+      } else if (action === "append") {
+        rows.push({ name_contains: "", ratio: "" });
+      }
+      setUnsavedChanges("系統參數");
+      detailSettingsPayload.rice = { ...(detailSettingsPayload.rice || {}), conversions: rows };
+      renderRiceConversions(detailSettingsPayload.rice);
     }
 
     function renderRosterCodeDefinitions(defs) {
@@ -1957,7 +2030,7 @@
     }
 
     function applyDetailRowAction(action, rowIndex) {
-      const rows = collectRosterCodeDefinitions();
+      const rows = collectRosterCodeDefinitions(true);
       const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
       if (action === "insert") {
         rows.splice(Math.min(idx, rows.length), 0, emptyRosterCodeDefinition());
@@ -1972,7 +2045,7 @@
       refreshRosterMaintReport();
     }
 
-    function collectRosterCodeDefinitions() {
+    function collectRosterCodeDefinitions(includeEmpty = false) {
       const rows = [];
       document.querySelectorAll("#detail-code-definitions [data-detail-code-index]").forEach((input) => {
         const idx = Number(input.getAttribute("data-detail-code-index"));
@@ -1981,6 +2054,8 @@
         while (rows.length <= idx) rows.push({ pattern: "", label: "" });
         rows[idx][field] = input.value.trim();
       });
+      // includeEmpty：row action 要保留空行，等 DOM index 同 array index 對齊
+      if (includeEmpty) return rows;
       return rows.filter((row) => row.pattern || row.label);
     }
 
@@ -2001,8 +2076,7 @@
       setDetailStatus("Saving...");
       const systemFolder = String(document.getElementById("detail-system-folder")?.value || "").trim();
       const dataFolder = String(document.getElementById("detail-data-folder")?.value || "").trim();
-      const brown = Number(document.getElementById("detail-rice-brown")?.value);
-      const other = Number(document.getElementById("detail-rice-other")?.value);
+      const riceRows = collectRiceConversions();
       const gcClientSecret = String(document.getElementById("detail-gc-client-secret")?.value || "").trim();
       const gcTokenFile = String(document.getElementById("detail-gc-token-file")?.value || "").trim();
       const gcNonworkCalendar = String(document.getElementById("detail-gc-nonwork-calendar")?.value || "").trim();
@@ -2015,17 +2089,20 @@
         showDetailError("System folder and data folder are required.");
         return;
       }
-      if (!Number.isFinite(brown) || brown <= 0 || !Number.isFinite(other) || other <= 0) {
-        setDetailStatus("");
-        showDetailError("Rice cooked-to-raw ratios must be greater than zero.");
-        return;
+      for (const row of riceRows) {
+        const ratio = Number(row.ratio);
+        if (!row.name_contains || !Number.isFinite(ratio) || ratio <= 0) {
+          setDetailStatus("");
+          showDetailError("Each rice conversion row needs a name keyword and a ratio greater than zero.");
+          return;
+        }
+        row.ratio = ratio;
       }
       try {
         const data = await persistDetailSettings({
           system_folder: systemFolder,
           data_folder: dataFolder,
-          cooked_to_raw_brown: brown,
-          cooked_to_raw_other: other,
+          rice_conversions: riceRows,
           google_calendar_sync: {
             ...(googleCalendarSync || {}),
             client_secret_file: gcClientSecret,
@@ -2042,8 +2119,7 @@
         clearUnsavedChanges("系統參數");
         shoppingRiceConfig = {
           ...(shoppingRiceConfig || {}),
-          cooked_to_raw_brown: data.rice.cooked_to_raw_brown,
-          cooked_to_raw_other: data.rice.cooked_to_raw_other,
+          conversions: data.rice.conversions,
         };
         setDetailStatus(`Save Detail Settings ${new Date().toLocaleTimeString("en-GB")}`);
       } catch (e) {
@@ -2105,7 +2181,7 @@
       const nutrientCells = nutrientKeys.map((key) =>
         `<td class="catalog-num"><input type="text" inputmode="decimal" class="catalog-cell-input" data-catalog-row="${idx}" data-catalog-nutrient="${esc(key)}" value="${esc(catalogNutrientText(nutrients[key] ?? 0))}" readonly /></td>`
       ).join("");
-      return `<tr data-catalog-index="${idx}" data-catalog-search="${esc(`${row.category || ""} ${row.name || ""}`.toLowerCase())}">
+      return `<tr data-catalog-index="${idx}">
         <td class="catalog-paused"><input type="checkbox" data-catalog-row="${idx}" data-catalog-field="paused"${row.paused ? " checked" : ""} /></td>
         ${textInput("category", row.category, "catalog-category")}
         ${textInput("name", row.name, "catalog-name")}
@@ -2114,13 +2190,6 @@
         ${numberInput("max_g", row.max_g)}
         ${numberInput("daymax_g", row.daymax_g)}
       </tr>`;
-    }
-
-    function applyCatalogFilter() {
-      const query = String(document.getElementById("catalog-filter")?.value || "").trim().toLowerCase();
-      document.querySelectorAll("#catalog-editor tr[data-catalog-index]").forEach((row) => {
-        row.style.display = !query || String(row.getAttribute("data-catalog-search") || "").includes(query) ? "" : "none";
-      });
     }
 
     function renderNutritionCatalog(data) {
@@ -2157,7 +2226,6 @@
       attachCatalogColumnResizers();
       applyTableOffsets(editor);
       attachTableDragHandles();
-      applyCatalogFilter();
     }
 
     function catalogColumnWidthPx(key) {

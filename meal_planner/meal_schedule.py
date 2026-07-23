@@ -222,6 +222,7 @@ def choose_ingredients_for_meals(
     reroll_nonce: int = 0,
     nutrition_entries: list[Any] | None = None,
     bound_overrides: dict[int, dict[str, float]] | None = None,
+    forced_rice_row: int | None = None,
 ) -> tuple[
     dict[str, list[str]],
     dict[str, dict[str, float]],
@@ -254,6 +255,22 @@ def choose_ingredients_for_meals(
             alts = item.get("alternatives", [])
             alts_list = [str(x) for x in alts] if isinstance(alts, list) else []
             candidates_by_item[(meal, i)] = candidate_entries_from_alternatives(entries, alts_list)
+
+    if forced_rice_row is not None:
+        # 一日一米：鎖咗嘅餐已經食咗某款米，重解餐次嘅米類候選只准同款
+        # （除非嗰款米本身已暫停／唔喺候選，先容許轉款）。
+        for meal, items in meal_pattern_parts.items():
+            if meal not in visible_set:
+                continue
+            for i, item in enumerate(items):
+                alts = item.get("alternatives", [])
+                alts_list = [str(x) for x in alts] if isinstance(alts, list) else []
+                if not any((a or "").strip().lower() == rice_token for a in alts_list):
+                    continue
+                cands = candidates_by_item.get((meal, i), [])
+                forced = [e for e in cands if int(e.row_index) == int(forced_rice_row)]
+                if forced:
+                    candidates_by_item[(meal, i)] = forced
 
     fixed_names: dict[str, list[str]] = {meal: [] for meal in meal_pattern_parts.keys()}
     fixed_items: dict[str, list[dict[str, object]]] = {meal: [] for meal in meal_pattern_parts.keys()}
@@ -402,8 +419,7 @@ def build_rice_note(
 
     rice_name = rice_items[0][0]
     cooked_g = sum(g for _, g in rice_items)
-    is_brown = bool(settings.rice.brown_name_contains and settings.rice.brown_name_contains in rice_name)
-    ratio = settings.rice.cooked_to_raw_brown if is_brown else settings.rice.cooked_to_raw_other
+    ratio = settings.rice.ratio_for(rice_name)
     raw_g = cooked_g / ratio if ratio > 0 else 0.0
     water_g = raw_g * settings.rice.water_multiplier
     return f"{rice_name}({cooked_g:.0f}g)=生重{raw_g:.0f}g\n水={water_g:.0f}g"
@@ -512,6 +528,24 @@ def build_day_meal_plan(
 
     # 已食餐（partial-day re-solve）：當成固定營養，剔出求解範圍，內容原封不動。
     locked = {m: v for m, v in (locked_meals or {}).items() if m in visible_meals and isinstance(v, dict)}
+    # 一日一米：鎖咗嘅餐如果已包含米類，重解餐次要焗住用同一款米。
+    forced_rice_row: int | None = None
+    if locked:
+        rice_markers = tuple(x for x in settings.rice.note_name_contains if x)
+        for data in locked.values():
+            items_in = data.get("items")
+            for it in items_in if isinstance(items_in, list) else []:
+                if not isinstance(it, dict):
+                    continue
+                try:
+                    row_i = int(it.get("row")) if it.get("row") is not None else None
+                except (TypeError, ValueError):
+                    row_i = None
+                if row_i is not None and any(m in str(it.get("name", "")) for m in rice_markers):
+                    forced_rice_row = row_i
+                    break
+            if forced_rice_row is not None:
+                break
     for meal, data in locked.items():
         if meal not in solver_visible_meals:
             # 例如餐廳午餐已經以固定營養處理，locked 數值同佢一致，唔好重複計。
@@ -542,6 +576,7 @@ def build_day_meal_plan(
         reroll_nonce=reroll_nonce,
         nutrition_entries=cache.nutrition_entries if cache is not None else None,
         bound_overrides=bound_overrides,
+        forced_rice_row=forced_rice_row,
     )
     if rest and isinstance(rest.get("nutrients"), dict):
         meal_nutrients["午餐"] = {

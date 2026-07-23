@@ -16,7 +16,7 @@
         return;
       }
       const customContextMenuArea = ev.target.closest(
-        "#maint-editor, #catalog-editor, #detail-code-definitions, #maint-row-menu, #catalog-row-menu, #detail-row-menu, #oos-menu"
+        "#maint-editor, #catalog-editor, #detail-code-definitions, #detail-rice-conversions, #maint-row-menu, #catalog-row-menu, #detail-row-menu, #detail-rice-row-menu, #oos-menu"
       );
       if (customContextMenuArea) return;
       const insideApp = ev.target.closest(".app-shell") || ev.target.closest("#menu-context-menu");
@@ -453,6 +453,19 @@
       hideDetailRowMenu();
       applyDetailRowAction(action.getAttribute("data-detail-row-action"), Number.isInteger(idx) ? idx : -1);
     });
+    document.getElementById("detail-rice-conversions").addEventListener("contextmenu", (ev) => {
+      const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-detail-rice-row]") : null;
+      const idx = row ? Number(row.getAttribute("data-detail-rice-row")) : -1;
+      showDetailRiceRowMenu(ev, Number.isInteger(idx) ? idx : -1);
+    });
+    document.getElementById("detail-rice-row-menu").addEventListener("click", (ev) => {
+      const action = ev.target && ev.target.closest ? ev.target.closest("[data-detail-rice-row-action]") : null;
+      const menu = document.getElementById("detail-rice-row-menu");
+      if (!action || !menu) return;
+      const idx = Number(menu.getAttribute("data-detail-rice-row-index"));
+      hideDetailRiceRowMenu();
+      applyDetailRiceRowAction(action.getAttribute("data-detail-rice-row-action"), Number.isInteger(idx) ? idx : -1);
+    });
     document.getElementById("maint-row-menu").addEventListener("click", (ev) => {
       const action = ev.target && ev.target.closest ? ev.target.closest("[data-maint-row-action]") : null;
       const menu = document.getElementById("maint-row-menu");
@@ -473,7 +486,6 @@
       ev.preventDefault();
       pasteMaintClipboard(input, ev.clipboardData.getData("text/plain"));
     });
-    document.getElementById("catalog-filter").addEventListener("input", applyCatalogFilter);
     document.getElementById("catalog-editor").addEventListener("focusin", (ev) => {
       const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-catalog-index]") : null;
       const idx = row ? Number(row.getAttribute("data-catalog-index")) : NaN;
@@ -574,16 +586,19 @@
       if (!ev.target || !ev.target.closest || !ev.target.closest("#catalog-row-menu")) hideCatalogRowMenu();
       if (!ev.target || !ev.target.closest || !ev.target.closest("#maint-row-menu")) hideMaintRowMenu();
       if (!ev.target || !ev.target.closest || !ev.target.closest("#detail-row-menu")) hideDetailRowMenu();
+      if (!ev.target || !ev.target.closest || !ev.target.closest("#detail-rice-row-menu")) hideDetailRiceRowMenu();
     });
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") hideCatalogRowMenu();
       if (ev.key === "Escape") hideMaintRowMenu();
       if (ev.key === "Escape") hideDetailRowMenu();
+      if (ev.key === "Escape") hideDetailRiceRowMenu();
     });
     document.getElementById("catalog-editor").addEventListener("scroll", hideCatalogRowMenu);
     // capture=true：scroll event 唔 bubble，資料而家喺 .maint-sheet-body 內捲，要用 capture 先截到。
     document.getElementById("maint-editor").addEventListener("scroll", hideMaintRowMenu, true);
     document.querySelector(".detail-editor")?.addEventListener("scroll", hideDetailRowMenu);
+    document.querySelector(".detail-editor")?.addEventListener("scroll", hideDetailRiceRowMenu);
     document.addEventListener("keydown", async (ev) => {
       if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && String(ev.key).toLowerCase() === "s") {
         ev.preventDefault();

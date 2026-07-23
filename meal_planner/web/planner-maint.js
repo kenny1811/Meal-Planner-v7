@@ -70,6 +70,20 @@
         applyScheduleGridRowAction(action, rowIndex);
         return;
       }
+      // Append 上限一行空行：已有尾部空行就唔加新行，cursor 直接跳過去（save 時先 trim）。
+      if (action === "append") {
+        const blankIdx = trailingBlankMaintRowIndex();
+        if (blankIdx >= 0) {
+          const input = document.querySelector(
+            `#maint-editor tr[data-maint-row-index="${blankIdx}"] textarea, #maint-editor tr[data-maint-row-index="${blankIdx}"] input`
+          );
+          if (input) {
+            if (activeMaintSheetKey === "roster") beginRosterCellEdit(input);
+            else input.focus();
+          }
+          return;
+        }
+      }
       const rows = collectMaintRows();
       const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
       if (action === "insert") {
@@ -508,6 +522,19 @@
         tr.setAttribute("data-maint-row-index", String(nextIdx));
         tr.querySelectorAll("[data-maint-row]").forEach((input) => input.setAttribute("data-maint-row", String(nextIdx)));
       });
+    }
+
+    function trailingBlankMaintRowIndex() {
+      const trs = document.querySelectorAll("#maint-editor tr[data-maint-row-index]");
+      const last = trs[trs.length - 1];
+      if (!last) return -1;
+      const inputs = last.querySelectorAll("[data-maint-row][data-maint-col], textarea[data-maint-roster-row]");
+      if (!inputs.length) return -1;
+      for (const input of inputs) {
+        if (String(input.value || "").trim() !== "") return -1;
+      }
+      const idx = Number(last.getAttribute("data-maint-row-index"));
+      return Number.isInteger(idx) && idx > 0 ? idx : -1;
     }
 
     function applyMaintRowsFast(rows, action, idx) {

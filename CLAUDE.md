@@ -9,11 +9,22 @@
 ## 版本號 & Changelog（每個 session 都要跟）
 - 網頁 sidebar 版本號 X.Y.Z 讀 **committed 版**根目錄 `CHANGELOG.md`（`git show HEAD:CHANGELOG.md`）
   最頂嘅 `## X.Y.Z` 標題：**commit 咗先至跳 version**，未 commit 嘅 entry／WIP 唔會喺 app 出現。
-- **凡改到 `meal_planner/` 嘅嘢（code／UI／行為），完成改動時喺 `CHANGELOG.md` 頂加一條新 entry
-  並跳 version，但唔好自己 commit——出版由用戶把關**：改動 + entry 留喺 working copy 排隊，
-  **用戶開聲話 commit 先至 commit**（entry 同 code 同一個 commit 出街，嗰陣 sidebar 版本先跳）。
-  Z=修補／執靚／微調、Y=功能級改動（Z 歸零）、X=大改版（好少郁）。
-  一個邏輯改動一條 entry（唔係逐個 file 一條）；entry 用英文（app UI 係英文）、日期 dd/mm/yyyy。
+- **commit 以「項目」為單位，唔係逐個小改動**：
+  - **加／減功能（Y 級）**，例如加 out-of-stock、減營養清單 filter：成個項目做完先 commit + 加一條
+    entry；期間用戶試用、要求修正嘅中途迭代**直程唔使記錄**（唔加 entry、唔 commit），
+    entry 只描述最終行為。
+  - **修舊 bug（Z 級）**，例如刪行刪錯行：一個 fix 就係一個項目——整好、驗證完先 commit + 一條 entry。
+  - 「完成」以用戶收貨為準（用戶參與緊嘅項目，佢話 OK／唔再修正先算完；自足嘅小 fix 驗證完即算）。
+    項目完成就 commit，唔使另外問；**中途半製成品永遠唔好 commit**。
+  - **用戶叫「改返正」嘅修正（糾正 Claude 之前嘅產出／方向）唔使 commit、唔使 entry**——佢哋係
+    迭代嘅一部分，留喺 working copy 跟大隊。除「項目完成」外 Claude 唔好自作主張 commit
+    （行政／整理性 commit 都唔好，有需要先問）。
+  Y=功能級改動、Z=修補／執靚／微調、X=大改版（好少郁）。**Y 同 Z 各自獨立累加（可去到 999），
+  Y+1 嗰陣 Z 唔 reset**。
+  一個項目一條 entry；entry 用英文（app UI 係英文）、要簡短（一兩句短 bullet，唔好長篇解釋）、
+  日期 dd/mm/yyyy；**只寫用戶角度見到／用到嘅改變**——純內部嘢（機制、refactor、工作流程）
+  唔加 entry、唔跳 version，code 跟其他項目嘅 commit 出街就得；entry 同 code 落同一個 commit，
+  commit 咗 sidebar version 先跳。
 - Sidebar 版本號 click 落去會開 changelog dialog（`/api/changelog`，都係 committed 版）。
 
 ## 測試

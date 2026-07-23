@@ -96,10 +96,14 @@ meal_business_rules:
 ```yaml
 rice:
   note_name_contains: ["米"]
-  brown_name_contains: "糙米"
+  cooked_to_raw:
+    - { name_contains: "糙米", ratio: 2.623 }
+  cooked_to_raw_default: 2.67
 ```
 
-- 食材名稱包含 `brown_name_contains` 時用糙米熟重轉生重比例，否則用其他米比例。
+- 熟重轉生重比例按 `cooked_to_raw` 行由上至下配對：食材名稱包含該行 `name_contains`
+  即用該行 `ratio`；全部不命中時用 `cooked_to_raw_default`。（舊格式
+  `cooked_to_raw_brown` / `cooked_to_raw_other` / `brown_name_contains` 仍可讀取。）
 - 備註公式：
   - 生重 = 熟重總和 / 對應熟重轉生重比例
   - 水 = 生重 * `water_multiplier`

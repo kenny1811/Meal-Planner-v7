@@ -88,10 +88,15 @@
         ? shoppingRiceConfig.note_name_contains.map((x) => String(x || "")).filter(Boolean)
         : [];
       if (!markers.some((marker) => text.includes(marker))) return null;
-      const brownMarker = String(shoppingRiceConfig.brown_name_contains || "");
-      const brownRatio = Number(shoppingRiceConfig.cooked_to_raw_brown);
-      const otherRatio = Number(shoppingRiceConfig.cooked_to_raw_other);
-      const ratio = brownMarker && text.includes(brownMarker) ? brownRatio : otherRatio;
+      const conversions = Array.isArray(shoppingRiceConfig.conversions) ? shoppingRiceConfig.conversions : [];
+      let ratio = Number(shoppingRiceConfig.cooked_to_raw_default);
+      for (const row of conversions) {
+        const keyword = String((row && row.name_contains) || "");
+        if (keyword && text.includes(keyword)) {
+          ratio = Number(row.ratio);
+          break;
+        }
+      }
       if (!Number.isFinite(ratio) || ratio <= 0) return null;
       return cookedGrams / ratio;
     }

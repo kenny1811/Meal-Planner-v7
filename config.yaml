@@ -11,8 +11,8 @@ database:
 
 folders:
   # system_folder 為 v7 程式根目錄；data_folder 可放 workbook / sqlite / plans_store。
-  system_folder: "."
-  data_folder: "."
+  system_folder: 'D:\Projects\餐單生成v7'
+  data_folder: 'D:\Projects\餐單生成v7'
 
 sheets:
   menu_v5: "餐單v5"
@@ -42,13 +42,17 @@ nutrition_portion:
   default_g: 100
 
 rice:
-  cooked_to_raw_brown: 2.623
-  cooked_to_raw_other: 2.67
+  # 熟重→生重換算：由上至下第一個「名稱包含 name_contains」嘅行命中就用該 ratio；
+  # 冇命中就用 cooked_to_raw_default。
+  cooked_to_raw:
+    - { name_contains: "糙米", ratio: 2.623 }
+    - { name_contains: "三色藜麥米", ratio: 2.67 }
+    - { name_contains: "藜麥米", ratio: 2.67 }
+  cooked_to_raw_default: 2.67
   water_multiplier: 2
   rice_category_exact: "米"
-  # 米類備註：食材名稱包含以下字串即計入熟重；包含 brown_name_contains 則用糙米換算率。
+  # 米類備註：食材名稱包含以下字串即計入熟重。
   note_name_contains: ["米"]
-  brown_name_contains: "糙米"
 
 dates:
   timezone: "Asia/Hong_Kong"

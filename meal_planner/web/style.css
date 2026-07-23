@@ -1467,6 +1467,9 @@
       padding: 4px 6px;
       background: #f8fafc;
     }
+    table.detail-field-table thead th {
+      text-align: center;
+    }
     table.detail-field-table label {
       display: block;
     }

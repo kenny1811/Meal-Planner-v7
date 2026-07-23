@@ -57,13 +57,26 @@ class NutritionPortionConfig:
 
 
 @dataclass(frozen=True)
+class RiceConversion:
+    name_contains: str
+    ratio: float
+
+
+@dataclass(frozen=True)
 class RiceConfig:
-    cooked_to_raw_brown: float
-    cooked_to_raw_other: float
+    conversions: tuple[RiceConversion, ...]
+    cooked_to_raw_default: float
     water_multiplier: float
     rice_category_exact: str
     note_name_contains: tuple[str, ...]
-    brown_name_contains: str
+
+    def ratio_for(self, name: str) -> float:
+        """熟重→生重換算率：由上至下第一個「名稱包含 name_contains」的行命中即用；冇命中用 default。"""
+        text = str(name or "")
+        for conv in self.conversions:
+            if conv.name_contains and conv.name_contains in text:
+                return conv.ratio
+        return self.cooked_to_raw_default
 
 
 @dataclass(frozen=True)
@@ -204,9 +217,31 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
     )
 
     rc = data.get("rice", {}) or {}
+    conversions: list[RiceConversion] = []
+    if "cooked_to_raw" in rc:
+        for entry in rc.get("cooked_to_raw") or []:
+            if isinstance(entry, dict):
+                keyword, ratio_raw = str(entry.get("name_contains", "")).strip(), entry.get("ratio")
+            elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                keyword, ratio_raw = str(entry[0]).strip(), entry[1]
+            else:
+                continue
+            try:
+                ratio = float(ratio_raw)
+            except (TypeError, ValueError):
+                continue
+            if keyword and ratio > 0:
+                conversions.append(RiceConversion(name_contains=keyword, ratio=ratio))
+    else:
+        # 舊格式 fallback：brown/other 兩個 scalar + brown_name_contains keyword。
+        brown_keyword = str(rc.get("brown_name_contains", "糙米")).strip()
+        if brown_keyword:
+            conversions.append(
+                RiceConversion(name_contains=brown_keyword, ratio=float(rc.get("cooked_to_raw_brown", 2.623)))
+            )
     rice = RiceConfig(
-        cooked_to_raw_brown=float(rc.get("cooked_to_raw_brown", 2.623)),
-        cooked_to_raw_other=float(rc.get("cooked_to_raw_other", 2.67)),
+        conversions=tuple(conversions),
+        cooked_to_raw_default=float(rc.get("cooked_to_raw_default", rc.get("cooked_to_raw_other", 2.67))),
         water_multiplier=float(rc.get("water_multiplier", 2)),
         rice_category_exact=str(rc.get("rice_category_exact", "米")),
         note_name_contains=tuple(
@@ -217,7 +252,6 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
                 else ["米"]
             )
         ),
-        brown_name_contains=str(rc.get("brown_name_contains", "糙米")),
     )
 
     dc = data.get("dates", {}) or {}
@@ -324,12 +358,27 @@ def clear_settings_cache() -> None:
 
 def save_rice_detail_settings(
     *,
-    cooked_to_raw_brown: float,
-    cooked_to_raw_other: float,
+    conversions: list[tuple[str, float]],
+    cooked_to_raw_default: float | None = None,
 ) -> AppSettings:
-    """Persist editable rice conversion settings into config.yaml."""
-    if cooked_to_raw_brown <= 0 or cooked_to_raw_other <= 0:
+    """Persist editable rice conversion rows into config.yaml.
+
+    `cooked_to_raw_default` 係隱藏後備（冇行命中先用）；None = 保留 config.yaml 現值。
+    """
+    if cooked_to_raw_default is not None and cooked_to_raw_default <= 0:
         raise ValueError("Rice cooked-to-raw ratios must be greater than zero.")
+    cleaned: list[tuple[str, float]] = []
+    for keyword, ratio_raw in conversions:
+        kw = str(keyword or "").strip()
+        if not kw:
+            raise ValueError("Rice conversion rows need a non-empty name keyword.")
+        try:
+            ratio = float(ratio_raw)
+        except (TypeError, ValueError) as e:
+            raise ValueError("Rice cooked-to-raw ratios must be greater than zero.") from e
+        if ratio <= 0:
+            raise ValueError("Rice cooked-to-raw ratios must be greater than zero.")
+        cleaned.append((kw, ratio))
 
     settings = get_settings()
     cfg_path = Path(os.environ.get("MENU_CONFIG", str(settings.project_root / "config.yaml")))
@@ -338,21 +387,34 @@ def save_rice_detail_settings(
 
     text = cfg_path.read_text(encoding="utf-8")
 
-    def replace_key(src: str, key: str, value: float) -> str:
-        pattern = rf"(^[ \t]*{re.escape(key)}[ \t]*:[ \t]*)([-+]?\d+(?:\.\d+)?)([ \t]*(?:#.*)?$)"
-        updated, count = re.subn(
-            pattern,
-            lambda m: f"{m.group(1)}{value:g}{m.group(3)}",
-            src,
+    def yaml_quote(value: str) -> str:
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+    rows_text = "".join(
+        f"    - {{ name_contains: {yaml_quote(kw)}, ratio: {ratio:g} }}\n" for kw, ratio in cleaned
+    )
+    block_pattern = r"(^[ \t]*cooked_to_raw[ \t]*:[ \t]*(?:#[^\n]*)?\n)(?:[ \t]+-[^\n]*\n?)*"
+    text, count = re.subn(
+        block_pattern,
+        lambda m: m.group(1) + rows_text,
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if count != 1:
+        raise ValueError("Cannot find rice setting cooked_to_raw in config.yaml.")
+
+    if cooked_to_raw_default is not None:
+        default_pattern = r"(^[ \t]*cooked_to_raw_default[ \t]*:[ \t]*)([-+]?\d+(?:\.\d+)?)([ \t]*(?:#.*)?$)"
+        text, count = re.subn(
+            default_pattern,
+            lambda m: f"{m.group(1)}{cooked_to_raw_default:g}{m.group(3)}",
+            text,
             count=1,
             flags=re.MULTILINE,
         )
         if count != 1:
-            raise ValueError(f"Cannot find rice setting {key} in config.yaml.")
-        return updated
-
-    text = replace_key(text, "cooked_to_raw_brown", cooked_to_raw_brown)
-    text = replace_key(text, "cooked_to_raw_other", cooked_to_raw_other)
+            raise ValueError("Cannot find rice setting cooked_to_raw_default in config.yaml.")
     write_text_atomic(cfg_path, text, encoding="utf-8", newline="\n")
     clear_settings_cache()
     return get_settings()
@@ -391,10 +453,12 @@ def save_folder_settings(
         text += "\nfolders:\n  system_folder: \".\"\n  data_folder: \".\"\n"
 
     def replace_key(src: str, key: str, value: str) -> str:
+        # YAML 單引號 scalar：backslash 照字面（Windows path 安全），單引號用 '' 逃逸。
+        quoted = "'" + value.replace("'", "''") + "'"
         pattern = rf"(^[ \t]*{re.escape(key)}[ \t]*:[ \t]*)(.*?)([ \t]*(?:#.*)?$)"
         updated, count = re.subn(
             pattern,
-            lambda m: f'{m.group(1)}"{value}"{m.group(3)}',
+            lambda m: f"{m.group(1)}{quoted}{m.group(3)}",
             src,
             count=1,
             flags=re.MULTILINE,

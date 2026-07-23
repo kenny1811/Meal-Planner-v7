@@ -195,12 +195,12 @@ class CliApiTests(unittest.TestCase):
             with open(os.path.join(tmp, "config.yaml"), "w", encoding="utf-8") as f:
                 f.write(
                     "rice:\n"
-                    "  cooked_to_raw_brown: 2.623\n"
-                    "  cooked_to_raw_other: 2.67\n"
+                    "  cooked_to_raw:\n"
+                    "    - { name_contains: \"糙米\", ratio: 2.623 }\n"
+                    "  cooked_to_raw_default: 2.67\n"
                     "  water_multiplier: 2\n"
                     "  rice_category_exact: \"米\"\n"
                     "  note_name_contains: [\"米\"]\n"
-                    "  brown_name_contains: \"糙米\"\n"
                 )
             clear_settings_cache()
             client = TestClient(app)
@@ -208,19 +208,33 @@ class CliApiTests(unittest.TestCase):
             before = client.get("/api/detail-settings").json()
             response = client.post(
                 "/api/detail-settings",
-                json={"cooked_to_raw_brown": 2.5, "cooked_to_raw_other": 2.8},
+                json={
+                    "rice_conversions": [
+                        {"name_contains": "糙米", "ratio": 2.5},
+                        {"name_contains": "紅米", "ratio": 2.4},
+                    ],
+                },
             )
             after = response.json()
 
-            self.assertEqual(before["rice"]["cooked_to_raw_brown"], 2.623)
+            self.assertEqual(
+                before["rice"]["conversions"], [{"name_contains": "糙米", "ratio": 2.623}]
+            )
             self.assertEqual(response.status_code, 200)
             self.assertTrue(after["ok"])
-            self.assertEqual(after["rice"]["cooked_to_raw_brown"], 2.5)
-            self.assertEqual(after["rice"]["cooked_to_raw_other"], 2.8)
+            self.assertEqual(
+                after["rice"]["conversions"],
+                [
+                    {"name_contains": "糙米", "ratio": 2.5},
+                    {"name_contains": "紅米", "ratio": 2.4},
+                ],
+            )
             with open(os.path.join(tmp, "config.yaml"), encoding="utf-8") as f:
                 saved = f.read()
-            self.assertIn("cooked_to_raw_brown: 2.5", saved)
-            self.assertIn("cooked_to_raw_other: 2.8", saved)
+            self.assertIn('- { name_contains: "糙米", ratio: 2.5 }', saved)
+            self.assertIn('- { name_contains: "紅米", ratio: 2.4 }', saved)
+            # 隱藏後備值冇send就唔郁
+            self.assertIn("cooked_to_raw_default: 2.67", saved)
 
         if old_root is None:
             os.environ.pop("MENU_PROJECT_ROOT", None)

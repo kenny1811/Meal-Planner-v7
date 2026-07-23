@@ -189,7 +189,6 @@
         <h2 data-title-key="catalog">Nutrition Catalog</h2>
         <div class="config-toolbar catalog-toolbar">
           <button type="button" class="btn" id="catalog-save" style="display:none;">Save Catalog</button>
-          <span><label for="catalog-filter">Filter</label><input type="text" id="catalog-filter" /></span>
           <span id="catalog-status" class="target-status"></span>
         </div>
         <div id="catalog-err" class="err"></div>
@@ -228,22 +227,7 @@
           </section>
           <section class="detail-section-block" data-detail-block="rice">
             <h3>Rice conversion</h3>
-            <table class="detail-field-table" data-form-table>
-              <colgroup>
-                <col data-form-col-key="detail_rice_label" data-form-col-default="454" />
-                <col data-form-col-key="detail_rice_value" data-form-col-default="290" />
-              </colgroup>
-              <tbody>
-                <tr>
-                  <th scope="row" data-form-col-key="detail_rice_label"><label for="detail-rice-brown">Brown rice cooked/raw ratio</label></th>
-                  <td data-form-col-key="detail_rice_value"><input type="number" id="detail-rice-brown" min="0.001" step="0.001" /></td>
-                </tr>
-                <tr>
-                  <th scope="row" data-form-col-key="detail_rice_label"><label for="detail-rice-other">Other rice cooked/raw ratio</label></th>
-                  <td data-form-col-key="detail_rice_value"><input type="number" id="detail-rice-other" min="0.001" step="0.001" /></td>
-                </tr>
-              </tbody>
-            </table>
+            <div id="detail-rice-conversions"></div>
           </section>
           <section class="detail-section-block" data-detail-block="google-calendar">
             <h3>Google Calendar</h3>
@@ -289,6 +273,11 @@
           <button type="button" data-detail-row-action="insert">Insert Row</button>
           <button type="button" data-detail-row-action="delete">Delete Row</button>
           <button type="button" data-detail-row-action="append">Append Row</button>
+        </div>
+        <div id="detail-rice-row-menu" class="maint-row-menu" hidden>
+          <button type="button" data-detail-rice-row-action="insert">Insert Row</button>
+          <button type="button" data-detail-rice-row-action="delete">Delete Row</button>
+          <button type="button" data-detail-rice-row-action="append">Append Row</button>
         </div>
       </section>
     </div>

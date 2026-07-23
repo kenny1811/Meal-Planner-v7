@@ -300,9 +300,14 @@ class CatalogRowsRequest(BaseModel):
     rows: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class RiceConversionRow(BaseModel):
+    name_contains: str
+    ratio: float = Field(..., gt=0)
+
+
 class DetailSettingsRequest(BaseModel):
-    cooked_to_raw_brown: float = Field(..., gt=0)
-    cooked_to_raw_other: float = Field(..., gt=0)
+    rice_conversions: list[RiceConversionRow] = Field(default_factory=list)
+    cooked_to_raw_default: float | None = Field(None, gt=0)
     system_folder: str | None = None
     data_folder: str | None = None
     google_calendar_sync: dict[str, Any] | None = None
@@ -1460,8 +1465,10 @@ def api_mobile_meal_plan(date_iso: str, meta_only: bool = False) -> dict[str, An
             "nutrient_keys": payload.get("nutrient_keys", list(NUTRIENT_KEYS)),
             "day": day_payload,
             "rice_settings": {
-                "cooked_to_raw_brown": settings.rice.cooked_to_raw_brown,
-                "cooked_to_raw_other": settings.rice.cooked_to_raw_other,
+                "conversions": [
+                    {"name_contains": c.name_contains, "ratio": c.ratio} for c in settings.rice.conversions
+                ],
+                "cooked_to_raw_default": settings.rice.cooked_to_raw_default,
                 "water_multiplier": settings.rice.water_multiplier,
             },
             "nutrition_format": {
@@ -1589,10 +1596,11 @@ def api_shopping_catalog() -> dict[str, Any]:
         return {
             "by_name": by_name,
             "rice": {
-                "cooked_to_raw_brown": settings.rice.cooked_to_raw_brown,
-                "cooked_to_raw_other": settings.rice.cooked_to_raw_other,
+                "conversions": [
+                    {"name_contains": c.name_contains, "ratio": c.ratio} for c in settings.rice.conversions
+                ],
+                "cooked_to_raw_default": settings.rice.cooked_to_raw_default,
                 "note_name_contains": list(settings.rice.note_name_contains),
-                "brown_name_contains": settings.rice.brown_name_contains,
             },
         }
     except WorkbookValidationError as e:
@@ -1609,8 +1617,10 @@ def _detail_settings_payload() -> dict[str, Any]:
             "data_folder": str(settings.data_folder),
         },
         "rice": {
-            "cooked_to_raw_brown": settings.rice.cooked_to_raw_brown,
-            "cooked_to_raw_other": settings.rice.cooked_to_raw_other,
+            "conversions": [
+                {"name_contains": c.name_contains, "ratio": c.ratio} for c in settings.rice.conversions
+            ],
+            "cooked_to_raw_default": settings.rice.cooked_to_raw_default,
         },
         "google_calendar_sync": load_google_calendar_sync_settings(),
         "roster_code_definitions": load_roster_code_definitions(settings),
@@ -1631,8 +1641,8 @@ def api_get_detail_settings() -> dict[str, Any]:
 def api_set_detail_settings(body: DetailSettingsRequest) -> dict[str, Any]:
     try:
         save_rice_detail_settings(
-            cooked_to_raw_brown=body.cooked_to_raw_brown,
-            cooked_to_raw_other=body.cooked_to_raw_other,
+            conversions=[(row.name_contains, row.ratio) for row in body.rice_conversions],
+            cooked_to_raw_default=body.cooked_to_raw_default,
         )
         if body.system_folder is not None or body.data_folder is not None:
             current = get_settings()
