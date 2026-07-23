@@ -184,6 +184,49 @@ final class AlarmStore {
         return false;
     }
 
+    /** 儲存 alarms 入面搵「最近已過」(prev) 同「最快將到」(next) 一個。
+     *  WatchBridge tile-state 同 NextAlarmWidgetProvider 共用（以前各抄一份 scan）。 */
+    static PrevNext findPrevNext(Context context, long now) {
+        JSONArray alarms = getAlarms(context);
+        JSONObject prev = null;
+        JSONObject next = null;
+        long prevAt = 0L;
+        long nextAt = Long.MAX_VALUE;
+        for (int i = 0; i < alarms.length(); i++) {
+            JSONObject alarm = alarms.optJSONObject(i);
+            if (alarm == null) {
+                continue;
+            }
+            long triggerAt = alarm.optLong("trigger_at_epoch_ms", 0L);
+            if (triggerAt <= 0L) {
+                continue;
+            }
+            if (triggerAt <= now && triggerAt >= prevAt) {
+                prev = alarm;
+                prevAt = triggerAt;
+            }
+            if (triggerAt > now && triggerAt < nextAt) {
+                next = alarm;
+                nextAt = triggerAt;
+            }
+        }
+        return new PrevNext(prev, prevAt, next, nextAt == Long.MAX_VALUE ? 0L : nextAt);
+    }
+
+    static final class PrevNext {
+        final JSONObject prev;
+        final long prevAt;
+        final JSONObject next;
+        final long nextAt;
+
+        PrevNext(JSONObject prev, long prevAt, JSONObject next, long nextAt) {
+            this.prev = prev;
+            this.prevAt = prevAt;
+            this.next = next;
+            this.nextAt = nextAt;
+        }
+    }
+
     static void markAlarmFired(Context context, String id) {
         String targetId = id == null ? "" : id;
         if (targetId.isEmpty()) {

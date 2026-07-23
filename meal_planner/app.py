@@ -758,10 +758,7 @@ def _rows_for_dates(
     ]
 
 
-def _extract_schedule_grid_effective_dates(
-    imported_rows: list[list[Any]],
-    existing_rows: list[Any],
-) -> set[str]:
+def _extract_schedule_grid_effective_dates(imported_rows: list[list[Any]]) -> set[str]:
     if not isinstance(imported_rows, list):
         return set()
 
@@ -1648,28 +1645,43 @@ def api_import_schedule_grid_from_default_xml() -> dict[str, Any]:
     return _import_schedule_grid_from_xml_bytes(data)
 
 
-def _import_schedule_grid_from_xml_bytes(data: bytes) -> dict[str, Any]:
-    sheet_key = _validate_maintenance_key("schedule_grid")
-    settings = get_settings()
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty XML upload.")
+def _normalize_schedule_grid_xml(data: bytes) -> tuple[list[list[Any]], set[str], str | None]:
+    """三條 import path（檔案 upload / phone push / phone IP preview）共用嘅
+    「XML bytes → 正規化 rows」流程——以前每條 path 抄一份，改一處要人手抄三處。
+    回傳 (rows, imported_dates, effective_version)。"""
     try:
         rows = _parse_schedule_grid_texts(_extract_xml_texts(data))[0]
-        seed_version, root_roster_code = _schedule_grid_xml_metadata(data)
-        if seed_version is None:
-            seed_version = _extract_seed_effective_version_from_xml_bytes(data)
+        effective_version, root_roster_code = _schedule_grid_xml_metadata(data)
+        if effective_version is None:
+            effective_version = _extract_seed_effective_version_from_xml_bytes(data)
         rows = _apply_schedule_grid_xml_metadata(
             rows,
-            effective_version=seed_version,
+            effective_version=effective_version,
             roster_code=root_roster_code,
         )
-        rows, imported_dates = _fill_missing_schedule_grid_version(rows, seed_version)
+        rows, imported_dates = _fill_missing_schedule_grid_version(rows, effective_version)
+        return rows, imported_dates, effective_version
     except HTTPException:
         raise
     except ET.ParseError as e:
         raise HTTPException(status_code=400, detail=f"Invalid XML: {e}") from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid XML content: {e}") from e
+
+
+def _import_schedule_grid_from_xml_bytes(data: bytes) -> dict[str, Any]:
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty XML upload.")
+    rows, imported_dates, _ = _normalize_schedule_grid_xml(data)
+    return _import_normalized_schedule_grid_rows(rows, imported_dates)
+
+
+def _import_normalized_schedule_grid_rows(
+    rows: list[list[Any]],
+    imported_dates: set[str],
+) -> dict[str, Any]:
+    sheet_key = _validate_maintenance_key("schedule_grid")
+    settings = get_settings()
     try:
         sheet = load_sheet_rows(sheet_key, settings)
     except MaintenanceDatabaseError as e:
@@ -1682,7 +1694,7 @@ def _import_schedule_grid_from_xml_bytes(data: bytes) -> dict[str, Any]:
     effective_versions = (
         imported_dates
         if imported_dates
-        else _extract_schedule_grid_effective_dates(rows, existing_rows)
+        else _extract_schedule_grid_effective_dates(rows)
     )
     if not effective_versions:
         has_existing_rows = isinstance(existing_rows, list) and len(existing_rows) > 1
@@ -1797,38 +1809,8 @@ def _fill_missing_schedule_grid_version(
 def _import_schedule_grid_from_phone_bytes(data: bytes) -> dict[str, Any]:
     if not data:
         raise HTTPException(status_code=400, detail="No XML content uploaded.")
-    try:
-        rows = _parse_schedule_grid_texts(_extract_xml_texts(data))[0]
-    except HTTPException:
-        raise
-    except ET.ParseError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid XML: {e}") from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid XML content: {e}") from e
-
-    effective_version, root_roster_code = _schedule_grid_xml_metadata(data)
-    if effective_version is None:
-        effective_version = _extract_seed_effective_version_from_xml_bytes(data)
-    rows = _apply_schedule_grid_xml_metadata(
-        rows,
-        effective_version=effective_version,
-        roster_code=root_roster_code,
-    )
-    rows, _ = _fill_missing_schedule_grid_version(rows, effective_version)
-    normalized_data = _build_schedule_grid_xml(
-        rows,
-        fallback_effective_date=effective_version,
-    )
-
-    try:
-        import_result = _import_schedule_grid_from_xml_bytes(normalized_data)
-    except HTTPException:
-        raise
-    except ET.ParseError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid XML: {e}") from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid XML content: {e}") from e
-
+    rows, imported_dates, _ = _normalize_schedule_grid_xml(data)
+    import_result = _import_normalized_schedule_grid_rows(rows, imported_dates)
     return {
         **import_result,
         "ok": True,
@@ -1860,27 +1842,11 @@ def _fetch_schedule_grid_xml_from_phone_ip() -> bytes:
 @app.post("/api/maint/sheets/schedule_grid/preview-from-phone-ip")
 def api_preview_schedule_grid_from_phone_ip() -> dict[str, Any]:
     xml_data = _fetch_schedule_grid_xml_from_phone_ip()
-    try:
-        rows = _parse_schedule_grid_texts(_extract_xml_texts(xml_data))[0]
-        effective_version, root_roster_code = _schedule_grid_xml_metadata(xml_data)
-        if effective_version is None:
-            effective_version = _extract_seed_effective_version_from_xml_bytes(xml_data)
-        rows = _apply_schedule_grid_xml_metadata(
-            rows,
-            effective_version=effective_version,
-            roster_code=root_roster_code,
-        )
-        rows, imported_dates = _fill_missing_schedule_grid_version(rows, effective_version)
-        normalized_data = _build_schedule_grid_xml(
-            rows,
-            fallback_effective_date=effective_version,
-        )
-    except HTTPException:
-        raise
-    except ET.ParseError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid XML: {e}") from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid XML content: {e}") from e
+    rows, imported_dates, effective_version = _normalize_schedule_grid_xml(xml_data)
+    normalized_data = _build_schedule_grid_xml(
+        rows,
+        fallback_effective_date=effective_version,
+    )
 
     with _PHONE_SCHEDULE_GRID_PENDING_LOCK:
         global _PHONE_SCHEDULE_GRID_PENDING_XML

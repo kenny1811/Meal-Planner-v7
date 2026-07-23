@@ -32,6 +32,7 @@ class OnOffDutyView {
 
     private final Activity activity;
     private final LinearLayout container;
+    private final PanelUi ui;
     private final Typeface regularTypeface;
     private final Typeface boldTypeface;
     private JSONObject plan;
@@ -44,6 +45,7 @@ class OnOffDutyView {
         this.container = container;
         this.regularTypeface = regular != null ? regular : Typeface.DEFAULT;
         this.boldTypeface = bold != null ? bold : Typeface.DEFAULT_BOLD;
+        this.ui = new PanelUi(activity, regular, bold);
     }
 
     // ---------------------------------------------------------------- 網絡
@@ -629,54 +631,34 @@ class OnOffDutyView {
 
     // ---------------------------------------------------------------- helpers
 
+
+    // ---- 共用 UI 工廠：薄 delegate 落 PanelUi（styling 常數得嗰邊一份） ----
+
     private TextView textView(String text, int sizeSp, int color, boolean bold) {
-        TextView view = new TextView(activity);
-        view.setText(text);
-        view.setTextSize(sizeSp);
-        view.setTextColor(color);
-        view.setTypeface(bold ? boldTypeface : regularTypeface);
-        view.setPadding(dp(8), dp(2), dp(8), dp(2));
-        return view;
+        return ui.textView(text, sizeSp, color, bold);
     }
 
     private LinearLayout row() {
-        LinearLayout layout = new LinearLayout(activity);
-        layout.setOrientation(LinearLayout.HORIZONTAL);
-        layout.setGravity(Gravity.CENTER_VERTICAL);
-        return layout;
+        return ui.row();
     }
 
     private Button actionButton(String label) {
-        Button button = new Button(activity);
-        button.setText(label);
-        button.setAllCaps(false);
-        button.setTypeface(regularTypeface);
-        button.setTextSize(11);
-        button.setMinHeight(dp(30));
-        button.setMinimumHeight(dp(30));
-        button.setMinWidth(0);
-        button.setMinimumWidth(0);
-        button.setPadding(dp(6), 0, dp(6), 0);
-        return button;
+        return ui.actionButton(label);
     }
 
     private LinearLayout.LayoutParams buttonParams() {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, dp(30));
-        params.setMargins(dp(3), 0, 0, 0);
-        return params;
+        return ui.buttonParams();
     }
 
     private LinearLayout.LayoutParams weighted(float weight) {
-        return new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, weight);
+        return ui.weighted(weight);
     }
 
     private LinearLayout.LayoutParams fullWidth() {
-        return new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        return ui.fullWidth();
     }
 
     private int dp(int value) {
-        return Math.round(activity.getResources().getDisplayMetrics().density * value);
+        return ui.dp(value);
     }
 }

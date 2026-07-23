@@ -57,7 +57,7 @@ final class WatchBridge {
 
     static void sendTileState(Context context) {
         long now = System.currentTimeMillis();
-        AlarmPair pair = findPrevNext(context, now);
+        AlarmStore.PrevNext pair = AlarmStore.findPrevNext(context, now);
         PutDataMapRequest request = PutDataMapRequest.create(TILE_STATE_PATH);
         DataMap map = request.getDataMap();
         map.putLong("updated_at", now);
@@ -97,33 +97,6 @@ final class WatchBridge {
         } catch (Exception ignored) {
         }
         return payload.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-    }
-
-    private static AlarmPair findPrevNext(Context context, long now) {
-        JSONArray alarms = AlarmStore.getAlarms(context);
-        JSONObject prev = null;
-        JSONObject next = null;
-        long prevAt = 0L;
-        long nextAt = Long.MAX_VALUE;
-        for (int i = 0; i < alarms.length(); i++) {
-            JSONObject alarm = alarms.optJSONObject(i);
-            if (alarm == null) {
-                continue;
-            }
-            long triggerAt = alarm.optLong("trigger_at_epoch_ms", 0L);
-            if (triggerAt <= 0L) {
-                continue;
-            }
-            if (triggerAt <= now && triggerAt >= prevAt) {
-                prev = alarm;
-                prevAt = triggerAt;
-            }
-            if (triggerAt > now && triggerAt < nextAt) {
-                next = alarm;
-                nextAt = triggerAt;
-            }
-        }
-        return new AlarmPair(prev, prevAt, next, nextAt == Long.MAX_VALUE ? 0L : nextAt);
     }
 
     private static JSONArray buildScheduleItems(Context context) {
@@ -207,17 +180,5 @@ final class WatchBridge {
         }
     }
 
-    private static final class AlarmPair {
-        final JSONObject prev;
-        final long prevAt;
-        final JSONObject next;
-        final long nextAt;
 
-        AlarmPair(JSONObject prev, long prevAt, JSONObject next, long nextAt) {
-            this.prev = prev;
-            this.prevAt = prevAt;
-            this.next = next;
-            this.nextAt = nextAt;
-        }
-    }
 }

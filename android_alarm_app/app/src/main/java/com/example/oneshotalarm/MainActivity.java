@@ -141,7 +141,7 @@ public class MainActivity extends Activity {
     private float mealSwipeDownY = 0f;
     private android.graphics.Typeface mealRegularTypeface;
     private android.graphics.Typeface mealMediumTypeface;
-    private boolean kitchenModeEnabled = false;
+    private boolean kitchenModeEnabled = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

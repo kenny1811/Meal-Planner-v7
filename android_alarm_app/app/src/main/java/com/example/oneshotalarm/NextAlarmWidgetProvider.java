@@ -82,22 +82,9 @@ public class NextAlarmWidgetProvider extends AppWidgetProvider {
     }
 
     private static WidgetAlarm findNextAlarm(Context context) {
-        JSONArray alarms = AlarmStore.getAlarms(context);
-        long now = System.currentTimeMillis();
-        JSONObject best = null;
-        long bestAt = Long.MAX_VALUE;
-        for (int i = 0; i < alarms.length(); i++) {
-            JSONObject alarm = alarms.optJSONObject(i);
-            if (alarm == null) {
-                continue;
-            }
-            long triggerAt = alarm.optLong("trigger_at_epoch_ms", 0L);
-            if (triggerAt <= now || triggerAt >= bestAt) {
-                continue;
-            }
-            best = alarm;
-            bestAt = triggerAt;
-        }
+        AlarmStore.PrevNext pair = AlarmStore.findPrevNext(context, System.currentTimeMillis());
+        JSONObject best = pair.next;
+        long bestAt = pair.nextAt;
         if (best == null) {
             return null;
         }
