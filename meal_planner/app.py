@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import hashlib
+import subprocess
 import json
 import copy
 import time
@@ -171,6 +172,7 @@ def _health_payload() -> dict[str, Any]:
     return {
         "status": "ok",
         "version": app.version,
+        "web_version": _web_version_name(),
         "primary_data_source": "sqlite",
         "excel_role": "import_only",
         "project_root": str(settings.project_root),
@@ -1224,6 +1226,37 @@ def _apk_path(module: str) -> Path:
     name = "app" if module == "app" else "wear"
     return (_WEB_DIR.parent.parent / "android_alarm_app" / name / "build"
             / "outputs" / "apk" / "debug" / f"{name}-debug.apk")
+
+
+_WEB_VERSION_CACHE: tuple[float, str] | None = None
+
+
+def _web_version_name() -> str:
+    """網頁版 versionName：最近 v* tag 做 base（v7.0 起），
+    之後每個改到 meal_planner/ 嘅 commit，minor 自動 +1（唔使人手掹）。"""
+    global _WEB_VERSION_CACHE
+    now = time.time()
+    if _WEB_VERSION_CACHE is not None and now - _WEB_VERSION_CACHE[0] < 60.0:
+        return _WEB_VERSION_CACHE[1]
+    version = "7.0"
+    repo_root = _WEB_DIR.parent.parent
+    try:
+        described = subprocess.run(
+            ["git", "describe", "--tags", "--match", "v[0-9]*", "--abbrev=0"],
+            capture_output=True, text=True, cwd=repo_root, timeout=5,
+        )
+        match = re.fullmatch(r"v(\d+)\.(\d+)", described.stdout.strip()) if described.returncode == 0 else None
+        if match:
+            counted = subprocess.run(
+                ["git", "rev-list", "--count", f"{described.stdout.strip()}..HEAD", "--", "meal_planner"],
+                capture_output=True, text=True, cwd=repo_root, timeout=5,
+            )
+            bump = int(counted.stdout.strip()) if counted.returncode == 0 else 0
+            version = f"{match.group(1)}.{int(match.group(2)) + bump}"
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    _WEB_VERSION_CACHE = (now, version)
+    return version
 
 
 def _gradle_version(module: str) -> tuple[int, str]:

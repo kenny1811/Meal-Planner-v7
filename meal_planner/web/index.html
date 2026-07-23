@@ -22,6 +22,12 @@
         </svg>
         <span class="brand-name">餐單生成v7</span>
       </h2>
+      <script>
+        fetch("/api/health").then((r) => r.json()).then((d) => {
+          const el = document.querySelector(".brand-name");
+          if (el && d && d.web_version) el.textContent = "餐單生成v" + d.web_version;
+        }).catch(() => {});
+      </script>
       <button type="button" class="menu-add-button" id="menu-add" title="Create menu item" aria-label="Create menu item">+</button>
     </div>
     <div class="menu-list" data-menu-drop-group="top">
