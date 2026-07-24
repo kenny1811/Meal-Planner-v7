@@ -3,25 +3,24 @@ package com.example.oneshotalarm;
 import android.content.Context;
 import android.util.Log;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.text.SimpleDateFormat;
-import java.util.Locale;
 
-final class PhoneScheduleGridHttpServer {
-    private static final String TAG = "PhoneScheduleHttp";
+/**
+ * 電話本機 HTTP server：淨係做遠端截圖（電話 /capture、手錶 /capture/watch），唔使 adb。
+ * 行位表以前經 /export.xml 俾電腦 pull，而家改由電話「to Computer」推，嗰條路已經拆走。
+ */
+final class PhoneCaptureHttpServer {
+    private static final String TAG = "PhoneCaptureHttp";
     private static final int PORT = 8765;
     private static final Object LOCK = new Object();
     private static volatile boolean started = false;
 
-    private PhoneScheduleGridHttpServer() {
+    private PhoneCaptureHttpServer() {
     }
 
     static void start(Context context) {
@@ -62,10 +61,6 @@ final class PhoneScheduleGridHttpServer {
             String path = parsePath(requestLine);
             if ("/health".equals(path)) {
                 writeResponse(out, 200, "application/json; charset=utf-8", "{\"ok\":true}\n".getBytes("UTF-8"));
-                return;
-            }
-            if ("/export.xml".equals(path) || "/api/schedule-grid/export-xml".equals(path)) {
-                writeResponse(out, 200, "application/xml; charset=utf-8", buildScheduleGridXml(context).getBytes("UTF-8"));
                 return;
             }
             if ("/capture".equals(path)) {
@@ -155,53 +150,4 @@ final class PhoneScheduleGridHttpServer {
         out.flush();
     }
 
-    private static String buildScheduleGridXml(Context context) {
-        String exportDate = AlarmStore.getPlanDate(context);
-        if (exportDate == null || exportDate.trim().isEmpty()) {
-            exportDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(System.currentTimeMillis());
-        }
-        String rosterCode = AlarmStore.getRosterCode(context);
-        if (rosterCode == null) {
-            rosterCode = "";
-        }
-        JSONArray alarms = AlarmStore.getAlarms(context);
-        StringBuilder builder = new StringBuilder();
-        builder.append("<?xml version='1.0' encoding='UTF-8' standalone='yes'?>").append('\n');
-        builder.append("<schedule_grid effective_date=\"").append(escapeXml(exportDate))
-                .append("\" roster_code=\"").append(escapeXml(rosterCode.trim())).append("\">").append('\n');
-        String header = exportDate.trim() + (rosterCode.trim().isEmpty() ? "" : " " + rosterCode.trim());
-        builder.append("  <section>").append(escapeXml(header)).append("</section>").append('\n');
-        for (int i = 0; i < alarms.length(); i++) {
-            JSONObject alarm = alarms.optJSONObject(i);
-            if (alarm == null) {
-                continue;
-            }
-            long triggerAt = alarm.optLong("trigger_at_epoch_ms", 0L);
-            String trigger = triggerAt > 0L
-                    ? new SimpleDateFormat("HH:mm", Locale.getDefault()).format(triggerAt)
-                    : "";
-            String label = alarm.optString("label", "").trim();
-            if (trigger.isEmpty() || label.isEmpty()) {
-                continue;
-            }
-            builder.append("  <alarm>").append('\n');
-            builder.append("    <time>").append(escapeXml(trigger)).append("</time>").append('\n');
-            builder.append("    <content>").append(escapeXml(label)).append("</content>").append('\n');
-            builder.append("  </alarm>").append('\n');
-        }
-        builder.append("</schedule_grid>").append('\n');
-        return builder.toString();
-    }
-
-    private static String escapeXml(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&apos;");
-    }
 }

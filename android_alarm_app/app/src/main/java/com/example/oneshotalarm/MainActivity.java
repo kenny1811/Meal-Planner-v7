@@ -141,7 +141,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         configureSystemBars();
-        PhoneScheduleGridHttpServer.start(this);
+        PhoneCaptureHttpServer.start(this);
         buildUi();
         applyAodState(false);
         loadDraftFromStore();

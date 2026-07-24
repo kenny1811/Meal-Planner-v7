@@ -15,12 +15,11 @@ from typing import Any
 import xml.etree.ElementTree as ET
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from meal_planner.atomic_io import write_bytes_atomic
 from meal_planner.dates_input import DateValidationError, parse_date_expression
 from meal_planner.free_port import free_tcp_port
 from meal_planner.google_calendar_sync import authorize_google_calendar, google_calendar_auth_status, sync_roster_to_google_calendar
@@ -63,13 +62,11 @@ from meal_planner.schedule_grid import (
     rows_for_roster,
 )
 from meal_planner.schedule_grid_xml import (
-    SCHEDULE_GRID_EXPORT_FILE_NAME,
     SCHEDULE_GRID_HEADER,
     SCHEDULE_GRID_HEADER_RE,
     ScheduleGridDataError,
     ScheduleGridNotFound,
     apply_schedule_grid_xml_metadata,
-    build_current_schedule_grid_xml_export,
     build_schedule_grid_all_variants_export,
     build_schedule_grid_xml,
     check_roster_codes_against_schedule_grid,
@@ -80,7 +77,6 @@ from meal_planner.schedule_grid_xml import (
     normalize_schedule_grid_effective_date,
     parse_header_date,
     parse_schedule_grid_texts,
-    resolve_default_schedule_grid_xml,
     rows_for_dates,
     schedule_grid_xml_metadata,
 )
@@ -1100,33 +1096,6 @@ def api_google_calendar_roster_sync() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Google Calendar roster sync failed: {e}") from e
 
 
-@app.post("/api/maint/sheets/schedule_grid/import-xml")
-async def api_import_schedule_grid_from_xml(
-    file: UploadFile = File(...),
-) -> dict[str, Any]:
-    data = await file.read()
-    await file.close()
-    return _import_schedule_grid_from_xml_bytes(data)
-
-
-@app.post("/api/maint/sheets/schedule_grid/import-default-xml")
-def api_import_schedule_grid_from_default_xml() -> dict[str, Any]:
-    target = resolve_default_schedule_grid_xml()
-    if target is None:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Default schedule_grid seed file not found: "
-                f"{get_settings().data_folder / SCHEDULE_GRID_EXPORT_FILE_NAME}"
-            ),
-        )
-    try:
-        data = target.read_bytes()
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Read schedule_grid.xml failed: {e}") from e
-    return _import_schedule_grid_from_xml_bytes(data)
-
-
 def _normalize_schedule_grid_xml(data: bytes) -> tuple[list[list[Any]], set[str], str | None]:
     """三條 import path（檔案 upload / phone push / phone IP preview）共用嘅
     「XML bytes → 正規化 rows」流程——以前每條 path 抄一份，改一處要人手抄三處。
@@ -1149,13 +1118,6 @@ def _normalize_schedule_grid_xml(data: bytes) -> tuple[list[list[Any]], set[str]
         raise HTTPException(status_code=400, detail=f"Invalid XML: {e}") from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid XML content: {e}") from e
-
-
-def _import_schedule_grid_from_xml_bytes(data: bytes) -> dict[str, Any]:
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty XML upload.")
-    rows, imported_dates, _ = _normalize_schedule_grid_xml(data)
-    return _import_normalized_schedule_grid_rows(rows, imported_dates)
 
 
 def _import_normalized_schedule_grid_rows(
@@ -1205,39 +1167,9 @@ def _import_normalized_schedule_grid_rows(
     }
 
 
-@app.get("/api/maint/sheets/schedule_grid/export-xml")
-def api_export_schedule_grid_to_xml() -> Response:
-    _, xml_data = build_current_schedule_grid_xml_export()
-    filename = SCHEDULE_GRID_EXPORT_FILE_NAME
-    return Response(
-        content=xml_data,
-        media_type="application/xml; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
 @app.get("/api/maint/sheets/schedule_grid/export-all-xml")
 def api_export_all_schedule_grid_to_xml() -> dict[str, Any]:
     return build_schedule_grid_all_variants_export()
-
-
-@app.post("/api/maint/sheets/schedule_grid/export-xml-to-file")
-def api_export_schedule_grid_to_file() -> dict[str, Any]:
-    settings = get_settings()
-    version, xml_data = build_current_schedule_grid_xml_export()
-    target_path = settings.data_folder / SCHEDULE_GRID_EXPORT_FILE_NAME
-    try:
-        settings.data_folder.mkdir(parents=True, exist_ok=True)
-        write_bytes_atomic(target_path, xml_data)
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Save schedule_grid.xml to data folder failed: {e}") from e
-    return {
-        "ok": True,
-        "path": str(target_path),
-        "filename": SCHEDULE_GRID_EXPORT_FILE_NAME,
-        "size": len(xml_data),
-        "effective_date": version,
-    }
 
 
 def _extract_seed_effective_version_from_xml_bytes(data: bytes) -> str | None:

@@ -7,7 +7,6 @@ ScheduleGridDataError／ScheduleGridNotFound，由 app.py 譯做 HTTP status。
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from pathlib import Path
 import re
 from typing import Any
 import xml.etree.ElementTree as ET
@@ -54,7 +53,6 @@ _SCHEDULE_GRID_NOISE_TEXTS = {
 }
 SCHEDULE_GRID_HEADER = ["更碼", "時間", "內容", "時長", "生效日期"]
 _BLANK_EFFECTIVE_DATE_SENTINEL = "0001-01-01"
-SCHEDULE_GRID_EXPORT_FILE_NAME = "export.xml"
 
 
 def extract_xml_texts(xml_bytes: bytes) -> list[str]:
@@ -537,49 +535,6 @@ def build_schedule_grid_xml(
         lines.append(f"<alarm_label>{_escape_xml_text(text_label)}</alarm_label>")
     lines.append("</schedule_grid>")
     return ("\n".join(lines) + "\n").encode("utf-8")
-
-
-def resolve_default_schedule_grid_xml() -> Path | None:
-    settings = get_settings()
-    target = settings.data_folder / SCHEDULE_GRID_EXPORT_FILE_NAME
-    return target if target.is_file() else None
-
-
-def build_current_schedule_grid_xml_export() -> tuple[str, bytes]:
-    settings = get_settings()
-    try:
-        sheet = load_sheet_rows("schedule_grid", settings)
-    except MaintenanceDatabaseError as e:
-        raise ScheduleGridDataError(str(e)) from e
-    try:
-        roster_sheet = load_sheet_rows("roster", settings)
-    except MaintenanceDatabaseError:
-        roster_sheet = {}
-    except OSError:
-        roster_sheet = {}
-
-    rows = sheet.get("rows", [])
-    if not isinstance(rows, list):
-        rows = []
-    export_target = _choose_schedule_grid_export_target(
-        rows,
-        settings.dates.timezone,
-        roster_sheet.get("rows", []) if isinstance(roster_sheet.get("rows", []), list) else [],
-    )
-    if export_target is None:
-        raise ScheduleGridNotFound("更表之後冇返工日記錄")
-    target_date, roster_code, export_version, target_schedule_rows = export_target
-    if not any(grid_row_matches_roster(getattr(row, "code", ""), roster_code) for row in target_schedule_rows):
-        raise ScheduleGridNotFound(f"搵唔到 {roster_code} 行位表")
-    exported_rows = _schedule_rows_to_grid_rows(target_schedule_rows)
-    if not exported_rows:
-        raise ScheduleGridNotFound(f"搵唔到 {target_date} {roster_code} 對應嘅行位表版本。")
-    rows = [SCHEDULE_GRID_HEADER[:], *[list(row) for row in exported_rows if isinstance(row, (list, tuple))]]
-    return export_version, build_schedule_grid_xml(
-        rows,
-        fallback_effective_date=export_version,
-        section_date=target_date,
-    )
 
 
 def _exact_schedule_rows_for_code_on_day(
