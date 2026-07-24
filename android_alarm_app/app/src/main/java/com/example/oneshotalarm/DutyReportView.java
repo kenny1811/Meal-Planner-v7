@@ -1079,12 +1079,6 @@ class DutyReportView {
     }
 
 
-    private TextView sectionTitle(String text) {
-        TextView view = textView(text, 11, 0xFF0F172A, true);
-        view.setPadding(dp(8), dp(8), dp(8), dp(1));
-        return view;
-    }
-
     // ---- 共用 UI 工廠：薄 delegate 落 PanelUi（styling 常數得嗰邊一份） ----
 
     private TextView textView(String text, int sizeSp, int color, boolean bold) {

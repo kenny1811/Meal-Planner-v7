@@ -1,4 +1,4 @@
-"""彙總：讀取工作簿、更表、指標，產生含 MILP/LP 配餐結果的預覽 JSON。"""
+"""彙總：讀取維護表、更表、指標，產生含 MILP/LP 配餐結果的預覽 JSON。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from datetime import date
 from typing import Any
 
 from meal_planner.dates_input import validate_dates_within_allowed_months
-from meal_planner.excel_io import load_roster_map
 from meal_planner.format_rules import (
     error_font_red_calcium,
     error_font_red_fat_pct,
@@ -29,7 +28,7 @@ from meal_planner.indicators import (
     profile_from_json_map,
 )
 from meal_planner.nutrition_db import load_catalog_entries, load_target_rows
-from meal_planner.roster import code_for_date, is_work_day
+from meal_planner.roster import code_for_date, is_work_day, load_roster_map
 from meal_planner.settings import AppSettings, get_settings
 
 
@@ -301,7 +300,6 @@ def preview_days(
 
         meal_plan = build_day_meal_plan(
             settings,
-            None,
             code,
             is_wd,
             d,
@@ -597,7 +595,6 @@ def resolve_day_out_of_stock(
 
     meal_plan = build_day_meal_plan(
         settings,
-        None,
         code,
         is_wd,
         d,

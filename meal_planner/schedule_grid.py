@@ -9,7 +9,7 @@ from typing import Any
 
 
 from meal_planner.settings import AppSettings
-from meal_planner.timeparse import parse_time as _to_time
+from meal_planner.timeparse import cell_text, parse_time as _to_time
 
 MEAL_KEYS = ("早餐", "午餐", "小食", "晚餐")
 
@@ -207,17 +207,6 @@ def parse_relative_hours(text: str | None, *, kind: str) -> float | None:
     return None
 
 
-def _cell_rule_str(v: Any) -> str | None:
-    if v is None:
-        return None
-    if isinstance(v, time):
-        return v.strftime("%H:%M")
-    if isinstance(v, datetime):
-        return v.strftime("%H:%M")
-    s = str(v).strip()
-    return s if s else None
-
-
 def resolve_meal_times_display(
     settings: AppSettings,
     *,
@@ -247,7 +236,7 @@ def resolve_meal_times_display(
     end = ot_end if ot_end is not None else g_end
 
     def resolve_one(meal: str, raw: Any) -> str | None:
-        s = _cell_rule_str(raw)
+        s = cell_text(raw)
         if not s or s == "—":
             return None
         if re.fullmatch(r"\d{1,2}:\d{2}", s):

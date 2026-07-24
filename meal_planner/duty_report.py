@@ -21,7 +21,14 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from meal_planner.duty_common import GRACE_DETAIL, GRACE_MINUTES, POST_MAPPING, RETRY_SECONDS, retry_backoff_active
+from meal_planner.duty_common import (
+    GRACE_DETAIL,
+    GRACE_MINUTES,
+    POST_MAPPING,
+    RETRY_SECONDS,
+    load_kv_config,
+    retry_backoff_active,
+)
 from meal_planner.duty_scheduler import notify_change
 from meal_planner.maintenance_db import load_sheet_rows
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
@@ -149,18 +156,7 @@ def save_overlay(settings: AppSettings, biz_date: date, overlay: dict[str, Any])
 
 
 def load_config(settings: AppSettings) -> dict[str, Any]:
-    with _DB_LOCK:
-        conn = _connect(settings)
-        try:
-            rows = conn.execute("SELECT config_key, value_json FROM duty_report_config").fetchall()
-        finally:
-            conn.close()
-    stored: dict[str, Any] = {}
-    for key, value_json in rows:
-        try:
-            stored[key] = json.loads(value_json)
-        except ValueError:
-            continue
+    stored = load_kv_config(_DB_LOCK, lambda: _connect(settings), "duty_report_config")
     mapping = stored.get("mapping")
     if not isinstance(mapping, dict) or not mapping:
         mapping = dict(DEFAULT_GROUP_MAPPING)

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from datetime import time
 
-from meal_planner.nutrition_catalog import NUTRIENT_HEADER_BY_KEY
+from meal_planner.indicators import NUTRIENT_HEADERS as NUTRIENT_HEADER_BY_KEY
 from meal_planner.reference_db import ReferenceDatabaseError, load_planning_references
 from meal_planner.maintenance_db import save_sheet_rows
 from meal_planner.settings import clear_settings_cache, get_settings

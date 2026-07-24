@@ -3,7 +3,6 @@
 
 對應規格見專案根目錄 規則.md §16。
 脂肪比例由 target row 提供；9 kcal/g 由 config.yaml 載入。
-openpyxl 字色可用 Font(color=FONT_RED_ARGB)。
 """
 
 from __future__ import annotations

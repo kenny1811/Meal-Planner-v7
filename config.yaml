@@ -1,38 +1,24 @@
 # 餐單生成 — 預設組態（§2：禁止在程式內寫死；此檔為預設來源）
-# 可用環境變數覆寫：MENU_WORKBOOK、MENU_DATABASE、MENU_CONFIG、MENU_PROJECT_ROOT
-
-workbook:
-  # 相對於專案根目錄；或由 MENU_WORKBOOK 指定絕對路徑
-  filename: "餐單AI版測試.xlsm"
+# 可用環境變數覆寫：MENU_DATABASE、MENU_CONFIG、MENU_PROJECT_ROOT
 
 database:
-  # Phase 1：營養清單與 targets SQLite；可由 MENU_DATABASE 指定絕對路徑
+  # 全部資料（維護表、營養清單、targets）嘅唯一來源；可由 MENU_DATABASE 指定絕對路徑
   filename: "meal_planner.sqlite3"
 
 folders:
-  # system_folder 為 v7 程式根目錄；data_folder 可放 workbook / sqlite / plans_store。
+  # system_folder 為 v7 程式根目錄；data_folder 可放 sqlite / plans_store。
   system_folder: 'D:\Projects\餐單生成v7'
   data_folder: 'D:\Projects\餐單生成v7'
 
+# 維護表喺 Config 頁嘅來源名（純顯示用）
 sheets:
-  menu_v5: "餐單v5"
   roster: "更表"
   meal_times: "飯時"
-  nutrition_list: "營養清單"
   restaurant: "餐廳選擇"
   overtime: "加班表"
   schedule_grid: "行位表"
   payroll_times: "更時表"
   public_holidays: "公眾假期"
-
-# 餐單v5 指標列（1-based 列號，與現有試算表對齊；若表結構變更請改此處）
-menu_v5_layout:
-  indicator_header_row: 1
-  workday_indicator_row: 2
-  nonworkday_indicator_row: 3
-  # 營養欄由 F 欄起共 10 欄（卡路里…反式脂肪）
-  nutrient_first_col: 6
-  nutrient_col_count: 10
 
 nutrition_format:
   tolerance: 5
@@ -43,12 +29,11 @@ nutrition_portion:
 
 rice:
   # 熟重→生重換算：由上至下第一個「名稱包含 name_contains」嘅行命中就用該 ratio；
-  # 冇命中就用 cooked_to_raw_default。
+  # 冇命中冇 fallback——米類備註／購物清單會直接寫明未設定，提醒去 Config 加行。
   cooked_to_raw:
-    - { name_contains: "糙米", ratio: 2.623 }
-    - { name_contains: "三色藜麥米", ratio: 2.67 }
-    - { name_contains: "藜麥米", ratio: 2.67 }
-  cooked_to_raw_default: 2.67
+    - { name_contains: "糙米", ratio: 2.5 }
+    - { name_contains: "三色藜麥米", ratio: 2.5 }
+    - { name_contains: "藜麥米", ratio: 2.6282 }
   water_multiplier: 2
   rice_category_exact: "米"
   # 米類備註：食材名稱包含以下字串即計入熟重。
@@ -60,12 +45,6 @@ dates:
 pattern:
   item_separator: "+"
   item_alt_separator: "/"
-
-# 飯時：更碼「PenC」「PenM」等只命中 PenC*／PenM 單列時，試算表仍按 2–5 行拆四餐 Pattern（EleM 早餐、IFCM* 午餐…）
-meal_times_stack:
-  enabled: true
-  roster_prefix: "Pen"
-  pattern_rules: ["EleM", "IFCM*", "PenC*", "PenM"]
 
 # 業務規則：把原本散落在程式內的餐單行為集中在此。
 meal_business_rules:

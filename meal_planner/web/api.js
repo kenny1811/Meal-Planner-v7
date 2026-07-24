@@ -489,17 +489,6 @@
       return data || {};
     }
 
-    async function importMaintSheet(sheetKey) {
-      const r = await fetch(`/api/maint/sheets/${encodeURIComponent(sheetKey)}/import`, {
-        method: "POST",
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Import maintenance sheet failed.", r.status));
-      }
-      return data || {};
-    }
-
     async function importScheduleGridXml(file) {
       const form = new FormData();
       form.append("file", file);

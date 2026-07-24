@@ -28,7 +28,7 @@
 - Sidebar 版本號 click 落去會開 changelog dialog（`/api/changelog`，都係 committed 版）。
 
 ## 測試
-- `pytest`（需 venv 裝齊 fastapi / pulp / openpyxl / pyyaml）。
+- `pytest`（需 venv 裝齊 fastapi / pulp / pyyaml）。
 - 不依賴 fastapi/pulp 的模組可用 `python -m unittest tests.<name>` 單獨跑。
 
 ## Cowork 編輯注意（重要 workaround）

@@ -98,12 +98,11 @@ rice:
   note_name_contains: ["米"]
   cooked_to_raw:
     - { name_contains: "糙米", ratio: 2.623 }
-  cooked_to_raw_default: 2.67
 ```
 
 - 熟重轉生重比例按 `cooked_to_raw` 行由上至下配對：食材名稱包含該行 `name_contains`
-  即用該行 `ratio`；全部不命中時用 `cooked_to_raw_default`。（舊格式
-  `cooked_to_raw_brown` / `cooked_to_raw_other` / `brown_name_contains` 仍可讀取。）
+  即用該行 `ratio`。全部不命中**沒有 fallback**：米類備註與購物清單會直接標明
+  「未設定換算率」，提示到 Config → Rice conversion 補行。
 - 備註公式：
   - 生重 = 熟重總和 / 對應熟重轉生重比例
   - 水 = 生重 * `water_multiplier`
@@ -111,7 +110,7 @@ rice:
 
 ## 7. 目前仍屬程式規則
 
-以下規則已文件化，但暫未抽到設定，因為它們與工作簿欄位語義直接綁定：
+以下規則已文件化，但暫未抽到設定，因為它們與維護表欄位語義直接綁定：
 
 - `跟行位表` 午餐找 `飯`，小食找 `小食`。
 - 相對時間文字只解析 `開工前 N 小時`、`收工後 N 小時`。

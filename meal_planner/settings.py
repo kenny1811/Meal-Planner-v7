@@ -19,30 +19,14 @@ def _default_project_root() -> Path:
 
 
 @dataclass(frozen=True)
-class WorkbookConfig:
-    filename: str
-
-
-@dataclass(frozen=True)
 class SheetsConfig:
-    menu_v5: str
     roster: str
     meal_times: str
-    nutrition_list: str
     restaurant: str
     overtime: str
     schedule_grid: str
     payroll_times: str
     public_holidays: str
-
-
-@dataclass(frozen=True)
-class MenuV5LayoutConfig:
-    indicator_header_row: int
-    workday_indicator_row: int
-    nonworkday_indicator_row: int
-    nutrient_first_col: int
-    nutrient_col_count: int
 
 
 @dataclass(frozen=True)
@@ -65,18 +49,20 @@ class RiceConversion:
 @dataclass(frozen=True)
 class RiceConfig:
     conversions: tuple[RiceConversion, ...]
-    cooked_to_raw_default: float
     water_multiplier: float
     rice_category_exact: str
     note_name_contains: tuple[str, ...]
 
-    def ratio_for(self, name: str) -> float:
-        """熟重→生重換算率：由上至下第一個「名稱包含 name_contains」的行命中即用；冇命中用 default。"""
+    def ratio_for(self, name: str) -> float | None:
+        """熟重→生重換算率：由上至下第一個「名稱包含 name_contains」的行命中即用。
+
+        冇命中回 None——冇 fallback，caller 必須明示浮面（例如米類備註直接寫明未設定）。
+        """
         text = str(name or "")
         for conv in self.conversions:
             if conv.name_contains and conv.name_contains in text:
                 return conv.ratio
-        return self.cooked_to_raw_default
+        return None
 
 
 @dataclass(frozen=True)
@@ -140,10 +126,8 @@ class AppSettings:
     project_root: Path
     system_folder: Path
     data_folder: Path
-    workbook_path: Path
     database_path: Path
     sheets: SheetsConfig
-    menu_v5_layout: MenuV5LayoutConfig
     nutrition_format: NutritionFormatConfig
     nutrition_portion: NutritionPortionConfig
     rice: RiceConfig
@@ -151,15 +135,6 @@ class AppSettings:
     pattern: PatternConfig
     meal_business_rules: MealBusinessRulesConfig
     optimizer: OptimizerConfig
-
-
-def _deep_get(d: Mapping[str, Any], *keys: str, default: Any = None) -> Any:
-    cur: Any = d
-    for k in keys:
-        if not isinstance(cur, Mapping) or k not in cur:
-            return default
-        cur = cur[k]
-    return cur
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:
@@ -177,33 +152,19 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
     system_folder = (project_root / system_raw).resolve() if not Path(system_raw).is_absolute() else Path(system_raw).resolve()
     data_folder = (project_root / data_raw).resolve() if not Path(data_raw).is_absolute() else Path(data_raw).resolve()
 
-    wb_fn = str(data.get("workbook", {}).get("filename", "餐單AI版測試.xlsm"))
-    wb_path = Path(wb_fn)
-    workbook_path = wb_path.resolve() if wb_path.is_absolute() else (data_folder / wb_path).resolve()
     db_fn = str(data.get("database", {}).get("filename", "meal_planner.sqlite3"))
     db_path = Path(db_fn)
     database_path = db_path.resolve() if db_path.is_absolute() else (data_folder / db_path).resolve()
 
     sh = data.get("sheets", {}) or {}
     sheets = SheetsConfig(
-        menu_v5=str(sh.get("menu_v5", "餐單v5")),
         roster=str(sh.get("roster", "更表")),
         meal_times=str(sh.get("meal_times", "飯時")),
-        nutrition_list=str(sh.get("nutrition_list", "營養清單")),
         restaurant=str(sh.get("restaurant", "餐廳選擇")),
         overtime=str(sh.get("overtime", "加班表")),
         schedule_grid=str(sh.get("schedule_grid", "行位表")),
         payroll_times=str(sh.get("payroll_times", "更時表")),
         public_holidays=str(sh.get("public_holidays", "公眾假期")),
-    )
-
-    mv = data.get("menu_v5_layout", {}) or {}
-    menu_v5_layout = MenuV5LayoutConfig(
-        indicator_header_row=int(mv.get("indicator_header_row", 1)),
-        workday_indicator_row=int(mv.get("workday_indicator_row", 2)),
-        nonworkday_indicator_row=int(mv.get("nonworkday_indicator_row", 3)),
-        nutrient_first_col=int(mv.get("nutrient_first_col", 6)),
-        nutrient_col_count=int(mv.get("nutrient_col_count", 10)),
     )
 
     nf = data.get("nutrition_format", {}) or {}
@@ -218,30 +179,21 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
 
     rc = data.get("rice", {}) or {}
     conversions: list[RiceConversion] = []
-    if "cooked_to_raw" in rc:
-        for entry in rc.get("cooked_to_raw") or []:
-            if isinstance(entry, dict):
-                keyword, ratio_raw = str(entry.get("name_contains", "")).strip(), entry.get("ratio")
-            elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
-                keyword, ratio_raw = str(entry[0]).strip(), entry[1]
-            else:
-                continue
-            try:
-                ratio = float(ratio_raw)
-            except (TypeError, ValueError):
-                continue
-            if keyword and ratio > 0:
-                conversions.append(RiceConversion(name_contains=keyword, ratio=ratio))
-    else:
-        # 舊格式 fallback：brown/other 兩個 scalar + brown_name_contains keyword。
-        brown_keyword = str(rc.get("brown_name_contains", "糙米")).strip()
-        if brown_keyword:
-            conversions.append(
-                RiceConversion(name_contains=brown_keyword, ratio=float(rc.get("cooked_to_raw_brown", 2.623)))
-            )
+    for entry in rc.get("cooked_to_raw") or []:
+        if isinstance(entry, dict):
+            keyword, ratio_raw = str(entry.get("name_contains", "")).strip(), entry.get("ratio")
+        elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+            keyword, ratio_raw = str(entry[0]).strip(), entry[1]
+        else:
+            continue
+        try:
+            ratio = float(ratio_raw)
+        except (TypeError, ValueError):
+            continue
+        if keyword and ratio > 0:
+            conversions.append(RiceConversion(name_contains=keyword, ratio=ratio))
     rice = RiceConfig(
         conversions=tuple(conversions),
-        cooked_to_raw_default=float(rc.get("cooked_to_raw_default", rc.get("cooked_to_raw_other", 2.67))),
         water_multiplier=float(rc.get("water_multiplier", 2)),
         rice_category_exact=str(rc.get("rice_category_exact", "米")),
         note_name_contains=tuple(
@@ -305,10 +257,8 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
         project_root=project_root,
         system_folder=system_folder,
         data_folder=data_folder,
-        workbook_path=workbook_path,
         database_path=database_path,
         sheets=sheets,
-        menu_v5_layout=menu_v5_layout,
         nutrition_format=nutrition_format,
         nutrition_portion=nutrition_portion,
         rice=rice,
@@ -326,21 +276,16 @@ def get_settings() -> AppSettings:
     data = _load_yaml_mapping(cfg_path)
     settings = _build_settings(project_root, data)
 
-    wb_override = os.environ.get("MENU_WORKBOOK")
     db_override = os.environ.get("MENU_DATABASE")
-    if wb_override or db_override:
-        wb_path = Path(wb_override) if wb_override else settings.workbook_path
-        workbook_path = wb_path if wb_path.is_absolute() else (project_root / wb_path).resolve()
-        db_path = Path(db_override) if db_override else settings.database_path
+    if db_override:
+        db_path = Path(db_override)
         database_path = db_path if db_path.is_absolute() else (project_root / db_path).resolve()
         return AppSettings(
             project_root=settings.project_root,
             system_folder=settings.system_folder,
             data_folder=settings.data_folder,
-            workbook_path=workbook_path,
             database_path=database_path,
             sheets=settings.sheets,
-            menu_v5_layout=settings.menu_v5_layout,
             nutrition_format=settings.nutrition_format,
             nutrition_portion=settings.nutrition_portion,
             rice=settings.rice,
@@ -359,14 +304,8 @@ def clear_settings_cache() -> None:
 def save_rice_detail_settings(
     *,
     conversions: list[tuple[str, float]],
-    cooked_to_raw_default: float | None = None,
 ) -> AppSettings:
-    """Persist editable rice conversion rows into config.yaml.
-
-    `cooked_to_raw_default` 係隱藏後備（冇行命中先用）；None = 保留 config.yaml 現值。
-    """
-    if cooked_to_raw_default is not None and cooked_to_raw_default <= 0:
-        raise ValueError("Rice cooked-to-raw ratios must be greater than zero.")
+    """Persist editable rice conversion rows into config.yaml."""
     cleaned: list[tuple[str, float]] = []
     for keyword, ratio_raw in conversions:
         kw = str(keyword or "").strip()
@@ -403,18 +342,6 @@ def save_rice_detail_settings(
     )
     if count != 1:
         raise ValueError("Cannot find rice setting cooked_to_raw in config.yaml.")
-
-    if cooked_to_raw_default is not None:
-        default_pattern = r"(^[ \t]*cooked_to_raw_default[ \t]*:[ \t]*)([-+]?\d+(?:\.\d+)?)([ \t]*(?:#.*)?$)"
-        text, count = re.subn(
-            default_pattern,
-            lambda m: f"{m.group(1)}{cooked_to_raw_default:g}{m.group(3)}",
-            text,
-            count=1,
-            flags=re.MULTILINE,
-        )
-        if count != 1:
-            raise ValueError("Cannot find rice setting cooked_to_raw_default in config.yaml.")
     write_text_atomic(cfg_path, text, encoding="utf-8", newline="\n")
     clear_settings_cache()
     return get_settings()

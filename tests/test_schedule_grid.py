@@ -3,16 +3,15 @@ import os
 import tempfile
 from datetime import date, time, timedelta
 
-from fastapi import HTTPException
-
-from meal_planner.app import (
-    _apply_schedule_grid_xml_metadata,
-    _build_schedule_grid_all_variants_export,
-    _extract_xml_texts,
-    _merge_schedule_grid_rows_for_import,
-    _parse_schedule_grid_texts,
-    _rows_for_dates,
-    _schedule_grid_xml_metadata,
+from meal_planner.schedule_grid_xml import (
+    ScheduleGridNotFound,
+    apply_schedule_grid_xml_metadata,
+    build_schedule_grid_all_variants_export,
+    extract_xml_texts,
+    merge_schedule_grid_rows_for_import,
+    parse_schedule_grid_texts,
+    rows_for_dates,
+    schedule_grid_xml_metadata,
 )
 from meal_planner.maintenance_db import save_sheet_rows
 from meal_planner.schedule_grid import ScheduleRow, grid_row_matches_roster, load_schedule_rows_from_rows, rows_for_roster
@@ -79,8 +78,8 @@ class ScheduleGridTests(unittest.TestCase):
                     settings,
                 )
 
-                with self.assertRaises(HTTPException) as ctx:
-                    _build_schedule_grid_all_variants_export()
+                with self.assertRaises(ScheduleGridNotFound) as ctx:
+                    build_schedule_grid_all_variants_export()
             finally:
                 if old_root is None:
                     os.environ.pop("MENU_PROJECT_ROOT", None)
@@ -88,8 +87,7 @@ class ScheduleGridTests(unittest.TestCase):
                     os.environ["MENU_PROJECT_ROOT"] = old_root
                 clear_settings_cache()
 
-        self.assertEqual(ctx.exception.status_code, 404)
-        self.assertEqual(ctx.exception.detail, "搵唔到 PenB 行位表")
+        self.assertEqual(str(ctx.exception), "搵唔到 PenB 行位表")
 
     def test_phone_import_replaces_only_imported_code_for_effective_date(self):
         existing = [
@@ -103,7 +101,7 @@ class ScheduleGridTests(unittest.TestCase):
             ["PenBM", "10:20", "現場改", "10", "2026-06-17"],
         ]
 
-        merged = _merge_schedule_grid_rows_for_import(
+        merged = merge_schedule_grid_rows_for_import(
             existing,
             imported,
             {"2026-06-17"},
@@ -114,7 +112,7 @@ class ScheduleGridTests(unittest.TestCase):
         self.assertIn(existing[2], merged)
         self.assertNotIn(existing[3], merged)
         self.assertIn(imported[1], merged)
-        self.assertEqual(len(_rows_for_dates(existing, {"2026-06-17"}, {"PenBM"})), 1)
+        self.assertEqual(len(rows_for_dates(existing, {"2026-06-17"}, {"PenBM"})), 1)
 
     def test_phone_import_without_codes_does_not_replace_entire_effective_date(self):
         existing = [
@@ -127,7 +125,7 @@ class ScheduleGridTests(unittest.TestCase):
             ["", "10:20", "現場改", "10", "2026-06-17"],
         ]
 
-        merged = _merge_schedule_grid_rows_for_import(
+        merged = merge_schedule_grid_rows_for_import(
             existing,
             imported,
             {"2026-06-17"},
@@ -137,7 +135,7 @@ class ScheduleGridTests(unittest.TestCase):
         self.assertIn(existing[1], merged)
         self.assertIn(existing[2], merged)
         self.assertIn(imported[1], merged)
-        self.assertEqual(_rows_for_dates(existing, {"2026-06-17"}, set()), [])
+        self.assertEqual(rows_for_dates(existing, {"2026-06-17"}, set()), [])
 
     def test_phone_xml_root_roster_code_overrides_display_weekday_header(self):
         xml = """<?xml version='1.0' encoding='UTF-8' standalone='yes'?>
@@ -150,9 +148,9 @@ class ScheduleGridTests(unittest.TestCase):
 </schedule_grid>
 """.encode("utf-8")
 
-        effective_version, roster_code = _schedule_grid_xml_metadata(xml)
-        rows = _parse_schedule_grid_texts(_extract_xml_texts(xml))[0]
-        rows = _apply_schedule_grid_xml_metadata(
+        effective_version, roster_code = schedule_grid_xml_metadata(xml)
+        rows = parse_schedule_grid_texts(extract_xml_texts(xml))[0]
+        rows = apply_schedule_grid_xml_metadata(
             rows,
             effective_version=effective_version,
             roster_code=roster_code,

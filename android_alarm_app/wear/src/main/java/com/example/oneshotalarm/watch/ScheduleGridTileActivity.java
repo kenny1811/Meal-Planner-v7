@@ -215,11 +215,6 @@ public class ScheduleGridTileActivity extends Activity {
         return view;
     }
 
-    private void addSpacer(LinearLayout root, int dp) {
-        TextView spacer = new TextView(this);
-        root.addView(spacer, new LinearLayout.LayoutParams(1, dp(dp)));
-    }
-
     private JSONArray parseRows(String raw) {
         try {
             return new JSONArray(raw == null ? "[]" : raw);

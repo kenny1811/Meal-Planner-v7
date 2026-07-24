@@ -5,10 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from openpyxl import Workbook
-
-from meal_planner.nutrition_catalog import NUTRIENT_HEADER_BY_KEY
+from meal_planner.indicators import NUTRIENT_HEADERS as NUTRIENT_HEADER_BY_KEY
 from meal_planner.nutrition_db import (
+    NutritionDatabaseError,
     database_path,
     load_catalog_entries,
     load_nutrition_profile,
@@ -22,29 +21,30 @@ from meal_planner.nutrition_db import (
 from meal_planner.settings import clear_settings_cache, get_settings
 
 
-def _write_row(ws, row, values):
-    for col, value in enumerate(values, start=1):
-        ws.cell(row, col).value = value
+def _seed_catalog(settings):
+    """種一行「蘋果」入 SQLite——SQLite 係唯一來源，冇 workbook 呢回事。"""
+    nutrients = {key: float(100 + idx) for idx, key in enumerate(NUTRIENT_HEADER_BY_KEY)}
+    return save_catalog_entries(
+        [
+            {
+                "paused": False,
+                "category": "水果",
+                "name": "蘋果",
+                "min_g": "50",
+                "max_g": "200",
+                "daymax_g": "300",
+                "nutrients": nutrients,
+            }
+        ],
+        settings,
+    )
 
 
-def _make_workbook() -> Workbook:
-    settings = get_settings()
-    wb = Workbook()
-    menu_ws = wb.active
-    menu_ws.title = settings.sheets.menu_v5
-    nutrition_ws = wb.create_sheet(settings.sheets.nutrition_list)
-
-    nutrient_headers = list(NUTRIENT_HEADER_BY_KEY.values())
-    nutrient_values = list(range(100, 100 + len(nutrient_headers)))
-    _write_row(nutrition_ws, 1, ["類別", "名稱", "暫停", "Min (g)", "Max (g)", "DayMax (g)", *nutrient_headers])
-    _write_row(nutrition_ws, 2, ["水果", "蘋果", "", 50, 200, 300, *nutrient_values])
-
-    first_col = settings.menu_v5_layout.nutrient_first_col
-    for idx, header in enumerate(nutrient_headers):
-        menu_ws.cell(settings.menu_v5_layout.indicator_header_row, first_col + idx).value = header
-        menu_ws.cell(settings.menu_v5_layout.workday_indicator_row, first_col + idx).value = f"W{idx}"
-        menu_ws.cell(settings.menu_v5_layout.nonworkday_indicator_row, first_col + idx).value = f"N{idx}"
-    return wb
+def _seed_targets(settings):
+    headers = list(NUTRIENT_HEADER_BY_KEY.values())
+    workday = ["100-200", "10-20", "20-30", "< 5", "< 10", "< 100", "> 300", "< 27.5% kcal", "< 7% kcal", "< 1% kcal"]
+    nonworkday = ["90-180", "9-18", "18-28", "< 4", "< 9", "< 90", "> 280", "< 27.5% kcal", "< 7% kcal", "< 1% kcal"]
+    return save_target_rows(headers, workday, nonworkday, settings)
 
 
 class NutritionDatabaseTests(unittest.TestCase):
@@ -62,23 +62,25 @@ class NutritionDatabaseTests(unittest.TestCase):
         clear_settings_cache()
         self.tmp.cleanup()
 
-    def test_catalog_bootstraps_once_from_workbook(self):
+    def test_empty_catalog_raises_instead_of_falling_back(self):
         settings = get_settings()
-        wb = _make_workbook()
 
-        first = load_catalog_entries(settings, wb)
-        wb[settings.sheets.nutrition_list].cell(2, 2).value = "改名"
-        second = load_catalog_entries(settings, wb)
+        with self.assertRaises(NutritionDatabaseError):
+            load_catalog_entries(settings)
+
+    def test_catalog_round_trips_through_sqlite(self):
+        settings = get_settings()
+        _seed_catalog(settings)
+
+        entries = load_catalog_entries(settings)
 
         self.assertTrue(database_path(settings).is_file())
-        self.assertEqual(first[0].name, "蘋果")
-        self.assertEqual(second[0].name, "蘋果")
-        self.assertEqual(second[0].nutrients["kcal"], 100.0)
+        self.assertEqual(entries[0].name, "蘋果")
+        self.assertEqual(entries[0].nutrients["kcal"], 100.0)
 
     def test_save_catalog_replaces_rows_and_assigns_new_row_index(self):
         settings = get_settings()
-        wb = _make_workbook()
-        original = load_catalog_entries(settings, wb)[0]
+        original = _seed_catalog(settings)[0]
 
         saved = save_catalog_entries(
             [
@@ -114,24 +116,25 @@ class NutritionDatabaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             save_catalog_entries([{"category": "Missing name"}], settings)
 
-    def test_targets_bootstrap_once_from_workbook(self):
+    def test_empty_targets_raise_instead_of_falling_back(self):
         settings = get_settings()
-        wb = _make_workbook()
-        first_col = settings.menu_v5_layout.nutrient_first_col
 
-        first = load_target_rows(settings, wb)
-        wb[settings.sheets.menu_v5].cell(settings.menu_v5_layout.workday_indicator_row, first_col).value = "changed"
-        second = load_target_rows(settings, wb)
+        with self.assertRaises(NutritionDatabaseError):
+            load_target_rows(settings)
 
-        self.assertEqual(first[0][0], NUTRIENT_HEADER_BY_KEY["kcal"])
-        self.assertEqual(first[1][0], "W0")
-        self.assertEqual(first[2][0], "N0")
-        self.assertEqual(second[1][0], "W0")
+    def test_targets_round_trip_through_sqlite(self):
+        settings = get_settings()
+        _seed_targets(settings)
+
+        headers, workday, nonworkday = load_target_rows(settings)
+
+        self.assertEqual(headers[0], NUTRIENT_HEADER_BY_KEY["kcal"])
+        self.assertEqual(workday[0], "100-200")
+        self.assertEqual(nonworkday[0], "90-180")
 
     def test_save_targets_replaces_sqlite_rows_and_validates_indicator_text(self):
         settings = get_settings()
-        wb = _make_workbook()
-        headers, _, _ = load_target_rows(settings, wb)
+        headers = list(NUTRIENT_HEADER_BY_KEY.values())
         workday = ["100-200", "10-20", "20-30", "< 5", "< 10", "< 100", "> 300", "< 27.5% kcal", "< 7% kcal", "< 1% kcal"]
         nonworkday = ["90-180", "9-18", "18-28", "< 4", "< 9", "< 90", "> 280", "< 27.5% kcal", "< 7% kcal", "< 1% kcal"]
 

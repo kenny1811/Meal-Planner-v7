@@ -89,16 +89,15 @@
         : [];
       if (!markers.some((marker) => text.includes(marker))) return null;
       const conversions = Array.isArray(shoppingRiceConfig.conversions) ? shoppingRiceConfig.conversions : [];
-      let ratio = Number(shoppingRiceConfig.cooked_to_raw_default);
       for (const row of conversions) {
         const keyword = String((row && row.name_contains) || "");
-        if (keyword && text.includes(keyword)) {
-          ratio = Number(row.ratio);
-          break;
+        const ratio = Number(row && row.ratio);
+        if (keyword && text.includes(keyword) && Number.isFinite(ratio) && ratio > 0) {
+          return cookedGrams / ratio;
         }
       }
-      if (!Number.isFinite(ratio) || ratio <= 0) return null;
-      return cookedGrams / ratio;
+      // 冇 fallback：米類但冇換算行 → 標明未設定，唔會靜靜哋當熟重
+      return "missing";
     }
 
     let shoppingStartWasAuto = true;
@@ -179,11 +178,13 @@
               const cat = String(shoppingCatalogByName[name] || "Uncategorized");
               const key = `${cat}\u0000${name}`;
               const rawRiceGrams = riceRawGrams(name, grams);
-              const shopGrams = rawRiceGrams == null ? grams : rawRiceGrams;
+              const shopGrams = typeof rawRiceGrams === "number" ? rawRiceGrams : grams;
               const old = byPair.get(key) || {
                 category: cat,
                 name,
-                display_name: rawRiceGrams == null ? name : `${name} (raw weight)`,
+                display_name: rawRiceGrams === "missing"
+                  ? `${name} (no rice conversion row — add one in Config)`
+                  : rawRiceGrams == null ? name : `${name} (raw weight)`,
                 grams: 0,
                 sources: [],
               };

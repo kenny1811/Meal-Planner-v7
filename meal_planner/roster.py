@@ -87,6 +87,14 @@ def roster_map_from_sheet_rows(rows: list[Any] | None) -> dict[tuple[int, int], 
     return roster_for_month(roster_texts_from_sheet_rows(rows))
 
 
+def load_roster_map(settings: Any | None = None) -> dict[tuple[int, int], RosterMonth]:
+    """由 SQLite 維護表讀更表——讀唔到就 raise，唔會靜靜當「冇更表」。"""
+    from meal_planner.maintenance_db import load_sheet_rows
+
+    sheet = load_sheet_rows("roster", settings)
+    return roster_map_from_sheet_rows(sheet.get("rows", []))
+
+
 def is_work_day(code: str) -> bool:
     if code == "SB":
         return False

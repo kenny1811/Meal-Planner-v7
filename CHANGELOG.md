@@ -4,6 +4,11 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.2.6 — 23/07/2026 26:20
+- Rice conversion: removed the hidden default ratio — no fallback anywhere. Rice that
+  matches no conversion row now shows it plainly: the rice note says the ratio is not
+  configured, and the shopping list marks the item "no rice conversion row".
+
 ## 7.2.5 — 23/07/2026 23:02
 - Maint sheets: Append Row keeps a single trailing blank row.
 

@@ -46,19 +46,6 @@ final class AlarmScheduler {
         }
     }
 
-    static void scheduleManual(Context context, long triggerAtMillis) {
-        JSONArray alarms = new JSONArray();
-        try {
-            JSONObject alarm = new JSONObject();
-            alarm.put("id", "manual-" + triggerAtMillis);
-            alarm.put("label", "手動鬧鐘");
-            alarm.put("trigger_at_epoch_ms", triggerAtMillis);
-            alarms.put(alarm);
-        } catch (Exception ignored) {
-        }
-        schedulePlan(context, alarms, 0L);
-    }
-
     static void schedulePlan(Context context, JSONArray alarms, long cleanupAtMillis) {
         schedulePlan(
                 context,

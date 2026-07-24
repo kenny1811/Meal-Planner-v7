@@ -6,17 +6,14 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any
 
-from openpyxl.workbook.workbook import Workbook
 
-from meal_planner.indicators import DayIndicatorProfile, NUTRIENT_KEYS
-from meal_planner.nutrition_catalog import (
-    NUTRIENT_HEADER_BY_KEY,
-    candidate_entries_from_alternatives,
-)
+from meal_planner.indicators import DayIndicatorProfile, NUTRIENT_HEADERS, NUTRIENT_KEYS
+from meal_planner.nutrition_catalog import candidate_entries_from_alternatives
 from meal_planner.nutrition_db import load_catalog_entries
 from meal_planner.optimizer import solve_day_meal_plan
 from meal_planner.patterns import parse_meal_patterns
 from meal_planner.settings import AppSettings
+from meal_planner.timeparse import cell_text
 
 
 def roster_matches_rule(rule_cell: str | None, roster_code: str) -> bool:
@@ -33,17 +30,6 @@ def roster_matches_rule(rule_cell: str | None, roster_code: str) -> bool:
     if rule_cmp.endswith("*"):
         return code_cmp.startswith(rule_cmp[:-1])
     return code_cmp == rule_cmp
-
-
-def _cell_str(v: Any) -> str | None:
-    if v is None:
-        return None
-    if isinstance(v, time):
-        return v.strftime("%H:%M")
-    if isinstance(v, datetime):
-        return v.strftime("%H:%M")
-    s = str(v).strip()
-    return s if s else None
 
 
 @dataclass(frozen=True)
@@ -83,7 +69,7 @@ def load_meal_time_rules_from_rows(raw_rows: list[list[Any]]) -> list[MealTimeRu
 
         def gv(name: str) -> str | None:
             idx = cols.get(name)
-            return _cell_str(row[idx]) if idx is not None and idx < len(row) else None
+            return cell_text(row[idx]) if idx is not None and idx < len(row) else None
 
         rules.append(
             MealTimeRule(
@@ -109,8 +95,8 @@ def load_meal_patterns_table_from_rows(raw_rows: list[list[Any]]) -> dict[str, s
     if c_meal is None or c_pat is None:
         return out
     for row in raw_rows[1:]:
-        meal = _cell_str(row[c_meal]) if c_meal < len(row) else None
-        pat = _cell_str(row[c_pat]) if c_pat < len(row) else None
+        meal = cell_text(row[c_meal]) if c_meal < len(row) else None
+        pat = cell_text(row[c_pat]) if c_pat < len(row) else None
         if meal not in out or not pat:
             continue
         if out[meal] is None:
@@ -141,7 +127,7 @@ def load_restaurant_rows_from_rows(raw_rows: list[list[Any]]) -> list[dict[str, 
     if "更碼關鍵字" not in h:
         return []
     cols = {name: h.get(name) for name in ("舖頭 (Store)", "營業時間", "餐廳選擇", "地址")}
-    nutrient_cols = {k: h.get(NUTRIENT_HEADER_BY_KEY[k]) for k in NUTRIENT_KEYS}
+    nutrient_cols = {k: h.get(NUTRIENT_HEADERS[k]) for k in NUTRIENT_KEYS}
     rows: list[dict[str, Any]] = []
     for row_index, row in enumerate(raw_rows[1:], start=2):
         kw_idx = h["更碼關鍵字"]
@@ -211,7 +197,6 @@ def first_matching_restaurant(rest_rows: list[dict[str, Any]], roster_code: str)
 
 
 def choose_ingredients_for_meals(
-    wb: Workbook | None,
     settings: AppSettings,
     meal_pattern_parts: dict[str, list[dict[str, object]]],
     day: date | None = None,
@@ -239,7 +224,7 @@ def choose_ingredients_for_meals(
         return 0.0
 
     if nutrition_entries is None:
-        entries = load_catalog_entries(settings, wb)
+        entries = load_catalog_entries(settings)
     else:
         entries = nutrition_entries
     visible_set = set(visible_meals or meal_pattern_parts.keys())
@@ -420,14 +405,15 @@ def build_rice_note(
     rice_name = rice_items[0][0]
     cooked_g = sum(g for _, g in rice_items)
     ratio = settings.rice.ratio_for(rice_name)
-    raw_g = cooked_g / ratio if ratio > 0 else 0.0
+    if ratio is None:
+        return f"（{rice_name} 未設定生熟換算率：去 Config → Rice conversion 加行）"
+    raw_g = cooked_g / ratio
     water_g = raw_g * settings.rice.water_multiplier
     return f"{rice_name}({cooked_g:.0f}g)=生重{raw_g:.0f}g\n水={water_g:.0f}g"
 
 
 def build_day_meal_plan(
     settings: AppSettings,
-    wb: Workbook | None,
     roster_code: str | None,
     is_work_day: bool | None,
     day: date | None = None,
@@ -565,7 +551,6 @@ def build_day_meal_plan(
 
     meal_pattern_parts = parse_meal_patterns(by_meal, settings.pattern)
     meal_ingredients, meal_nutrients, meal_items, optimization_meta = choose_ingredients_for_meals(
-        wb,
         settings,
         meal_pattern_parts,
         day=day,

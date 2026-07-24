@@ -1,4 +1,4 @@
-"""Generic SQLite maintenance copies for workbook sheets."""
+"""維護表（更表／飯時／行位表…）嘅 SQLite 儲存——SQLite 係唯一 source of truth。"""
 
 from __future__ import annotations
 
@@ -8,10 +8,7 @@ import json
 import sqlite3
 from typing import Any
 
-from openpyxl.workbook.workbook import Workbook
-
 from meal_planner.duty_scheduler import notify_change
-from meal_planner.excel_io import get_sheet
 from meal_planner.settings import AppSettings, get_settings
 
 
@@ -131,42 +128,6 @@ def _cell_to_json_value(value: Any) -> Any:
     return value
 
 
-def _read_workbook_sheet_rows(settings: AppSettings, wb: Workbook, sheet_key: str) -> list[list[Any]]:
-    if sheet_key == "wake_alarms":
-        try:
-            get_sheet(wb, _sheet_name_for_key(settings, sheet_key))
-        except Exception:
-            return [["日期", "起身時間", "備註"]]
-    if sheet_key == "mtr_doors":
-        try:
-            get_sheet(wb, _sheet_name_for_key(settings, sheet_key))
-        except Exception:
-            return [list(row) for row in MTR_DOORS_DEFAULT_ROWS]
-    sheet_name = _sheet_name_for_key(settings, sheet_key)
-    ws = get_sheet(wb, sheet_name)
-    max_row = int(ws.max_row or 0)
-    
-    if sheet_key == "meal_times":
-        start_col = 1
-        max_col = min(int(ws.max_column or 0), 5)
-    elif sheet_key == "meal_patterns":
-        start_col = 7
-        max_col = min(int(ws.max_column or 0), 8)
-    else:
-        start_col = 1
-        max_col = int(ws.max_column or 0)
-
-    rows: list[list[Any]] = []
-    for r in range(1, max_row + 1):
-        row = [_cell_to_json_value(ws.cell(r, c).value) for c in range(start_col, max_col + 1)]
-        while row and row[-1] is None:
-            row.pop()
-        rows.append(row)
-    while rows and not any(cell not in (None, "") for cell in rows[-1]):
-        rows.pop()
-    return rows
-
-
 def _has_sheet_rows(conn: sqlite3.Connection, sheet_key: str) -> bool:
     return (
         conn.execute(
@@ -217,62 +178,8 @@ def save_sheet_rows(
     return {"sheet_key": sheet_key, "updated_at": now, "row_count": len(clean_rows)}
 
 
-def bootstrap_sheet_from_workbook(
-    settings: AppSettings,
-    wb: Workbook,
-    sheet_key: str,
-    *,
-    replace_existing: bool = False,
-) -> None:
-    with closing(_connect(settings)) as conn:
-        _ensure_schema(conn)
-        if not replace_existing and _has_sheet_rows(conn, sheet_key):
-            return
-    save_sheet_rows(sheet_key, _read_workbook_sheet_rows(settings, wb, sheet_key), settings)
-
-
-def bootstrap_all_from_workbook(
-    settings: AppSettings,
-    wb: Workbook,
-    *,
-    replace_existing: bool = False,
-) -> None:
-    for sheet_key, _ in MAINTENANCE_SHEETS:
-        bootstrap_sheet_from_workbook(settings, wb, sheet_key, replace_existing=replace_existing)
-    bootstrap_roster_code_definitions(settings, wb)
-
-
-def _read_roster_code_definitions_from_workbook(settings: AppSettings, wb: Workbook) -> list[dict[str, Any]]:
-    ws = get_sheet(wb, settings.sheets.roster)
-    rows: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for r in range(1, int(ws.max_row or 0) + 1):
-        pattern = str(ws.cell(r, 3).value or "").strip()
-        label = str(ws.cell(r, 4).value or "").strip()
-        if not pattern or not label or pattern == "更碼":
-            continue
-        if pattern in seen:
-            continue
-        seen.add(pattern)
-        rows.append({"pattern": pattern, "label": label, "sort_order": len(rows) + 1})
-    return rows
-
-
 def _has_roster_code_definitions(conn: sqlite3.Connection) -> bool:
     return conn.execute("SELECT 1 FROM roster_code_definitions LIMIT 1").fetchone() is not None
-
-
-def bootstrap_roster_code_definitions(
-    settings: AppSettings,
-    wb: Workbook,
-    *,
-    replace_existing: bool = False,
-) -> None:
-    with closing(_connect(settings)) as conn:
-        _ensure_schema(conn)
-        if not replace_existing and _has_roster_code_definitions(conn):
-            return
-    save_roster_code_definitions(_read_roster_code_definitions_from_workbook(settings, wb), settings)
 
 
 def load_roster_code_definitions(settings: AppSettings | None = None) -> list[dict[str, Any]]:
@@ -367,7 +274,6 @@ def list_maintenance_sheets(settings: AppSettings | None = None) -> list[dict[st
 def load_sheet_rows(
     sheet_key: str,
     settings: AppSettings | None = None,
-    wb: Workbook | None = None,
 ) -> dict[str, Any]:
     settings = settings or get_settings()
 
@@ -392,18 +298,15 @@ def load_sheet_rows(
         has_rows = _has_sheet_rows(conn, sheet_key)
         meta, rows = _read(conn) if has_rows else (None, [])
     if not has_rows:
-        if sheet_key == "wake_alarms" and wb is None:
+        # 得呢兩張表有預設內容（純本地資料，唔會有其他來源）；其餘空表就係空表，要報出嚟。
+        if sheet_key == "wake_alarms":
             save_sheet_rows(sheet_key, [["日期", "起身時間", "備註"]], settings)
-            has_rows = True
-        if sheet_key == "mtr_doors" and wb is None:
+        elif sheet_key == "mtr_doors":
             save_sheet_rows(sheet_key, [list(row) for row in MTR_DOORS_DEFAULT_ROWS], settings)
-            has_rows = True
-        if not has_rows and wb is None:
+        else:
             raise MaintenanceDatabaseError(
-                f"Maintenance sheet {_display_name_for_key(sheet_key)} is empty and no workbook was provided."
+                f"Maintenance sheet {_display_name_for_key(sheet_key)} is empty."
             )
-        if not has_rows and wb is not None:
-            bootstrap_sheet_from_workbook(settings, wb, sheet_key)
         with closing(_connect(settings)) as conn:
             meta, rows = _read(conn)
 

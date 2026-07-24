@@ -5,10 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from openpyxl.worksheet.worksheet import Worksheet
-
-from meal_planner.excel_io import header_col_map
-from meal_planner.indicators import NUTRIENT_HEADERS as NUTRIENT_HEADER_BY_KEY, NUTRIENT_KEYS
 
 
 @dataclass(frozen=True)
@@ -21,76 +17,6 @@ class NutritionEntry:
     min_g: float | None
     max_g: float | None
     daymax_g: float | None
-
-
-def _is_paused(v: Any) -> bool:
-    if v is None:
-        return False
-    s = str(v).strip().lower()
-    return s in {"yes", "y", "true", "1"}
-
-
-def _to_float(v: Any) -> float:
-    if v is None:
-        return 0.0
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _to_float_or_none(v: Any) -> float | None:
-    if v is None:
-        return None
-    s = str(v).strip()
-    if not s:
-        return None
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
-
-
-def load_nutrition_entries(ws: Worksheet) -> list[NutritionEntry]:
-    required = {"類別", "名稱", "暫停", "Min (g)", "Max (g)", "DayMax (g)"}
-    required.update(NUTRIENT_HEADER_BY_KEY.values())
-    h = header_col_map(ws, 1, required_headers=required, max_scan_col=20)
-    c_pause = h.get("暫停")
-    c_cat = h.get("類別")
-    c_name = h.get("名稱")
-    c_min = h.get("Min (g)")
-    c_max = h.get("Max (g)")
-    c_daymax = h.get("DayMax (g)")
-    if not c_cat or not c_name:
-        return []
-    out: list[NutritionEntry] = []
-    for r in range(2, (ws.max_row or 0) + 1):
-        cat = ws.cell(r, c_cat).value
-        name = ws.cell(r, c_name).value
-        if cat is None or name is None:
-            continue
-        cat_s = str(cat).strip()
-        name_s = str(name).strip()
-        if not cat_s or not name_s:
-            continue
-        paused = _is_paused(ws.cell(r, c_pause).value) if c_pause else False
-        nutrients: dict[str, float] = {}
-        for key in NUTRIENT_KEYS:
-            col = h.get(NUTRIENT_HEADER_BY_KEY[key])
-            nutrients[key] = _to_float(ws.cell(r, col).value) if col else 0.0
-        out.append(
-            NutritionEntry(
-                row_index=r,
-                paused=paused,
-                category=cat_s,
-                name=name_s,
-                nutrients=nutrients,
-                min_g=_to_float_or_none(ws.cell(r, c_min).value) if c_min else None,
-                max_g=_to_float_or_none(ws.cell(r, c_max).value) if c_max else None,
-                daymax_g=_to_float_or_none(ws.cell(r, c_daymax).value) if c_daymax else None,
-            )
-        )
-    return out
 
 
 def _match_entries_for_token(entries: list[NutritionEntry], token: str) -> list[NutritionEntry]:

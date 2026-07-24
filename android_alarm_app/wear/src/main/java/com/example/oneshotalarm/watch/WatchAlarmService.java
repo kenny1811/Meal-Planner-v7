@@ -74,13 +74,6 @@ public class WatchAlarmService extends Service {
         return (newline >= 0 ? key.substring(0, newline) : key).trim();
     }
 
-    static void setStrength(Context context, String strength) {
-        Intent intent = new Intent(context, WatchAlarmService.class);
-        intent.setAction(ACTION_SET_STRENGTH);
-        intent.putExtra(EXTRA_STRENGTH, strength);
-        context.startService(intent);
-    }
-
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {

@@ -36,6 +36,9 @@ android_alarm_app/app/src/main/assets/fonts/*.ttc
 android_watchface_app/*.png
 android_watchface_app/alarm-*.xml
 
+# adb keep-alive task log (regenerated every run)
+android_alarm_app/adb_auto_reconnect.log
+
 # OS/editor noise
 Thumbs.db
 .DS_Store

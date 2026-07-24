@@ -71,10 +71,6 @@ class GoogleCalendarSyncConfig:
     wake_offset_hours: float = DEFAULT_WAKE_OFFSET_HOURS
 
 
-def _truthy(value: str | None) -> bool:
-    return str(value or "").strip().casefold() in {"1", "true", "yes", "y", "on"}
-
-
 def config_from_env(settings: AppSettings) -> GoogleCalendarSyncConfig:
     from meal_planner.storage import load_google_calendar_sync_settings
 
@@ -155,6 +151,20 @@ def mtr_door_location_for_code(lookup: list[tuple[str, str]], roster_code: str) 
     return ""
 
 
+def _alarm_event(calendar_id: str, roster_day: date, code: str, start_at: datetime) -> CalendarEventPlan:
+    """起身鬧鐘 event——大假日同返工日兩條路共用，改標題／長度淨係改呢度。"""
+    return CalendarEventPlan(
+        kind="alarm",
+        calendar_id=calendar_id,
+        roster_date=roster_day,
+        roster_code=code,
+        start_at=start_at,
+        end_at=start_at + ALARM_EVENT_DURATION,
+        summary="起身",
+        description="起身",
+    )
+
+
 def _combine(day: date, value: time, tz: ZoneInfo) -> datetime:
     return datetime(day.year, day.month, day.day, value.hour, value.minute, tzinfo=tz)
 
@@ -221,18 +231,8 @@ def build_roster_calendar_plan(
                 )
                 wake_time = wake_alarm_by_date.get(roster_day)
                 if wake_time:
-                    alarm_start = _combine(roster_day, wake_time, tz)
                     alarm_events.append(
-                        CalendarEventPlan(
-                            kind="alarm",
-                            calendar_id=alarm_calendar_id,
-                            roster_date=roster_day,
-                            roster_code=code,
-                            start_at=alarm_start,
-                            end_at=alarm_start + ALARM_EVENT_DURATION,
-                            summary="起身",
-                            description="起身",
-                        )
+                        _alarm_event(alarm_calendar_id, roster_day, code, _combine(roster_day, wake_time, tz))
                     )
                 continue
             start_time, end_time = resolve_shift_time(payroll_rows, code, roster_day, holidays, overtime_by_date)
@@ -263,18 +263,7 @@ def build_roster_calendar_plan(
 
             wake_time = wake_alarm_by_date.get(roster_day)
             alarm_start = _combine_alarm(roster_day, wake_time, start_time, tz) if wake_time else start_at - timedelta(hours=wake_offset_hours)
-            alarm_events.append(
-                CalendarEventPlan(
-                    kind="alarm",
-                    calendar_id=alarm_calendar_id,
-                    roster_date=roster_day,
-                    roster_code=code,
-                    start_at=alarm_start,
-                    end_at=alarm_start + ALARM_EVENT_DURATION,
-                    summary="起身",
-                    description="起身",
-                )
-            )
+            alarm_events.append(_alarm_event(alarm_calendar_id, roster_day, code, alarm_start))
 
     all_events = work_events + alarm_events + leave_events
     time_min = min((event.start_at for event in all_events), default=None)
@@ -495,10 +484,6 @@ def _event_roster_date(event: dict[str, Any]) -> str | None:
     return str(raw)[:10]
 
 
-def _event_summary(event: dict[str, Any]) -> str:
-    return str(event.get("summary") or "").strip()
-
-
 def _event_start_value(event: dict[str, Any]) -> str | None:
     start = event.get("start") or {}
     raw = start.get("dateTime") or start.get("date")
@@ -509,18 +494,6 @@ def _event_end_value(event: dict[str, Any]) -> str | None:
     end = event.get("end") or {}
     raw = end.get("dateTime") or end.get("date")
     return str(raw) if raw else None
-
-
-def _planned_start_value(event: CalendarEventPlan) -> str:
-    if event.all_day:
-        return event.start_at.date().isoformat()
-    return _iso(event.start_at)
-
-
-def _planned_end_value(event: CalendarEventPlan) -> str:
-    if event.all_day:
-        return event.end_at.date().isoformat()
-    return _iso(event.end_at)
 
 
 def _body_start_value(body: dict[str, Any]) -> str | None:
@@ -555,14 +528,6 @@ def _event_matches_body(existing: dict[str, Any], body: dict[str, Any]) -> bool:
         and str(existing.get("location") or "").strip() == str(body.get("location") or "").strip()
         and _normal_description(existing.get("description")) == _normal_description(body.get("description"))
         and all(str(existing_private.get(k) or "") == str(v or "") for k, v in body_private.items())
-    )
-
-
-def _events_match_plan(existing: dict[str, Any], planned: CalendarEventPlan) -> bool:
-    return (
-        str(existing.get("summary") or "").strip() == planned.summary
-        and _starts_equal(_event_start_value(existing), _planned_start_value(planned))
-        and _starts_equal(_event_end_value(existing), _planned_end_value(planned))
     )
 
 

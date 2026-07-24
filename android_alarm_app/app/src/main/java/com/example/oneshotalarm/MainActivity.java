@@ -37,12 +37,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -58,7 +53,6 @@ import javax.xml.parsers.DocumentBuilderFactory;
 public class MainActivity extends Activity {
     private static final String TAG = "OneShotAlarm";
     private static final String EXPORT_FILE_NAME = "export.xml";
-    private static final int HTTP_CONNECT_TIMEOUT_MS = 2500;
     private static final int HTTP_READ_TIMEOUT_MS = 7000;
     private static final int PAGE_MEAL = 0;
     private static final int PAGE_SHIFT = 1;
@@ -207,40 +201,19 @@ public class MainActivity extends Activity {
         }
         serverStatusCheckInFlight = true;
         new Thread(() -> {
-            int state = SERVER_STATUS_OFFLINE;
-            String message = "";
-            for (String baseServer : getAutoServerCandidates(AlarmStore.getAutoSyncServerUrl(this))) {
-                String server = baseServer == null ? "" : baseServer.trim();
-                if (server.isEmpty()) {
-                    continue;
-                }
-                if (server.endsWith("/")) {
-                    server = server.substring(0, server.length() - 1);
-                }
-                HttpURLConnection conn = null;
-                try {
-                    URL url = new URL(server + "/health");
-                    conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-                    conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-                    conn.connect();
-                    int code = conn.getResponseCode();
-                    if (code == HttpURLConnection.HTTP_OK) {
-                        state = SERVER_STATUS_ONLINE;
-                        message = "";
-                        break;
-                    }
-                    // Server 有回應但唔正常：算 error，繼續試下一個 candidate。
-                    state = SERVER_STATUS_ERROR;
-                    message = "HTTP " + code;
-                } catch (Exception e) {
-                    // 呢個 candidate 掂唔到；維持而家嘅 state（可能已有 error）。
-                } finally {
-                    if (conn != null) {
-                        conn.disconnect();
-                    }
-                }
+            int state;
+            String message;
+            try {
+                ApiClient.request(this, "GET", "/health", (String) null, HTTP_READ_TIMEOUT_MS);
+                state = SERVER_STATUS_ONLINE;
+                message = "";
+            } catch (Exception e) {
+                // ApiClient 已經試齊 LAN/meshnet。回到 "HTTP <code>" ＝server 有應但唔正常；
+                // 其餘（connect/timeout）＝offline。
+                String detail = e.getMessage() == null ? "" : e.getMessage().trim();
+                boolean httpError = detail.startsWith("HTTP ");
+                state = httpError ? SERVER_STATUS_ERROR : SERVER_STATUS_OFFLINE;
+                message = httpError ? detail : "";
             }
             int finalState = state;
             String finalMessage = message;
@@ -710,19 +683,11 @@ public class MainActivity extends Activity {
         }
         statusView.setText("推送行位表到電腦中...");
         new Thread(() -> {
-            PushResult result = new PushResult(false, 0, 0, "");
-            for (String baseServer : getAutoServerCandidates(server)) {
-                if (baseServer == null || baseServer.trim().isEmpty()) {
-                    continue;
-                }
-                try {
-                    result = postCurrentScheduleGrid(baseServer.trim());
-                } catch (Exception e) {
-                    result = new PushResult(false, 0, 0, e.getMessage());
-                }
-                if (result.ok) {
-                    break;
-                }
+            PushResult result;
+            try {
+                result = postCurrentScheduleGrid();
+            } catch (Exception e) {
+                result = new PushResult(false, 0, 0, e.getMessage());
             }
             PushResult finalResult = result;
             runOnUiThread(() -> {
@@ -744,69 +709,22 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private PushResult postCurrentScheduleGrid(String rawServer) throws Exception {
-        String server = rawServer;
-        if (server.endsWith("/")) {
-            server = server.substring(0, server.length() - 1);
-        }
-        if (!server.startsWith("http://") && !server.startsWith("https://")) {
-            throw new IOException("電腦 server URL 無效");
-        }
-        byte[] body = buildScheduleGridXml().getBytes("UTF-8");
-        HttpURLConnection conn = null;
-        try {
-            URL url = new URL(server + "/api/maint/sheets/schedule_grid/import-phone-push");
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-            conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "application/xml; charset=utf-8");
-            conn.setRequestProperty("Content-Length", String.valueOf(body.length));
-            try (DataOutputStream out = new DataOutputStream(conn.getOutputStream())) {
-                out.write(body);
-                out.flush();
-            }
-            int code = conn.getResponseCode();
-            InputStream stream = code >= 200 && code < 300 ? conn.getInputStream() : conn.getErrorStream();
-            String response = stream == null ? "" : readInputStreamText(stream);
-            if (code < 200 || code >= 300) {
-                throw new IOException("HTTP " + code + " " + response);
-            }
-            JSONObject json = new JSONObject(response);
-            return new PushResult(
-                    json.optBoolean("ok", false),
-                    json.optInt("imported_row_count", 0),
-                    json.optInt("replaced_row_count", -1),
-                    json.optString("detail", json.optString("message", ""))
-            );
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-        }
-    }
-
-    private String[] getAutoServerCandidates(String preferredServer) {
-        String preferred = preferredServer == null ? "" : preferredServer.trim();
-        if (preferred.endsWith("/")) {
-            preferred = preferred.substring(0, preferred.length() - 1);
-        }
-        // 只有「用戶自訂咗一個唔同於預設」嘅 URL 先至獨用佢；
-        // 預設 URL 一律行 LAN/meshnet candidates（getAutoSyncServerUrl 永遠回傳預設，
-        // 如果照舊 short-circuit，meshnet fallback 會變死碼，出街就假 Offline）。
-        if (!preferred.isEmpty()
-                && (preferred.startsWith("http://") || preferred.startsWith("https://"))
-                && !preferred.equals(AlarmStore.DEFAULT_AUTO_SYNC_SERVER)) {
-            return new String[]{preferred};
-        }
-
-        String[] candidates = AlarmStore.getAutoSyncServerCandidates(this);
-        if (candidates != null && candidates.length > 0) {
-            return candidates;
-        }
-
-        return new String[]{AlarmStore.DEFAULT_AUTO_SYNC_SERVER};
+    private PushResult postCurrentScheduleGrid() throws Exception {
+        String response = ApiClient.request(
+                this,
+                "POST",
+                "/api/maint/sheets/schedule_grid/import-phone-push",
+                buildScheduleGridXml().getBytes("UTF-8"),
+                "application/xml; charset=utf-8",
+                HTTP_READ_TIMEOUT_MS
+        );
+        JSONObject json = new JSONObject(response);
+        return new PushResult(
+                json.optBoolean("ok", false),
+                json.optInt("imported_row_count", 0),
+                json.optInt("replaced_row_count", -1),
+                json.optString("detail", json.optString("message", ""))
+        );
     }
 
     private static final class PushResult {
@@ -825,20 +743,6 @@ public class MainActivity extends Activity {
 
     private String todayIso() {
         return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(System.currentTimeMillis());
-    }
-
-    private String readInputStreamText(InputStream inputStream) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        byte[] buffer = new byte[2048];
-        int read;
-        while (true) {
-            read = inputStream.read(buffer);
-            if (read < 0) {
-                break;
-            }
-            out.write(buffer, 0, read);
-        }
-        return out.toString("UTF-8");
     }
 
     private String buildScheduleGridXml() {
@@ -2274,50 +2178,6 @@ public class MainActivity extends Activity {
         );
     }
 
-    private void showShoppingListDialog() {
-        JSONObject day = mealPlanJson == null ? null : mealPlanJson.optJSONObject("day");
-        JSONObject mealPlan = day == null ? null : day.optJSONObject("meal_plan");
-        JSONObject mealItems = mealPlan == null ? null : mealPlan.optJSONObject("meal_items");
-        if (mealItems == null) {
-            Toast.makeText(this, "未有買餸清單資料", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String[] meals = new String[]{"早餐", "午餐", "小食", "晚餐"};
-        StringBuilder text = new StringBuilder();
-        for (String meal : meals) {
-            JSONArray items = mealItems.optJSONArray(meal);
-            if (items == null || items.length() == 0) {
-                continue;
-            }
-            if (text.length() > 0) {
-                text.append("\n");
-            }
-            text.append(meal).append("\n");
-            for (int i = 0; i < items.length(); i++) {
-                JSONObject item = items.optJSONObject(i);
-                if (item == null) {
-                    continue;
-                }
-                String name = item.optString("name", "").trim();
-                if (name.isEmpty()) {
-                    continue;
-                }
-                text.append("  ").append(name);
-                String amount = formatItemAmount(item.opt("grams"));
-                if (!amount.trim().isEmpty()) {
-                    text.append("  ").append(amount);
-                }
-                text.append("\n");
-            }
-        }
-        String body = text.length() == 0 ? "未有買餸清單資料" : text.toString().trim();
-        new AlertDialog.Builder(this)
-                .setTitle("買餸清單")
-                .setMessage(body)
-                .setPositiveButton("OK", null)
-                .show();
-    }
-
     private void ensureMealPlanLoaded(boolean force) {
         if (currentPage != PAGE_MEAL || mealFetchInFlight) {
             return;
@@ -2330,70 +2190,6 @@ public class MainActivity extends Activity {
 
     private void fetchMealPlanForSelectedDate() {
         ensureMealPlanLoaded(true);
-    }
-
-    private void fetchMealPlanMetaForDate(String dateIso) {
-        String autoServer = AlarmStore.getAutoSyncServerUrl(this);
-        if (autoServer == null || autoServer.trim().isEmpty() || mealFetchInFlight) {
-            return;
-        }
-        mealFetchInFlight = true;
-        updateMealLastUpdateStatus();
-        new Thread(() -> {
-            Exception lastError = null;
-            for (String baseServer : getAutoServerCandidates(autoServer)) {
-                String server = baseServer == null ? "" : baseServer.trim();
-                if (server.isEmpty()) {
-                    continue;
-                }
-                if (server.endsWith("/")) {
-                    server = server.substring(0, server.length() - 1);
-                }
-                HttpURLConnection conn = null;
-                try {
-                    URL url = new URL(server + "/api/mobile-meal-plan?date_iso=" + Uri.encode(dateIso) + "&meta_only=true");
-                    conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-                    conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-                    conn.connect();
-                    int code = conn.getResponseCode();
-                    if (code != HttpURLConnection.HTTP_OK) {
-                        lastError = new IOException("HTTP " + code);
-                        continue;
-                    }
-                    String body = readInputStreamText(conn.getInputStream());
-                    JSONObject json = new JSONObject(body);
-                    String serverVersion = json.optString("content_version", "").trim();
-                    mealFetchInFlight = false;
-                    mealLastFetchAtMs = System.currentTimeMillis();
-                    String cachedVersion = AlarmStore.getMealPlanJsonVersionForDate(this, dateIso);
-                    if (cachedVersion.isEmpty() && dateIso.equals(AlarmStore.getMealPlanJsonDate(this))) {
-                        cachedVersion = AlarmStore.getMealPlanJsonVersion(this);
-                    }
-                    if (!serverVersion.isEmpty() && serverVersion.equals(cachedVersion)) {
-                        mealFetchErrorText = "";
-                        runOnUiThread(this::renderMealPage);
-                        return;
-                    }
-                    runOnUiThread(() -> fetchMealPlanForDate(dateIso));
-                    return;
-                } catch (Exception e) {
-                    lastError = e;
-                } finally {
-                    if (conn != null) {
-                        conn.disconnect();
-                    }
-                }
-            }
-            mealFetchInFlight = false;
-            mealLastFetchAtMs = System.currentTimeMillis();
-            Exception finalError = lastError;
-            runOnUiThread(() -> {
-                mealFetchErrorText = finalError == null ? "連線電腦失敗" : "更新檢查失敗";
-                renderMealPage();
-            });
-        }).start();
     }
 
     private void fetchMealPlanForDate(String dateIso) {
@@ -2415,55 +2211,25 @@ public class MainActivity extends Activity {
         updateMealLastUpdateStatus();
         new Thread(() -> {
             Exception lastError = null;
-            for (String baseServer : getAutoServerCandidates(autoServer)) {
-                String server = baseServer == null ? "" : baseServer.trim();
-                if (server.isEmpty()) {
-                    continue;
+            try {
+                JSONObject json = fetchMealPlanJson(dateIso);
+                String contentVersion = json.optString("content_version", "").trim();
+                AlarmStore.saveMealPlanJson(this, dateIso, json.toString(), contentVersion);
+                if (commitDateOnSuccess) {
+                    mealSelectedDate = dateIso;
+                    mealExpandedKey = "";
                 }
-                if (server.endsWith("/")) {
-                    server = server.substring(0, server.length() - 1);
-                }
-                HttpURLConnection conn = null;
-                try {
-                    URL url = new URL(server + "/api/mobile-meal-plan?date_iso=" + Uri.encode(dateIso));
-                    conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-                    conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-                    conn.connect();
-                    int code = conn.getResponseCode();
-                    if (code != HttpURLConnection.HTTP_OK) {
-                        lastError = new IOException("HTTP " + code);
-                        continue;
-                    }
-                    String body = readInputStreamText(conn.getInputStream());
-                    JSONObject json = new JSONObject(body);
-                    if (!json.optBoolean("ok", false)) {
-                        lastError = new IOException("電腦未返回餐單");
-                        continue;
-                    }
-                    String contentVersion = json.optString("content_version", "").trim();
-                    AlarmStore.saveMealPlanJson(this, dateIso, json.toString(), contentVersion);
-                    if (commitDateOnSuccess) {
-                        mealSelectedDate = dateIso;
-                        mealExpandedKey = "";
-                    }
-                    mealPlanJson = json;
-                    mealPlanJsonDate = dateIso;
-                    mealPlanJsonVersion = contentVersion;
-                    mealFetchErrorText = "";
-                    mealLastFetchAtMs = System.currentTimeMillis();
-                    mealFetchInFlight = false;
-                    prefetchNeighborMealPlans(dateIso);
-                    runOnUiThread(this::renderMealPage);
-                    return;
-                } catch (Exception e) {
-                    lastError = e;
-                } finally {
-                    if (conn != null) {
-                        conn.disconnect();
-                    }
-                }
+                mealPlanJson = json;
+                mealPlanJsonDate = dateIso;
+                mealPlanJsonVersion = contentVersion;
+                mealFetchErrorText = "";
+                mealLastFetchAtMs = System.currentTimeMillis();
+                mealFetchInFlight = false;
+                prefetchNeighborMealPlans(dateIso);
+                runOnUiThread(this::renderMealPage);
+                return;
+            } catch (Exception e) {
+                lastError = e;
             }
             Exception finalError = lastError;
             mealFetchInFlight = false;
@@ -2478,6 +2244,22 @@ public class MainActivity extends Activity {
                 }
             });
         }).start();
+    }
+
+    /** 由電腦搂一日餐單（ApiClient 已經包 LAN→meshnet failover 同 last-good server 記憶）。 */
+    private JSONObject fetchMealPlanJson(String dateIso) throws Exception {
+        String body = ApiClient.request(
+                this,
+                "GET",
+                "/api/mobile-meal-plan?date_iso=" + Uri.encode(dateIso),
+                (String) null,
+                HTTP_READ_TIMEOUT_MS
+        );
+        JSONObject json = new JSONObject(body);
+        if (!json.optBoolean("ok", false)) {
+            throw new IOException("電腦未返回餐單");
+        }
+        return json;
     }
 
     private void shiftMealDate(int deltaDays) {
@@ -2544,43 +2326,15 @@ public class MainActivity extends Activity {
             return;
         }
         new Thread(() -> {
-            for (String baseServer : getAutoServerCandidates(autoServer)) {
-                String server = baseServer == null ? "" : baseServer.trim();
-                if (server.isEmpty()) {
-                    continue;
-                }
-                if (server.endsWith("/")) {
-                    server = server.substring(0, server.length() - 1);
-                }
-                HttpURLConnection conn = null;
-                try {
-                    URL url = new URL(server + "/api/mobile-meal-plan?date_iso=" + Uri.encode(dateIso));
-                    conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-                    conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-                    conn.connect();
-                    if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                        continue;
-                    }
-                    String body = readInputStreamText(conn.getInputStream());
-                    JSONObject json = new JSONObject(body);
-                    if (!json.optBoolean("ok", false)) {
-                        continue;
-                    }
-                    AlarmStore.saveMealPlanJson(
-                            this,
-                            dateIso,
-                            json.toString(),
-                            json.optString("content_version", "").trim()
-                    );
-                    return;
-                } catch (Exception ignored) {
-                } finally {
-                    if (conn != null) {
-                        conn.disconnect();
-                    }
-                }
+            try {
+                JSONObject json = fetchMealPlanJson(dateIso);
+                AlarmStore.saveMealPlanJson(
+                        this,
+                        dateIso,
+                        json.toString(),
+                        json.optString("content_version", "").trim()
+                );
+            } catch (Exception ignored) {
             }
         }).start();
     }
@@ -2604,62 +2358,34 @@ public class MainActivity extends Activity {
             Exception lastError = null;
             for (int day = 0; day < 45; day++) {
                 boolean dateLoaded = false;
-                for (String baseServer : getAutoServerCandidates(autoServer)) {
-                    String server = baseServer == null ? "" : baseServer.trim();
-                    if (server.isEmpty()) {
-                        continue;
+                try {
+                    JSONObject json = fetchMealPlanJson(cursor);
+                    AlarmStore.saveMealPlanJson(
+                            this,
+                            cursor,
+                            json.toString(),
+                            json.optString("content_version", "").trim()
+                    );
+                    loaded++;
+                    lastLoadedDate = cursor;
+                    dateLoaded = true;
+                    if (cursor.equals(displayDateIso)) {
+                        displayedDateLoaded = true;
+                        JSONObject displayJson = json;
+                        String displayVersion = json.optString("content_version", "").trim();
+                        runOnUiThread(() -> {
+                            if (!displayDateIso.equals(mealSelectedDate)) {
+                                return;
+                            }
+                            mealPlanJson = displayJson;
+                            mealPlanJsonDate = displayDateIso;
+                            mealPlanJsonVersion = displayVersion;
+                            mealFetchErrorText = "";
+                            renderMealPage();
+                        });
                     }
-                    if (server.endsWith("/")) {
-                        server = server.substring(0, server.length() - 1);
-                    }
-                    HttpURLConnection conn = null;
-                    try {
-                        URL url = new URL(server + "/api/mobile-meal-plan?date_iso=" + Uri.encode(cursor));
-                        conn = (HttpURLConnection) url.openConnection();
-                        conn.setRequestMethod("GET");
-                        conn.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS);
-                        conn.setReadTimeout(HTTP_READ_TIMEOUT_MS);
-                        conn.connect();
-                        if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                            continue;
-                        }
-                        String body = readInputStreamText(conn.getInputStream());
-                        JSONObject json = new JSONObject(body);
-                        if (!json.optBoolean("ok", false)) {
-                            continue;
-                        }
-                        AlarmStore.saveMealPlanJson(
-                                this,
-                                cursor,
-                                json.toString(),
-                                json.optString("content_version", "").trim()
-                        );
-                        loaded++;
-                        lastLoadedDate = cursor;
-                        dateLoaded = true;
-                        if (cursor.equals(displayDateIso)) {
-                            displayedDateLoaded = true;
-                            JSONObject displayJson = json;
-                            String displayVersion = json.optString("content_version", "").trim();
-                            runOnUiThread(() -> {
-                                if (!displayDateIso.equals(mealSelectedDate)) {
-                                    return;
-                                }
-                                mealPlanJson = displayJson;
-                                mealPlanJsonDate = displayDateIso;
-                                mealPlanJsonVersion = displayVersion;
-                                mealFetchErrorText = "";
-                                renderMealPage();
-                            });
-                        }
-                        break;
-                    } catch (Exception e) {
-                        lastError = e;
-                    } finally {
-                        if (conn != null) {
-                            conn.disconnect();
-                        }
-                    }
+                } catch (Exception e) {
+                    lastError = e;
                 }
                 if (!dateLoaded) {
                     break;
@@ -3307,10 +3033,6 @@ public class MainActivity extends Activity {
         return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(millis);
     }
 
-    private String formatTime(long millis) {
-        return new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(millis);
-    }
-
     private String formatIso(long millis) {
         return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.getDefault()).format(millis);
     }
@@ -3321,30 +3043,6 @@ public class MainActivity extends Activity {
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 9001);
         }
-    }
-
-    private void requestFullScreenIntentPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            return;
-        }
-        NotificationManager notificationManager =
-                (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (notificationManager != null && !notificationManager.canUseFullScreenIntent()) {
-            Toast.makeText(this, "請允許全螢幕鬧鐘通知", Toast.LENGTH_LONG).show();
-            AlarmScheduler.requestFullScreenIntentPermission(this);
-        }
-    }
-
-    private void requestOverlayPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) {
-            return;
-        }
-        Toast.makeText(this, "請允許顯示喺其他 App 上面", Toast.LENGTH_LONG).show();
-        Intent intent = new Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:" + getPackageName())
-        );
-        startActivity(intent);
     }
 
     private void handleTestDailyImportIntent(Intent intent) {

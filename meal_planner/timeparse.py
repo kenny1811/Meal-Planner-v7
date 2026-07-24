@@ -33,6 +33,16 @@ def parse_time(value: Any) -> time | None:
     return time(hour, minute)
 
 
+def cell_text(value: Any) -> str | None:
+    """儲存格值 → 顯示文字；time/datetime 一律 HH:MM，空白回 None。"""
+    if value is None:
+        return None
+    if isinstance(value, (time, datetime)):
+        return value.strftime("%H:%M")
+    text = str(value).strip()
+    return text or None
+
+
 def to_minutes(value: Any) -> int:
     """時間值 → 由 00:00 起計嘅分鐘；無效回 -1。"""
     t = parse_time(value)

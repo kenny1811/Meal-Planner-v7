@@ -2,16 +2,14 @@ import os
 import tempfile
 import unittest
 
-from openpyxl import Workbook
-
-from meal_planner.excel_io import load_roster_map
 from meal_planner.maintenance_db import (
-    bootstrap_roster_code_definitions,
+    MaintenanceDatabaseError,
     load_roster_code_definitions,
     load_sheet_rows,
     save_roster_code_definitions,
     save_sheet_rows,
 )
+from meal_planner.roster import load_roster_map
 from meal_planner.settings import clear_settings_cache, get_settings
 
 
@@ -30,23 +28,6 @@ class MaintenanceDatabaseTests(unittest.TestCase):
         clear_settings_cache()
         self.tmp.cleanup()
 
-    def test_sheet_bootstraps_once_then_uses_sqlite_copy(self):
-        settings = get_settings()
-        wb = Workbook()
-        wb.active.title = settings.sheets.public_holidays
-        ws = wb[settings.sheets.public_holidays]
-        ws.cell(1, 1).value = "日期"
-        ws.cell(1, 2).value = "假期名稱"
-        ws.cell(2, 1).value = "2026-01-01"
-        ws.cell(2, 2).value = "元旦"
-
-        first = load_sheet_rows("public_holidays", settings, wb)
-        ws.cell(2, 2).value = "Changed"
-        second = load_sheet_rows("public_holidays", settings, wb)
-
-        self.assertEqual(first["rows"][1], ["2026-01-01", "元旦"])
-        self.assertEqual(second["rows"][1], ["2026-01-01", "元旦"])
-
     def test_save_replaces_sheet_rows(self):
         settings = get_settings()
 
@@ -57,13 +38,23 @@ class MaintenanceDatabaseTests(unittest.TestCase):
         self.assertEqual(loaded["display_name"], "加班表")
         self.assertEqual(loaded["rows"], [["日期", "開工"], ["2026-05-23", "09:00"]])
 
-    def test_roster_map_prefers_maintenance_copy_over_workbook(self):
+    def test_empty_sheet_raises_instead_of_returning_nothing(self):
         settings = get_settings()
-        wb = Workbook()
-        wb.active.title = settings.sheets.roster
-        ws = wb[settings.sheets.roster]
-        ws.cell(1, 1).value = "2026年5月 1 SB"
 
+        with self.assertRaises(MaintenanceDatabaseError):
+            load_sheet_rows("public_holidays", settings)
+
+    def test_defaulted_sheets_seed_themselves(self):
+        settings = get_settings()
+
+        wake = load_sheet_rows("wake_alarms", settings)
+        doors = load_sheet_rows("mtr_doors", settings)
+
+        self.assertEqual(wake["rows"][0], ["日期", "起身時間", "備註"])
+        self.assertEqual(doors["rows"][0][0], "更碼")
+
+    def test_roster_map_reads_maintenance_copy(self):
+        settings = get_settings()
         save_sheet_rows(
             "roster",
             [
@@ -73,31 +64,15 @@ class MaintenanceDatabaseTests(unittest.TestCase):
             settings,
         )
 
-        roster = load_roster_map(settings, wb)
+        roster = load_roster_map(settings)
 
         self.assertEqual(roster[(2026, 6)].day_to_code, {1: "VPP", 2: "WL21"})
 
-    def test_roster_code_definitions_bootstrap_from_roster_cd_columns(self):
+    def test_roster_map_raises_when_roster_sheet_is_empty(self):
         settings = get_settings()
-        wb = Workbook()
-        wb.active.title = settings.sheets.roster
-        ws = wb[settings.sheets.roster]
-        ws.cell(1, 3).value = "更碼"
-        ws.cell(1, 4).value = "定義"
-        ws.cell(2, 3).value = "WL*"
-        ws.cell(2, 4).value = "週假"
-        ws.cell(3, 3).value = "SB"
-        ws.cell(3, 4).value = "Stand by"
 
-        bootstrap_roster_code_definitions(settings, wb)
-
-        self.assertEqual(
-            load_roster_code_definitions(settings),
-            [
-                {"pattern": "WL*", "label": "週假", "sort_order": 1},
-                {"pattern": "SB", "label": "Stand by", "sort_order": 2},
-            ],
-        )
+        with self.assertRaises(MaintenanceDatabaseError):
+            load_roster_map(settings)
 
     def test_save_roster_code_definitions_replaces_rows(self):
         settings = get_settings()
@@ -108,6 +83,8 @@ class MaintenanceDatabaseTests(unittest.TestCase):
         )
 
         self.assertEqual(saved, [{"pattern": "AL*", "label": "Annual leave", "sort_order": 1}])
+        self.assertEqual(load_roster_code_definitions(settings), saved)
+
 
 if __name__ == "__main__":
     unittest.main()

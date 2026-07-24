@@ -29,6 +29,19 @@ final class ApiClient {
 
     /** 逐個 server 試（LAN → Meshnet），成功嗰個記住做首選。method 係 "GET" 或 "POST"（jsonBody 可以 null＝無 body POST）。 */
     static String request(Context context, String method, String path, String jsonBody, int readTimeoutMs) throws Exception {
+        byte[] body = jsonBody == null ? null : jsonBody.getBytes(StandardCharsets.UTF_8);
+        return request(context, method, path, body, "application/json; charset=utf-8", readTimeoutMs);
+    }
+
+    /** 同上，但可以送任何 content-type（例如行位表 XML push）。 */
+    static String request(
+            Context context,
+            String method,
+            String path,
+            byte[] body,
+            String contentType,
+            int readTimeoutMs
+    ) throws Exception {
         String[] candidates = AlarmStore.getAutoSyncServerCandidates(context);
         Exception lastException = null;
         for (int i = 0; i < candidates.length; i++) {
@@ -38,11 +51,11 @@ final class ApiClient {
                 continue;
             }
             try {
-                String body = "POST".equals(method)
-                        ? httpPost(base + path, jsonBody, readTimeoutMs)
+                String responseBody = "POST".equals(method)
+                        ? httpPost(base + path, body, contentType, readTimeoutMs)
                         : httpGet(base + path, readTimeoutMs);
                 serverIndex = idx;
-                return body;
+                return responseBody;
             } catch (Exception e) {
                 lastException = e;
             }
@@ -76,20 +89,19 @@ final class ApiClient {
         }
     }
 
-    static String httpPost(String endpoint, String jsonBody, int readTimeoutMs) throws Exception {
+    static String httpPost(String endpoint, byte[] body, String contentType, int readTimeoutMs) throws Exception {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(endpoint).openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
             conn.setReadTimeout(readTimeoutMs);
-            if (jsonBody != null) {
+            if (body != null) {
                 conn.setDoOutput(true);
-                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                byte[] bytes = jsonBody.getBytes(StandardCharsets.UTF_8);
-                conn.setFixedLengthStreamingMode(bytes.length);
+                conn.setRequestProperty("Content-Type", contentType);
+                conn.setFixedLengthStreamingMode(body.length);
                 try (OutputStream out = conn.getOutputStream()) {
-                    out.write(bytes);
+                    out.write(body);
                 }
             }
             return readResponse(conn, endpoint);

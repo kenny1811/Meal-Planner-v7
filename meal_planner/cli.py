@@ -6,10 +6,8 @@ import argparse
 import json
 import sys
 import time
-from pathlib import Path
 
 from meal_planner.dates_input import DateValidationError, parse_date_expression
-from meal_planner.excel_io import WorkbookValidationError
 from meal_planner.preview import preview_days
 
 
@@ -50,12 +48,6 @@ def main(argv: list[str] | None = None) -> int:
         help='日期：空格分隔「3 5 7」或混範圍「12 13 14 15-17」、單段「12-15」、逗號多段「12-15,27-3」或「12,13,15-17」',
     )
     p.add_argument(
-        "--workbook",
-        type=str,
-        default=None,
-        help="覆寫工作簿路徑（等同 MENU_WORKBOOK）",
-    )
-    p.add_argument(
         "--full-mode",
         action="store_true",
         help="使用完整求解模式（等同 API fast_mode=false）",
@@ -91,28 +83,16 @@ def main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     pretty = not args.compact
 
-    if args.workbook:
-        import os
-
-        os.environ["MENU_WORKBOOK"] = str(Path(args.workbook).expanduser())
-        from meal_planner.settings import clear_settings_cache
-
-        clear_settings_cache()
-
     from meal_planner.settings import get_settings
 
-    wb_path = get_settings().workbook_path
     if args.health:
         _print_json(
             _success_payload(
                 {
                     "status": "ok",
                     "primary_data_source": "sqlite",
-                    "excel_role": "import_only",
                     "database": str(get_settings().database_path),
                     "database_exists": get_settings().database_path.is_file(),
-                    "workbook": str(wb_path),
-                    "workbook_exists": wb_path.is_file(),
                     "project_root": str(get_settings().project_root),
                 }
             ),
@@ -156,9 +136,6 @@ def main(argv: list[str] | None = None) -> int:
             stream=sys.stderr,
         )
         return 1
-    except WorkbookValidationError as e:
-        _print_json(_error_payload("bad_request", str(e)), pretty=pretty, stream=sys.stderr)
-        return 2
     except OSError as e:
         _print_json(
             _error_payload("internal_error", f"讀取資料失敗：{e}"),
@@ -172,7 +149,6 @@ def main(argv: list[str] | None = None) -> int:
         debug = {
             "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
             "dates_count": len(dates),
-            "workbook": str(wb_path),
             "fast_mode": not args.full_mode,
             "reroll_nonce": args.reroll_nonce,
         }

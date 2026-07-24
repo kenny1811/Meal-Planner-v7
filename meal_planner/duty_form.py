@@ -29,6 +29,7 @@ from meal_planner.duty_common import (
     GRACE_MINUTES,
     POST_MAPPING,
     RETRY_SECONDS,
+    load_kv_config,
     retry_backoff_active,
 )
 from meal_planner.duty_report import apply_override, build_plan as build_report_normal_plan, send_slot
@@ -116,20 +117,7 @@ def _connect(settings: AppSettings) -> sqlite3.Connection:
 
 
 def load_onoff_config(settings: AppSettings) -> dict[str, Any]:
-    import json
-
-    with _DB_LOCK:
-        conn = _connect(settings)
-        try:
-            rows = conn.execute("SELECT config_key, value_json FROM onoffduty_config").fetchall()
-        finally:
-            conn.close()
-    stored: dict[str, Any] = {}
-    for key, value_json in rows:
-        try:
-            stored[key] = json.loads(value_json)
-        except ValueError:
-            continue
+    stored = load_kv_config(_DB_LOCK, lambda: _connect(settings), "onoffduty_config")
     auto_send = stored.get("auto_send")
     return {"auto_send": bool(auto_send) if auto_send is not None else False}
 
@@ -216,10 +204,6 @@ def _holiday_dates(settings: AppSettings) -> set[date]:
     payload = load_sheet_rows("public_holidays", settings)
     rows = payload.get("rows") or [] if isinstance(payload, dict) else []
     return holiday_dates_from_rows(rows)
-
-
-def _fmt_mmdd(d: date) -> str:
-    return f"{d.month}/{d.day}"
 
 
 def build_prefill_url(

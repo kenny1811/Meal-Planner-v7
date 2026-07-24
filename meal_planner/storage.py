@@ -369,15 +369,6 @@ def load_latest_versions(dates: list[str], versions: dict[str, str] | None = Non
     return {"days": out_days, "versions": meta}
 
 
-def load_all_versions_meta() -> dict[str, list[str]]:
-    out: dict[str, list[str]] = {}
-    with _plan_db() as conn:
-        rows = conn.execute("SELECT date, timestamp FROM plan_versions ORDER BY date, timestamp").fetchall()
-    for row in rows:
-        out.setdefault(str(row["date"]), []).append(str(row["timestamp"]))
-    return out
-
-
 def merge_memory_payload(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
     """Merge a partial UI memory save without dropping days absent from the browser payload."""
     existing = existing if isinstance(existing, dict) else {}

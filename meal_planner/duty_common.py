@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from typing import Any, Callable
 
 # 到期後嘅寬限期：期內未發＝due（可以自動發），過咗＝missed。
 GRACE_MINUTES = 15
@@ -14,6 +16,27 @@ GRACE_DETAIL = f"passed grace window ({GRACE_MINUTES} min)"
 
 # 上次發送失敗後，最少等幾多秒先重試（唔好每 tick 狂試）。
 RETRY_SECONDS = 60
+
+
+def load_kv_config(lock, connect: Callable[[], Any], table: str) -> dict[str, Any]:
+    """key/value JSON 設定表 → dict（壞 JSON 嘅 row 跳過）。
+
+    Report_Normal 同 OnOff_Duty 兩張 config 表結構一樣，讀法收埋喺呢度。
+    `table` 係模組常數，唔會來自用戶輸入。
+    """
+    with lock:
+        conn = connect()
+        try:
+            rows = conn.execute(f"SELECT config_key, value_json FROM {table}").fetchall()
+        finally:
+            conn.close()
+    stored: dict[str, Any] = {}
+    for key, value_json in rows:
+        try:
+            stored[key] = json.loads(value_json)
+        except ValueError:
+            continue
+    return stored
 
 
 def retry_backoff_active(last_recorded_iso: str | None, now: datetime | None = None) -> bool:

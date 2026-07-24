@@ -9,7 +9,6 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
-from openpyxl import Workbook
 
 import meal_planner.app as app_module
 from meal_planner import cli
@@ -41,7 +40,7 @@ class CliApiTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["data"]["status"], "ok")
-        self.assertIn("workbook_exists", payload["data"])
+        self.assertIn("database_exists", payload["data"])
 
     def test_api_validation_error_uses_error_envelope(self):
         client = TestClient(app)
@@ -183,7 +182,7 @@ class CliApiTests(unittest.TestCase):
         stats = client.get("/api/debug/stats").json()
 
         self.assertEqual(health["status"], "ok")
-        self.assertIn("workbook_exists", health)
+        self.assertIn("database_exists", health)
         self.assertTrue(stats["ok"])
         self.assertIn("requests_total", stats["stats"])
         self.assertIn("/api/health", stats["stats"]["by_path"])
@@ -197,7 +196,6 @@ class CliApiTests(unittest.TestCase):
                     "rice:\n"
                     "  cooked_to_raw:\n"
                     "    - { name_contains: \"糙米\", ratio: 2.623 }\n"
-                    "  cooked_to_raw_default: 2.67\n"
                     "  water_multiplier: 2\n"
                     "  rice_category_exact: \"米\"\n"
                     "  note_name_contains: [\"米\"]\n"
@@ -233,8 +231,7 @@ class CliApiTests(unittest.TestCase):
                 saved = f.read()
             self.assertIn('- { name_contains: "糙米", ratio: 2.5 }', saved)
             self.assertIn('- { name_contains: "紅米", ratio: 2.4 }', saved)
-            # 隱藏後備值冇send就唔郁
-            self.assertIn("cooked_to_raw_default: 2.67", saved)
+            self.assertNotIn("cooked_to_raw_default", saved)
 
         if old_root is None:
             os.environ.pop("MENU_PROJECT_ROOT", None)
@@ -302,32 +299,6 @@ class CliApiTests(unittest.TestCase):
             with open(os.path.join(tmp, "config.yaml"), encoding="utf-8") as f:
                 saved = f.read()
             self.assertNotIn("profile:", saved)
-
-        if old_root is None:
-            os.environ.pop("MENU_PROJECT_ROOT", None)
-        else:
-            os.environ["MENU_PROJECT_ROOT"] = old_root
-        clear_settings_cache()
-
-    def test_api_single_maintenance_import_only_requires_target_sheet(self):
-        old_root = os.environ.get("MENU_PROJECT_ROOT")
-        with tempfile.TemporaryDirectory() as tmp:
-            os.environ["MENU_PROJECT_ROOT"] = tmp
-            clear_settings_cache()
-            settings = get_settings()
-            wb = Workbook()
-            wb.active.title = settings.sheets.public_holidays
-            wb[settings.sheets.public_holidays].append(["日期", "假期名稱"])
-            wb[settings.sheets.public_holidays].append(["2026-01-01", "元旦"])
-            wb.save(settings.workbook_path)
-
-            client = TestClient(app)
-            response = client.post("/api/maint/sheets/public_holidays/import")
-            payload = response.json()
-
-            self.assertEqual(response.status_code, 200)
-            self.assertTrue(payload["ok"])
-            self.assertEqual(payload["rows"][1], ["2026-01-01", "元旦"])
 
         if old_root is None:
             os.environ.pop("MENU_PROJECT_ROOT", None)

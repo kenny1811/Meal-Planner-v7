@@ -45,10 +45,6 @@ public class CaptureAccessibilityService extends AccessibilityService {
         super.onDestroy();
     }
 
-    static boolean isEnabled() {
-        return instance != null;
-    }
-
     /** 同步影一張全螢幕 PNG（喺 worker thread 叫）；null＝服務未開或失敗。 */
     static byte[] captureNow() {
         CaptureAccessibilityService service = instance;

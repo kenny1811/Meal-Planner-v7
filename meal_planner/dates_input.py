@@ -77,25 +77,6 @@ def _expand_segment(
     return out2
 
 
-def _parse_token(tok: str, year: int, month: int) -> list[date]:
-    """單一 token：同月範圍 `15-17`、跨月範圍 `27-3`、或單日 `12`。"""
-    tok = tok.strip()
-    if not tok:
-        return []
-    if _RANGE_SEG_RE.match(tok):
-        return _expand_segment(tok, year, month)
-    if tok.isdigit():
-        last = calendar.monthrange(year, month)[1]
-        d = int(tok)
-        if d < 1 or d > last:
-            raise ValueError(f"日數 {d} 超出 {year}-{month}（1–{last}）")
-        return [date(year, month, d)]
-    raise ValueError(
-        f"無法解析日期：{tok!r}。"
-        f"單日用空格分隔（如 12 13 14），同月範圍用 15-17，多段範圍用逗號（如 12-15,27-3）。"
-    )
-
-
 def parse_date_expression(
     expr: str,
     *,
