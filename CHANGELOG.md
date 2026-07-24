@@ -4,6 +4,10 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.2.7 — 24/07/2026 29:42
+- Fix: the schedule grid sent to the phone lost each row's duration when the grid
+  version came from a phone push. Labels now always carry it (e.g. "M 75").
+
 ## 7.2.6 — 23/07/2026 26:20
 - Rice conversion: removed the hidden default ratio — no fallback anywhere. Rice that
   matches no conversion row now shows it plainly: the rice note says the ratio is not

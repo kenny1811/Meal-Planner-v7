@@ -459,6 +459,19 @@ def merge_schedule_grid_rows_for_import(
     return merged
 
 
+_TRAILING_DURATION_RE = re.compile(r"\s+\d{1,3}$")
+
+
+def _label_with_duration(content: str, duration: str) -> str:
+    """行位表 label 一律「內容 + 時長」：先剝走內容尾巴嘅舊數字，再貼返時長欄嘅值。"""
+    base = _TRAILING_DURATION_RE.sub("", content).rstrip()
+    if not base:
+        base = content.strip()
+    if not duration or base == duration:
+        return base
+    return f"{base} {duration}".strip()
+
+
 def _escape_xml_text(value: Any) -> str:
     return (
         ""
@@ -530,7 +543,8 @@ def build_schedule_grid_xml(
         if header != last_header:
             lines.append(f"<section>{_escape_xml_text(header)}</section>")
             last_header = header
-        text_label = content_value
+        duration_value = ("" if len(row) < 4 or row[3] is None else str(row[3])).strip()
+        text_label = _label_with_duration(content_value, duration_value)
         lines.append(f"<alarm_time>{_escape_xml_text(time_value)}</alarm_time>")
         lines.append(f"<alarm_label>{_escape_xml_text(text_label)}</alarm_label>")
     lines.append("</schedule_grid>")
