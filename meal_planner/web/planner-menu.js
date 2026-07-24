@@ -53,15 +53,6 @@
       return btn;
     }
 
-    function staticMenuDefaultLabel(key) {
-      const menuItem = document.querySelector(`.menu-item[data-menu-key="${CSS.escape(key)}"]`);
-      const menuText = menuItem ? menuItem.querySelector(".menu-item-label")?.textContent : "";
-      if (menuText && menuText.trim()) return menuText.trim();
-      const titleNode = document.querySelector(`[data-title-key="${CSS.escape(key)}"]`);
-      const titleText = titleNode ? titleNode.textContent : "";
-      return titleText ? titleText.trim() : "";
-    }
-
     function defaultMenuLabel(key) {
       if (key === "config") return "Config";
       if (key === "maint") return "Maint";

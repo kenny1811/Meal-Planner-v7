@@ -3,7 +3,6 @@
     let scheduleGridNewShiftStartIndex = -1;
     let scheduleGridNewShiftCount = 0;
     let scheduleGridSkipNextRenderSort = false;
-    let shiftAnalysisSelectedBlocks = new Set();
     let shiftAnalysisSuppressNextClickClear = false;
     let shiftCodeAnalysisRows = [];
     const maintDirectKeyTimers = new WeakMap();
@@ -899,37 +898,6 @@
       }
     }
 
-    function appendScheduleGridNewShiftRowsFast(rows, startIdx, count, batch) {
-      const table = document.querySelector("#maint-editor table.maint-table");
-      const tbody = table && table.tBodies ? table.tBodies[0] : null;
-      if (!tbody) return false;
-      const cols = maintColumnCount(rows);
-      const currentCols = table.querySelectorAll("col[data-form-col-key]").length || cols;
-      if (cols !== currentCols) return false;
-      const formKey = `maint_${maintSheetPayload.sheet_key || "sheet"}`;
-      const header = Array.isArray(rows[0]) ? rows[0] : [];
-      const shiftCodeColIdx = header.findIndex((cell) => String(cell || "").trim() === "更碼");
-      const isShiftCodeCol = (cIdx) => cIdx === shiftCodeColIdx;
-      maintSheetPayload.rows = rows;
-      const fragment = document.createDocumentFragment();
-      const newRows = [];
-      for (let i = startIdx; i < startIdx + count; i += 1) {
-        const tr = document.createElement("tr");
-        tr.setAttribute("data-maint-row-index", String(i));
-        tr.setAttribute("data-schedule-new-shift-batch", batch);
-        tr.innerHTML = maintRowHtml(rows[i], i, cols, formKey, isShiftCodeCol);
-        fragment.appendChild(tr);
-        newRows.push(tr);
-      }
-      tbody.appendChild(fragment);
-      newRows.forEach((tr) => {
-        bindMaintRowInputs(tr);
-        applyFormColumnWidths(tr);
-        autoResizeTextareas(tr);
-      });
-      return true;
-    }
-
     function addScheduleGridShiftCodeRows(rowIndex) {
       if (activeMaintSheetKey !== "schedule_grid") return;
       const rows = collectMaintRows();
@@ -1487,7 +1455,6 @@
         block.style.left = `${x}px`;
         block.style.top = `${y}px`;
         if (width > 0) block.style.width = `${width}px`;
-        block.classList.toggle("is-shift-analysis-block-selected", shiftAnalysisSelectedBlocks.has(blockKey));
         const height = block.getBoundingClientRect().height;
         maxRight = Math.max(maxRight, x + Math.max(width, block.getBoundingClientRect().width));
         maxBottom = Math.max(maxBottom, y + height);
@@ -1495,155 +1462,6 @@
       });
       container.style.width = `${Math.max(280, maxRight)}px`;
       container.style.height = `${Math.max(260, maxBottom)}px`;
-    }
-
-    function updateShiftAnalysisBlockSelection() {
-      document.querySelectorAll(".shift-analysis-block[data-shift-analysis-block]").forEach((block) => {
-        const blockKey = block.getAttribute("data-shift-analysis-block");
-        block.classList.toggle("is-shift-analysis-block-selected", shiftAnalysisSelectedBlocks.has(blockKey));
-      });
-    }
-
-    function shiftAnalysisBlocksVisible() {
-      const root = document.querySelector(".shift-code-analysis-layout");
-      return activePanel === "reports" && !!(root && root.getClientRects().length);
-    }
-
-    function selectAllShiftAnalysisBlocks() {
-      shiftAnalysisSelectedBlocks.clear();
-      document.querySelectorAll(".shift-analysis-block[data-shift-analysis-block]").forEach((block) => {
-        const blockKey = block.getAttribute("data-shift-analysis-block");
-        if (blockKey) shiftAnalysisSelectedBlocks.add(blockKey);
-      });
-      updateShiftAnalysisBlockSelection();
-    }
-
-    function toggleShiftAnalysisBlockSelection(blockKey) {
-      if (!blockKey) return;
-      if (shiftAnalysisSelectedBlocks.has(blockKey)) {
-        shiftAnalysisSelectedBlocks.delete(blockKey);
-      } else {
-        shiftAnalysisSelectedBlocks.add(blockKey);
-      }
-      updateShiftAnalysisBlockSelection();
-    }
-
-    function clearShiftAnalysisBlockSelection() {
-      if (!shiftAnalysisSelectedBlocks.size) return;
-      shiftAnalysisSelectedBlocks.clear();
-      updateShiftAnalysisBlockSelection();
-    }
-
-    function bindShiftAnalysisSelectionKeys() {
-      if (document.body.dataset.shiftAnalysisSelectionKeysBound === "1") return;
-      document.body.dataset.shiftAnalysisSelectionKeysBound = "1";
-      document.addEventListener("keydown", (ev) => {
-        if (ev.key !== "Escape") return;
-        clearShiftAnalysisBlockSelection();
-      });
-      document.addEventListener("keydown", (ev) => {
-        if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || String(ev.key).toLowerCase() !== "a") return;
-        if (!shiftAnalysisBlocksVisible()) return;
-        ev.preventDefault();
-        selectAllShiftAnalysisBlocks();
-      });
-      document.addEventListener("click", (ev) => {
-        if (!shiftAnalysisSelectedBlocks.size || ev.ctrlKey || ev.metaKey) return;
-        if (shiftAnalysisSuppressNextClickClear) {
-          shiftAnalysisSuppressNextClickClear = false;
-          return;
-        }
-        if (ev.button != null && ev.button !== 0) return;
-        clearShiftAnalysisBlockSelection();
-      });
-    }
-
-    function attachShiftCodeAnalysisBlockDragHandles(root = document) {
-      bindShiftAnalysisSelectionKeys();
-      document.querySelectorAll(".shift-analysis-block[data-shift-analysis-block]").forEach((block) => {
-        if (root !== document && !root.contains(block) && block !== root && !block.contains(root)) return;
-        if (block.dataset.shiftAnalysisSelectBound === "1") return;
-        block.dataset.shiftAnalysisSelectBound = "1";
-        block.addEventListener("mousedown", (ev) => {
-          if (!(ev.ctrlKey || ev.metaKey) || (ev.button != null && ev.button !== 0)) return;
-          const interactive = ev.target && ev.target.closest
-            ? ev.target.closest("button,input,textarea,select,a,.form-col-resizer")
-            : null;
-          if (interactive) return;
-          ev.preventDefault();
-          ev.stopPropagation();
-          toggleShiftAnalysisBlockSelection(block.getAttribute("data-shift-analysis-block"));
-        });
-      });
-      document.querySelectorAll(".shift-analysis-block[data-shift-analysis-block] thead tr").forEach((handle) => {
-        if (root !== document && !root.contains(handle) && handle !== root) return;
-        if (handle.dataset.shiftAnalysisBlockDragBound === "1") return;
-        handle.dataset.shiftAnalysisBlockDragBound = "1";
-        handle.title = handle.title || "Drag to move block";
-        handle.addEventListener("mousedown", (ev) => {
-          if (ev.button != null && ev.button !== 0) return;
-          ev.preventDefault();
-          const block = handle.closest(".shift-analysis-block[data-shift-analysis-block]");
-          const blockKey = block && block.getAttribute("data-shift-analysis-block");
-          if (!blockKey) return;
-          if (ev.ctrlKey || ev.metaKey) {
-            ev.stopPropagation();
-            toggleShiftAnalysisBlockSelection(blockKey);
-            return;
-          }
-          const dragKeys = shiftAnalysisSelectedBlocks.has(blockKey) && shiftAnalysisSelectedBlocks.size > 1
-            ? Array.from(shiftAnalysisSelectedBlocks)
-            : [blockKey];
-          if (!shiftAnalysisSelectedBlocks.has(blockKey)) {
-            shiftAnalysisSelectedBlocks.clear();
-            updateShiftAnalysisBlockSelection();
-          }
-          const startX = ev.clientX;
-          const startY = ev.clientY;
-          let dragMoved = false;
-          const startOffsets = new Map();
-          dragKeys.forEach((key) => {
-            const target = document.querySelector(`.shift-analysis-block[data-shift-analysis-block="${key}"]`);
-            startOffsets.set(key, {
-              x: shiftAnalysisBlockOffsetPx(key, "x", target?.offsetLeft || 0),
-              y: shiftAnalysisBlockOffsetPx(key, "y", target?.offsetTop || 0),
-            });
-          });
-          startWindowDrag({
-            bodyClass: "is-dnd-dragging",
-            onMove: (mv) => {
-              const dx = mv.clientX - startX;
-              let dy = mv.clientY - startY;
-              const minStartY = Math.min(...Array.from(startOffsets.values()).map((item) => item.y));
-              if (Number.isFinite(minStartY) && minStartY + dy < 0) dy = -minStartY;
-              dragMoved = dragMoved || Math.abs(dx) > 2 || Math.abs(dy) > 2;
-              startOffsets.forEach((start, key) => {
-                formColumnWidths[`shift_analysis_block_${key}_x`] = start.x + dx;
-                formColumnWidths[`shift_analysis_block_${key}_y`] = start.y + dy;
-              });
-              applyShiftCodeAnalysisBlockLayout(root);
-            },
-            onUp: () => {
-              if (dragMoved) shiftAnalysisSuppressNextClickClear = true;
-              persistColumnWidths();
-            },
-          });
-        });
-        handle.addEventListener("click", (ev) => {
-          if (!ev.ctrlKey && !ev.metaKey) return;
-          ev.preventDefault();
-          ev.stopPropagation();
-        });
-        handle.addEventListener("dblclick", () => {
-          const block = handle.closest(".shift-analysis-block[data-shift-analysis-block]");
-          const blockKey = block && block.getAttribute("data-shift-analysis-block");
-          if (!blockKey) return;
-          delete formColumnWidths[`shift_analysis_block_${blockKey}_x`];
-          delete formColumnWidths[`shift_analysis_block_${blockKey}_y`];
-          applyShiftCodeAnalysisBlockLayout(root);
-          persistColumnWidths();
-        });
-      });
     }
 
     async function openShiftCodeAnalysisReport() {

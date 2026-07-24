@@ -1191,29 +1191,3 @@
       }
     }
 
-    async function importActiveMaintSheet() {
-      // 行位表由電話匯入；其餘維護表冇 import 來源（SQLite 就係唯一來源）。
-      if (activeMaintSheetKey !== "schedule_grid") return;
-      showMaintError("");
-      setMaintStatus("Importing...");
-      try {
-        const preview = await importScheduleGridFromAdbPhone();
-        const result = await confirmScheduleGridFromPhoneIp();
-        maintSheetPayload = await loadMaintSheet(activeMaintSheetKey);
-        const importedRows = Number.isFinite(Number(result.imported_row_count)) ? Number(result.imported_row_count) : null;
-        const replacedRows = Number.isFinite(Number(result.replaced_row_count)) ? Number(result.replaced_row_count) : null;
-        const phoneUrl = String((preview && preview.phone_url) || result.phone_url || "").trim();
-        if (!Array.isArray(maintSheetPayload.rows)) maintSheetPayload.rows = [];
-        renderMaintEditor();
-        clearUnsavedChanges("餐單參數");
-        setMaintStatus(
-          importedRows === null || replacedRows === null
-            ? `已匯入電話行位表${phoneUrl ? `；來源 ${phoneUrl}` : ""}`
-            : `已匯入電話行位表：${importedRows} 行；取代 ${replacedRows} 行${phoneUrl ? `；來源 ${phoneUrl}` : ""}`
-        );
-        await refreshMaintSheets();
-      } catch (e) {
-        showMaintError(String(e.message || e));
-        setMaintStatus("");
-      }
-    }

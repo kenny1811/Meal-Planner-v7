@@ -188,10 +188,6 @@
       await persistUiState({ menu_order: menuOrder, menu_hidden_keys: menuHiddenKeys });
     }
 
-    async function persistMenuLabels() {
-      await persistUiState({ menu_labels: menuLabels });
-    }
-
     async function persistMenuTreeOpen() {
       await persistUiState({ menu_tree_open: menuTreeOpen });
     }
@@ -224,15 +220,6 @@
       const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Google Calendar auth status failed.", r.status));
-      }
-      return data || {};
-    }
-
-    async function syncGoogleCalendarRoster() {
-      const r = await fetch("/api/google-calendar/roster-sync", { method: "POST" });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Google Calendar roster sync failed.", r.status));
       }
       return data || {};
     }
@@ -485,73 +472,6 @@
       const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Duty report config failed.", r.status));
-      }
-      return data || {};
-    }
-
-    async function importScheduleGridXml(file) {
-      const form = new FormData();
-      form.append("file", file);
-      const r = await fetch("/api/maint/sheets/schedule_grid/import-xml", {
-        method: "POST",
-        body: form,
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Import schedule_grid XML failed.", r.status));
-      }
-      return data || {};
-    }
-
-    async function importDefaultScheduleGridXml() {
-      const r = await fetch("/api/maint/sheets/schedule_grid/import-default-xml", {
-        method: "POST",
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Import schedule_grid.xml failed.", r.status));
-      }
-      return data || {};
-    }
-
-    async function importScheduleGridFromAdbPhone() {
-      const r = await fetch("/api/maint/sheets/schedule_grid/preview-from-phone-ip", {
-        method: "POST",
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Preview phone schedule_grid by IP failed.", r.status));
-      }
-      return data || {};
-    }
-
-    async function confirmScheduleGridFromPhoneIp() {
-      const r = await fetch("/api/maint/sheets/schedule_grid/confirm-phone-ip-import", {
-        method: "POST",
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Confirm phone schedule_grid import failed.", r.status));
-      }
-      return data || {};
-    }
-
-    async function exportScheduleGridXml() {
-      const r = await fetch("/api/maint/sheets/schedule_grid/export-xml");
-      if (!r.ok) {
-        const data = await parseJsonSafe(r);
-        throw new Error(apiErrorMessage(data, "Export schedule_grid XML failed.", r.status));
-      }
-      return r;
-    }
-
-    async function exportScheduleGridXmlToDataFolder() {
-      const r = await fetch("/api/maint/sheets/schedule_grid/export-xml-to-file", {
-        method: "POST",
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "Export schedule_grid XML to data folder failed.", r.status));
       }
       return data || {};
     }

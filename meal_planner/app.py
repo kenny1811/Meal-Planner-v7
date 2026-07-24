@@ -8,8 +8,6 @@ import subprocess
 import json
 import copy
 import time
-import threading
-import urllib.request
 import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -135,9 +133,6 @@ _DEBUG_STATS: dict[str, Any] = {
     "by_status": {},
     "last_error": None,
 }
-_PHONE_SCHEDULE_GRID_EXPORT_URL = "http://192.168.15.102:8765/export.xml"
-_PHONE_SCHEDULE_GRID_PENDING_XML: bytes | None = None
-_PHONE_SCHEDULE_GRID_PENDING_LOCK = threading.Lock()
 _DESKTOP_LAN_HOST = "192.168.15.125"
 _DESKTOP_LAN_SERVER = f"http://{_DESKTOP_LAN_HOST}:8765"
 
@@ -1312,58 +1307,6 @@ async def api_import_schedule_grid_from_phone_push(request: Request) -> dict[str
         **result,
         "ok": True,
         "source": "phone_push",
-    }
-
-
-def _fetch_schedule_grid_xml_from_phone_ip() -> bytes:
-    try:
-        with urllib.request.urlopen(_PHONE_SCHEDULE_GRID_EXPORT_URL, timeout=12) as response:
-            return response.read()
-    except OSError as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Cannot fetch phone schedule_grid from {_PHONE_SCHEDULE_GRID_EXPORT_URL}: {e}",
-        ) from e
-
-
-@app.post("/api/maint/sheets/schedule_grid/preview-from-phone-ip")
-def api_preview_schedule_grid_from_phone_ip() -> dict[str, Any]:
-    xml_data = _fetch_schedule_grid_xml_from_phone_ip()
-    rows, imported_dates, effective_version = _normalize_schedule_grid_xml(xml_data)
-    normalized_data = build_schedule_grid_xml(
-        rows,
-        fallback_effective_date=effective_version,
-    )
-
-    with _PHONE_SCHEDULE_GRID_PENDING_LOCK:
-        global _PHONE_SCHEDULE_GRID_PENDING_XML
-        _PHONE_SCHEDULE_GRID_PENDING_XML = normalized_data
-
-    return {
-        "ok": True,
-        "source": "phone_ip",
-        "phone_url": _PHONE_SCHEDULE_GRID_EXPORT_URL,
-        "rows": rows,
-        "row_count": max(0, len(rows) - 1),
-        "imported_versions": sorted(imported_dates),
-        "pending": True,
-    }
-
-
-@app.post("/api/maint/sheets/schedule_grid/confirm-phone-ip-import")
-def api_confirm_schedule_grid_from_phone_ip() -> dict[str, Any]:
-    with _PHONE_SCHEDULE_GRID_PENDING_LOCK:
-        global _PHONE_SCHEDULE_GRID_PENDING_XML
-        xml_data = _PHONE_SCHEDULE_GRID_PENDING_XML
-        _PHONE_SCHEDULE_GRID_PENDING_XML = None
-    if not xml_data:
-        raise HTTPException(status_code=400, detail="No pending phone schedule_grid import. Press import first.")
-    result = _import_schedule_grid_from_xml_bytes(xml_data)
-    return {
-        **result,
-        "ok": True,
-        "phone_url": _PHONE_SCHEDULE_GRID_EXPORT_URL,
-        "source": "phone_ip",
     }
 
 

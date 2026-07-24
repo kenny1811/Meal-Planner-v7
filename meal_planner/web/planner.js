@@ -782,10 +782,6 @@
       return MENU_STATIC_LEAF_KEYS.concat(maintSheetKeys());
     }
 
-    function allMenuKeys() {
-      return MENU_TREE_KEYS.concat(allMenuLeafKeys());
-    }
-
     function defaultMenuGroup(key) {
       if (MENU_DEFAULT_GROUPS[key]) return MENU_DEFAULT_GROUPS[key];
       if (maintSheetKeys().includes(key)) return "maint";
