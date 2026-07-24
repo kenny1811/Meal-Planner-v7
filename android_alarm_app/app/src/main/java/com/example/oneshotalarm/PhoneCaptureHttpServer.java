@@ -11,8 +11,10 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 /**
- * 電話本機 HTTP server：淨係做遠端截圖（電話 /capture、手錶 /capture/watch），唔使 adb。
- * 行位表以前經 /export.xml 俾電腦 pull，而家改由電話「to Computer」推，嗰條路已經拆走。
+ * 電話本機 HTTP server：淨係做手錶遠端截圖（/capture/watch，電話做中繼），唔使 adb。
+ * 電話自己嗰個 accessibility 截圖 service 已經拆——Mox Bank 會當佢係惡意程式，
+ * 用戶要長期喺 設定→協助工具 熄咗佢，即係實質永遠用唔到。
+ * 行位表以前經 /export.xml 俾電腦 pull，而家改由電話「to Computer」推，嗰條路亦拆咗。
  */
 final class PhoneCaptureHttpServer {
     private static final String TAG = "PhoneCaptureHttp";
@@ -63,17 +65,6 @@ final class PhoneCaptureHttpServer {
                 writeResponse(out, 200, "application/json; charset=utf-8", "{\"ok\":true}\n".getBytes("UTF-8"));
                 return;
             }
-            if ("/capture".equals(path)) {
-                // PC 遠端截圖（唔使 adb）；要喺 設定→協助工具 開咗 capture service。
-                byte[] png = CaptureAccessibilityService.captureNow();
-                if (png == null) {
-                    writeResponse(out, 503, "text/plain; charset=utf-8",
-                            "Capture service not enabled (Settings > Accessibility)\n".getBytes("UTF-8"));
-                } else {
-                    writeResponse(out, 200, "image/png", png);
-                }
-                return;
-            }
             if ("/capture/watch".equals(path)) {
                 // 手錶截圖：電話做中繼（message 去、ChannelClient 返）。
                 byte[] png = WatchCaptureBridge.requestCapture(context, 20000);
@@ -87,7 +78,7 @@ final class PhoneCaptureHttpServer {
             }
             writeResponse(out, 404, "text/plain; charset=utf-8", "Not found\n".getBytes("UTF-8"));
         } catch (IOException e) {
-            Log.e(TAG, "Handle phone schedule_grid HTTP request failed", e);
+            Log.e(TAG, "Handle phone capture HTTP request failed", e);
         }
     }
 
