@@ -197,6 +197,9 @@ final class AlarmStore {
             if (alarm == null) {
                 continue;
             }
+            if (alarm.optBoolean("disabled", false)) {
+                continue;  // 停用嘅行位唔算 prev/next
+            }
             long triggerAt = alarm.optLong("trigger_at_epoch_ms", 0L);
             if (triggerAt <= 0L) {
                 continue;

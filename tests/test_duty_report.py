@@ -101,9 +101,11 @@ class TestNormalizeHhmm(unittest.TestCase):
         self.assertEqual(normalize_hhmm("0916"), "09:16")
         self.assertEqual(normalize_hhmm("916"), "09:16")
 
-    def test_30_hour_times_wrap_to_early_morning(self):
-        self.assertEqual(normalize_hhmm("2416"), "00:16")
-        self.assertEqual(normalize_hhmm("29:59"), "05:59")
+    def test_early_morning_normalises_to_the_30_hour_form(self):
+        self.assertEqual(normalize_hhmm("2416"), "24:16")
+        self.assertEqual(normalize_hhmm("29:59"), "29:59")
+        self.assertEqual(normalize_hhmm("0016"), "24:16")
+        self.assertEqual(normalize_hhmm("05:59"), "29:59")
 
     def test_invalid_rejected(self):
         self.assertEqual(normalize_hhmm("abc"), "")
@@ -120,7 +122,8 @@ class TestSegments(unittest.TestCase):
             {"from": "bad", "code": "X"},
             {"code": ""},
         ])
-        self.assertEqual(segs, [{"from": "00:00", "code": "VOC"}, {"from": "14:00", "code": "PenA"}])
+        # 舊資料寫 "00:00" ＝ 全日，30 小時制之下即係由 06:00 起。
+        self.assertEqual(segs, [{"from": "06:00", "code": "VOC"}, {"from": "14:00", "code": "PenA"}])
 
     def test_whole_day_single_code(self):
         slots = compute_slots(ALL_ROWS, [{"from": "00:00", "code": "VOC"}], date(2026, 7, 12), MAPPING, TEMPLATE, {})

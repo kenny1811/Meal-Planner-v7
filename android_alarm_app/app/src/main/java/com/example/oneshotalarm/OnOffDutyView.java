@@ -547,7 +547,9 @@ class OnOffDutyView {
             headRow.addView(ui.chip("✗ missed — open the form yourself",
                     0xFF791F1F, 0xFFFCEBEB));
         } else if ("hold".equals(status)) {
-            headRow.addView(ui.chip("⏸ holding — 真收工先撳 Send now",
+            headRow.addView(ui.chip("start".equals(action.optString("kind", ""))
+                            ? "⏸ holding — 真開工先撳 Send now"
+                            : "⏸ holding — 真收工先撳 Send now",
                     0xFF9A5B00, 0xFFFAEEDA));
         } else {
             headRow.addView(textView("not reported yet", 11,
@@ -570,11 +572,12 @@ class OnOffDutyView {
                 9, overridden ? 0xFF9A5B00 : 0xFF9AA1A9, false);
         hintView.setPadding(0, 0, 0, 0);
         card.addView(hintView);
+        addHistoryLines(card, action);
 
-        // 掣行：Open form（＋收工卡今日加 Hold / Send now）
+        // 掣行：Open form（＋今日兩張卡都加 Hold / Send now）
         String url = action.optString("url", "");
         boolean isToday = plan != null && "today".equals(plan.optString("relation", "today"));
-        boolean showLate = "end".equals(kind) && isToday && !"sent".equals(status);
+        boolean showLate = isToday && !"sent".equals(status);
         LinearLayout buttonRow = row();
         boolean hasButton = false;
         if (!url.isEmpty()) {
@@ -585,14 +588,14 @@ class OnOffDutyView {
         }
         if (showLate) {
             boolean holding = "hold".equals(status);
-            Button holdButton = ui.outlineButton(holding ? "Cancel hold" : "Hold",
+            Button holdButton = ui.outlineButton(holding ? "Resume" : "Hold",
                     0xFF334155, 0xFFD8DEE6);
-            holdButton.setOnClickListener(v -> postLateOff(holding ? "release" : "hold", ""));
+            holdButton.setOnClickListener(v -> postHoldSend(holding ? "release" : "hold", kind, ""));
             LinearLayout.LayoutParams holdParams = new LinearLayout.LayoutParams(0, dp(38), 1f);
             holdParams.setMargins(dp(6), 0, 0, 0);
             buttonRow.addView(holdButton, holdParams);
             Button sendButton = ui.outlineButton("Send now", 0xFFA32D2D, 0xFFF0B9B9);
-            sendButton.setOnClickListener(v -> showLateSendDialog());
+            sendButton.setOnClickListener(v -> showSendNowDialog(kind));
             LinearLayout.LayoutParams sendParams = new LinearLayout.LayoutParams(0, dp(38), 1f);
             sendParams.setMargins(dp(6), 0, 0, 0);
             buttonRow.addView(sendButton, sendParams);
@@ -606,25 +609,77 @@ class OnOffDutyView {
         return card;
     }
 
-    /** 真收工齊發：以而家時間 交 form + 出 WhatsApp；遲 ≥15 分鐘先寫加班表。 */
-    private void showLateSendDialog() {
+    /**
+     * 完整經過（append-only）：交過就永遠留低，改時間唔會抹走。
+     * 得一行（＝而家個狀態）就唔畫，因為上面個 chip 已經講咗。
+     */
+    private void addHistoryLines(LinearLayout card, JSONObject action) {
+        JSONArray history = action.optJSONArray("history");
+        if (history == null || history.length() < 2) {
+            return;
+        }
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setVisibility(android.view.View.GONE);
+        TextView header = textView("▸ 經過（" + history.length() + "）", 10, 0xFF6B7280, false);
+        header.setPadding(0, dp(4), 0, 0);
+        header.setOnClickListener(v -> {
+            boolean show = box.getVisibility() != android.view.View.VISIBLE;
+            box.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
+            header.setText((show ? "▾ 經過（" : "▸ 經過（") + history.length() + "）");
+        });
+        card.addView(header);
+        card.addView(box);
+        for (int i = 0; i < history.length(); i++) {
+            JSONObject h = history.optJSONObject(i);
+            if (h == null) {
+                continue;
+            }
+            // 一行 = 幾時 + 符號 + 當時嗰個時間。狀態字／source／detail 符號已經代表咗。
+            String line = formatLoggedAt(h.optString("recorded_at", ""))
+                    + " " + historyIcon(h.optString("status", ""))
+                    + " " + h.optString("time_text", "");
+            TextView row = textView(line.trim(), 10, 0xFF6B7280, false);
+            row.setPadding(0, i == 0 ? dp(2) : 0, 0, 0);
+            box.addView(row);
+        }
+    }
+
+    private static String historyIcon(String status) {
+        switch (status) {
+            case "sent": return "✓";
+            case "opened": return "↗";
+            case "failed":
+            case "missed": return "✗";
+            case "hold": return "⏸";
+            case "resumed": return "▶";
+            case "rearmed": return "↻";
+            default: return "·";
+        }
+    }
+
+    /** 真開工／真收工齊發：以而家時間 交 form + 出 WhatsApp（開工仲會 update 加班表）。 */
+    private void showSendNowDialog(String kind) {
+        boolean isStart = "start".equals(kind);
         LinearLayout box = new LinearLayout(activity);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(16), dp(8), dp(16), 0);
         EditText noteInput = new EditText(activity);
         noteInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        noteInput.setHint("加班表備註（留空＝現場真收工）");
+        noteInput.setHint(isStart ? "加班表備註（留空＝現場真開工）" : "加班表備註（留空＝現場真收工）");
         box.addView(noteInput);
         new AlertDialog.Builder(activity)
-                .setTitle("以而家時間齊發？")
-                .setMessage("· 交 Off Duty form（實際時間）\n· 出 WhatsApp 報收工/報平安更\n· 超出更時表窗口（早開工/遲收工）兼 總工時>10.25h 先寫加班表")
+                .setTitle(isStart ? "以而家時間報開工？" : "以而家時間報收工？")
+                .setMessage(isStart
+                        ? "· 交 On Duty form（而家時間）\n· 出 WhatsApp 報開工\n· 實際開工同預設唔同就寫入加班表（報平安更／餐單／日曆跟住郁）"
+                        : "· 交 Off Duty form（而家時間）\n· 出 WhatsApp 報收工\n· 超出更時表窗口（早開工/遲收工）兼 總工時>10.25h 先寫加班表")
                 .setView(box)
-                .setPositiveButton("齊發", (d, w) -> postLateOff("send_now", noteInput.getText().toString().trim()))
+                .setPositiveButton("齊發", (d, w) -> postHoldSend("send_now", kind, noteInput.getText().toString().trim()))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
-    private void postLateOff(String actionName, String note) {
+    private void postHoldSend(String actionName, String kind, String note) {
         if (loading) {
             return;
         }
@@ -632,6 +687,7 @@ class OnOffDutyView {
         JSONObject payload = new JSONObject();
         try {
             payload.put("action", actionName);
+            payload.put("kind", kind);
             if (!note.isEmpty()) {
                 payload.put("note", note);
             }
@@ -645,22 +701,22 @@ class OnOffDutyView {
                     plan = parsed;
                     loading = false;
                     render();
-                    JSONObject result = parsed.optJSONObject("lateoff_result");
+                    JSONObject result = parsed.optJSONObject("sendnow_result");
                     if (result != null) {
                         String message = "齊發完成 " + result.optString("actual", "")
                                 + "\nForm: sent\nWhatsApp: " + result.optString("whatsapp", "?")
-                                + "\n加班表: " + (result.optBoolean("overtime_written", false) ? "已寫入" : "未達加班條件，冇寫");
+                                + "\n加班表: " + (result.optBoolean("overtime_written", false) ? "已寫入" : "冇寫");
                         new AlertDialog.Builder(activity).setMessage(message).setPositiveButton("OK", null).show();
                     }
                 });
             } catch (Exception e) {
                 activity.runOnUiThread(() -> {
                     loading = false;
-                    lastError = "Late-off failed: " + e.getMessage();
+                    lastError = "Hold/send failed: " + e.getMessage();
                     render();
                 });
             }
-        }, "onoffduty-lateoff").start();
+        }, "onoffduty-holdsend").start();
     }
 
     private static String formatLoggedAt(String iso) {

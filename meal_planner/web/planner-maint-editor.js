@@ -43,9 +43,12 @@
         const dates = Array.isArray(issue && issue.dates) ? issue.dates : [];
         const shown = dates.slice(0, 4).join("、");
         const more = dates.length > 4 ? ` 等 ${dates.length} 日` : "";
-        const why = issue && issue.reason === "unknown_code"
+        const reason = issue && issue.reason;
+        const why = reason === "unknown_code"
           ? "行位表冇呢個更碼"
-          : "當日冇已生效嘅行位表版本";
+          : reason === "missing_report_rows"
+            ? "當日版本冇齊「報開工／報收工」兩行"
+            : "當日冇已生效嘅行位表版本";
         return `${code}：${why}（${shown}${more}）`;
       });
       return `有更碼攞唔到行位表 ——\n${parts.join("\n")}`;
@@ -474,46 +477,17 @@
           if (d) return dateDmy(d.year, d.month, d.day);
         } else if (colIndex === 1 || colIndex === 2) {
           if (isInputEvent) return value;
-          const colon = s.match(/^(\d{1,2}):(\d{2})$/);
-          if (colon) {
-            const h = Number(colon[1]);
-            const m = Number(colon[2]);
-            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-              return `${String(h).padStart(2, "0")}${String(m).padStart(2, "0")}`;
-            }
-          }
-          const compact = s.match(/^(\d{1,4})$/);
-          if (compact) {
-            const raw = compact[1].padStart(4, "0");
-            const h = Number(raw.slice(0, 2));
-            const m = Number(raw.slice(2, 4));
-            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-              return `${String(h).padStart(2, "0")}${String(m).padStart(2, "0")}`;
-            }
-          }
+          // 30 小時制：00:00–05:59 一律存做 24:00–29:59（加班表用 HHMM 冇冒號）。
+          const t = normalTime(s);
+          if (t) return t.replace(":", "");
         }
         return isInputEvent ? value : s;
       }
 
       if (sheetKey === "medical_appointments" && colIndex === 2) {
         if (isInputEvent) return value;
-        const colon = s.match(/^(\d{1,2}):(\d{2})$/);
-        if (colon) {
-          const h = Number(colon[1]);
-          const m = Number(colon[2]);
-          if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-            return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-          }
-        }
-        const compact = s.match(/^(\d{1,4})$/);
-        if (compact) {
-          const raw = compact[1].padStart(4, "0");
-          const h = Number(raw.slice(0, 2));
-          const m = Number(raw.slice(2, 4));
-          if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-            return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-          }
-        }
+        const t = normalTime(s);
+        if (t) return t;
       }
 
       return value;
@@ -588,6 +562,121 @@
       } catch (_) {}
     }
 
+    /** 撳停用／啟用：改「停用」欄，跟住成張表重算時長，再 render。 */
+    function bindMaintDisableToggles(root) {
+      root.querySelectorAll("[data-maint-disable-row]").forEach((btn) => {
+        btn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const rIdx = Number(btn.getAttribute("data-maint-disable-row"));
+          if (!Number.isInteger(rIdx) || rIdx <= 0) return;
+          const rows = collectMaintRows();
+          const header = Array.isArray(rows[0]) ? rows[0] : [];
+          let offIdx = header.findIndex((cell) => String(cell || "").trim() === "停用");
+          if (offIdx < 0) {
+            offIdx = header.length;
+            rows[0] = [...header, "停用"];
+          }
+          const row = Array.isArray(rows[rIdx]) ? [...rows[rIdx]] : [];
+          while (row.length <= offIdx) row.push("");
+          const nowDisabled = !String(row[offIdx] || "").trim();
+          row[offIdx] = nowDisabled ? "1" : "";
+          rows[rIdx] = row;
+          maintSheetPayload.rows = recomputeScheduleGridDurations(rows);
+          setUnsavedChanges("餐單參數");
+          // 唔叫 renderMaintEditor()——重砌 639 行又慢又會令捲軸彈返上頂。
+          // 撳停用實際只郁三樣嘢：嗰行 dim、粒掣個字、受影響嗰幾格時長／內容。
+          applyScheduleGridDisableInPlace(rIdx, nowDisabled, btn);
+        });
+      });
+    }
+
+    /** 撳完停用／啟用，直接改 DOM：唔重砌，所以捲軸唔會郁。 */
+    function applyScheduleGridDisableInPlace(rIdx, nowDisabled, btn) {
+      const rows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows : [];
+      const header = Array.isArray(rows[0]) ? rows[0].map((c) => String(c || "").trim()) : [];
+      const cContent = header.indexOf("內容");
+      const cDur = header.indexOf("時長");
+      const tr = document.querySelector(`#maint-editor tr[data-maint-row-index="${rIdx}"]`);
+      if (tr) tr.classList.toggle("maint-row-off", nowDisabled);
+      if (btn) btn.textContent = nowDisabled ? "Enable" : "Disable";
+      // 停用一格會令前後幾格時長重算，所以內容／時長兩欄全部同步返（只寫有變嘅格）。
+      [cContent, cDur].forEach((cIdx) => {
+        if (cIdx < 0) return;
+        document.querySelectorAll(`#maint-editor [data-maint-row][data-maint-col="${cIdx}"]`).forEach((input) => {
+          const r = Number(input.getAttribute("data-maint-row"));
+          if (!Number.isInteger(r) || r <= 0 || !Array.isArray(rows[r])) return;
+          const value = String(rows[r][cIdx] ?? "");
+          if (input.value === value) return;
+          input.value = value;
+          if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
+        });
+      });
+    }
+
+    /** 內容尾巴嗰個數字同時長欄一致：先剝走舊數字，再貼返新嘅（同電腦出 label 一樣做法）。 */
+    function contentWithDuration(content, duration) {
+      const base = String(content ?? "").replace(/\s+\d{1,3}$/, "").trim();
+      if (!base) return String(content ?? "").trim();
+      return duration ? `${base} ${duration}` : base;
+    }
+
+    /**
+     * 重算時長：一格嘅時長 ＝ 去下一個「佔時間」行嘅距離。
+     * `-` 開頭嘅 marker 行同停用行都唔佔時間，前一格跨過佢哋；最後一格留空。
+     * 逐個（更碼 + 生效日期）版本各自計。
+     */
+    function recomputeScheduleGridDurations(rows) {
+      if (maintSheetPayload.sheet_key !== "schedule_grid" || !Array.isArray(rows[0])) return rows;
+      const header = rows[0].map((cell) => String(cell || "").trim());
+      const cCode = header.indexOf("更碼");
+      const cTime = header.indexOf("時間");
+      const cContent = header.indexOf("內容");
+      const cDur = header.indexOf("時長");
+      const cEff = header.findIndex((h) => h === "生效日期" || h === "生效" || h === "Effective From");
+      const cOff = header.indexOf("停用");
+      if (cCode < 0 || cTime < 0 || cContent < 0 || cDur < 0) return rows;
+
+      const minutesOf = (text) => {
+        const m = String(text || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+      };
+      const groups = new Map();
+      rows.forEach((row, rIdx) => {
+        if (rIdx === 0 || !Array.isArray(row)) return;
+        const key = `${String(row[cCode] || "").trim()}@@${cEff >= 0 ? String(row[cEff] || "").trim() : ""}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(rIdx);
+      });
+      groups.forEach((indexes) => {
+        const live = indexes.filter((rIdx) => {
+          const row = rows[rIdx];
+          const off = cOff >= 0 && String(row[cOff] || "").trim();
+          const marker = String(row[cContent] || "").trim().startsWith("-");
+          return !off && !marker && minutesOf(row[cTime]) !== null;
+        }).sort((a, b) => minutesOf(rows[a][cTime]) - minutesOf(rows[b][cTime]));
+        indexes.forEach((rIdx) => {
+          if (!live.includes(rIdx)) {
+            const row = [...rows[rIdx]];
+            while (row.length <= cDur) row.push("");
+            row[cDur] = "";
+            row[cContent] = contentWithDuration(row[cContent], "");
+            rows[rIdx] = row;
+          }
+        });
+        live.forEach((rIdx, i) => {
+          const row = [...rows[rIdx]];
+          while (row.length <= cDur) row.push("");
+          row[cDur] = i + 1 < live.length
+            ? String(minutesOf(rows[live[i + 1]][cTime]) - minutesOf(rows[rIdx][cTime]))
+            : "";
+          row[cContent] = contentWithDuration(row[cContent], row[cDur]);
+          rows[rIdx] = row;
+        });
+      });
+      return rows;
+    }
+
     function renderMaintEditor() {
       const editor = document.getElementById("maint-editor");
       if (!editor) return;
@@ -613,6 +702,18 @@
           });
           maintSheetPayload.rows = rows;
         }
+        // 「停用」欄係後加嘅 logical field：舊資料冇就即刻補上（同上面生效日期一樣做法）。
+        const offColName = "停用";
+        if (!rows[0].some((cell) => String(cell || "").trim() === offColName)) {
+          const offIdx = rows[0].length;
+          rows = rows.map((row, idx) => {
+            const next = Array.isArray(row) ? [...row] : [];
+            while (next.length < offIdx) next.push("");
+            next[offIdx] = idx === 0 ? offColName : (next[offIdx] || "");
+            return next;
+          });
+          maintSheetPayload.rows = rows;
+        }
         if (!scheduleGridNewShiftBatchId && !scheduleGridSkipNextRenderSort) {
           rows = sortedScheduleGridRows(rows);
           maintSheetPayload.rows = rows;
@@ -623,10 +724,14 @@
       const cols = maintColumnCount(rows);
       const title = menuLabel(maintSheetPayload.sheet_key) || maintSheetPayload.display_name || "Sheet";
       const formKey = `maint_${maintSheetPayload.sheet_key || "sheet"}`;
-      const colGroup = Array.from(
-        { length: cols },
-        (_, i) => `<col data-form-col-key="${formKey}_col_${i}" data-form-col-default="160" />`
-      ).join("");
+      // 「停用」欄唔出，改為最前面一條窄欄放 toggle。
+      const offColIdx = maintSheetPayload.sheet_key === "schedule_grid" && Array.isArray(rows[0])
+        ? rows[0].findIndex((cell) => String(cell || "").trim() === "停用")
+        : -1;
+      const colGroup = (offColIdx >= 0 ? `<col data-form-col-key="${formKey}_col_off" data-form-col-default="56" />` : "")
+        + Array.from({ length: cols }, (_, i) => (
+          i === offColIdx ? "" : `<col data-form-col-key="${formKey}_col_${i}" data-form-col-default="160" />`
+        )).join("");
       const isShiftCodeCol = (cIdx) => {
         return rows.length > 0 && Array.isArray(rows[0]) && String(rows[0][cIdx]).trim() === "更碼";
       };
@@ -741,13 +846,18 @@
         const headerRowClass = rIdx === 0 && maintSheetPayload.sheet_key !== "roster"
           ? ' class="maint-blue-header maint-sticky-header"'
           : "";
-        return `<tr data-maint-row-index="${rIdx}"${headerRowClass}${batchAttr}>${maintRowHtml(row, rIdx, cols, formKey, isShiftCodeCol)}</tr>`;
+        const offClass = rIdx > 0 && isScheduleGridRowDisabled(row) ? " maint-row-off" : "";
+        const rowClass = headerRowClass
+          ? headerRowClass.replace('"', `"${offClass ? offClass.trim() + " " : ""}`)
+          : (offClass ? ` class="${offClass.trim()}"` : "");
+        return `<tr data-maint-row-index="${rIdx}"${rowClass}${batchAttr}>${maintRowHtml(row, rIdx, cols, formKey, isShiftCodeCol)}</tr>`;
       }).join("");
       editor.innerHTML = `<div class="maint-sheet-title" style="display:flex;align-items:center;"><span>${esc(title)}</span>${filterHtml}</div>
         <div class="maint-sheet-body"><table class="maint-table" data-form-table>
           <colgroup>${colGroup}</colgroup>
           <tbody>${body}</tbody>
         </table></div>`;
+      bindMaintDisableToggles(editor);
       bindMaintContextMenu(editor);
       applyFormColumnWidths(editor);
       attachFormColumnResizers(editor);

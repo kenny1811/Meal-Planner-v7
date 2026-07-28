@@ -3,6 +3,8 @@ package com.example.oneshotalarm;
 import android.content.Context;
 import android.util.Log;
 
+import org.json.JSONObject;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -11,7 +13,12 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 /**
- * 電話本機 HTTP server：淨係做手錶遠端截圖（/capture/watch，電話做中繼），唔使 adb。
+ * 電話本機 HTTP server：
+ *   /capture/watch      手錶遠端截圖（電話做中繼），唔使 adb
+ *   /push/schedule-grid 電腦叫電話即刻重新匯入行位表（打風版本一 Apply 就即刻生效，
+ *                       唔使等聽日 05:00 嗰棍，亦唔使人手撳 Import）
+ * 電話唔會攞電腦份 XML／JSON 落嚟——push 淨係「叫佢做嘢」，之後照原本嗰條路
+ * 由電話自己 pull /export-all，一份 parsing 邏輯，唔會兩邊 drift。
  * 電話自己嗰個 accessibility 截圖 service 已經拆——Mox Bank 會當佢係惡意程式，
  * 用戶要長期喺 設定→協助工具 熄咗佢，即係實質永遠用唔到。
  * 行位表以前經 /export.xml 俾電腦 pull，而家改由電話「to Computer」推，嗰條路亦拆咗。
@@ -65,6 +72,19 @@ final class PhoneCaptureHttpServer {
                 writeResponse(out, 200, "application/json; charset=utf-8", "{\"ok\":true}\n".getBytes("UTF-8"));
                 return;
             }
+            if ("/push/schedule-grid".equals(path)) {
+                // 同 05:00 每日匯入行完全一樣嗰條路（會排鬧鐘 + 通知手錶）。
+                ScheduleGridAutoImporter.ImportResult result = ScheduleGridAutoImporter.importFromPc(context);
+                JSONObject json = new JSONObject();
+                json.put("ok", result.ok);
+                json.put("alarm_count", result.alarmCount);
+                json.put("plan_date", result.planDate);
+                json.put("roster_code", result.rosterCode);
+                json.put("message", result.message);
+                writeResponse(out, result.ok ? 200 : 503, "application/json; charset=utf-8",
+                        json.toString().getBytes("UTF-8"));
+                return;
+            }
             if ("/capture/watch".equals(path)) {
                 // 手錶截圖：電話做中繼（message 去、ChannelClient 返）。
                 byte[] png = WatchCaptureBridge.requestCapture(context, 20000);
@@ -77,7 +97,7 @@ final class PhoneCaptureHttpServer {
                 return;
             }
             writeResponse(out, 404, "text/plain; charset=utf-8", "Not found\n".getBytes("UTF-8"));
-        } catch (IOException e) {
+        } catch (Exception e) {
             Log.e(TAG, "Handle phone capture HTTP request failed", e);
         }
     }

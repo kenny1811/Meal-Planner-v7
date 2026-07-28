@@ -6,18 +6,10 @@ import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Locale;
-
-import javax.xml.parsers.DocumentBuilderFactory;
 
 final class ScheduleGridAutoImporter {
     private static final String TAG = "ScheduleGridAutoImport";
@@ -42,7 +34,7 @@ final class ScheduleGridAutoImporter {
 
     private static ImportResult importAllVariants(Context context) throws Exception {
         String body = ApiClient.request(
-                context, "GET", "/api/maint/sheets/schedule_grid/export-all-xml", null, HTTP_READ_TIMEOUT_MS);
+                context, "GET", "/api/maint/sheets/schedule_grid/export-all", null, HTTP_READ_TIMEOUT_MS);
         JSONObject response = new JSONObject(body);
         if (!response.optBoolean("ok", false)) {
             return new ImportResult(false, 0, "", "", "all variants response not ok");
@@ -61,15 +53,11 @@ final class ScheduleGridAutoImporter {
             if (item == null) {
                 continue;
             }
-            String xml = item.optString("xml", "");
-            if (xml.trim().isEmpty()) {
-                continue;
-            }
-            ParsedScheduleGrid parsed = parse(xml);
+            String rosterCode = item.optString("roster_code", "");
+            ParsedScheduleGrid parsed = parse(item);
             if (parsed.alarms.length() == 0) {
                 continue;
             }
-            String rosterCode = item.optString("roster_code", parsed.rosterCode);
             JSONObject stored = new JSONObject();
             stored.put("plan_date", parsed.planDate);
             stored.put("roster_code", rosterCode);
@@ -108,135 +96,41 @@ final class ScheduleGridAutoImporter {
         );
     }
 
-    private static ParsedScheduleGrid parse(String xml) throws Exception {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        try {
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-        } catch (Exception ignored) {
+    /** 一個 variant（電腦讀 sqlite 出嘅 alarms）→ 電話嘅鬧鐘 plan。 */
+    private static ParsedScheduleGrid parse(JSONObject variant) throws Exception {
+        String rosterCode = variant.optString("roster_code", "");
+        String planDate = normalizeDate(variant.optString("target_date", ""));
+        if (planDate.isEmpty()) {
+            planDate = normalizeDate(variant.optString("effective_date", ""));
         }
-        Document document = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(xml.getBytes("UTF-8"))
-        );
-        Element root = document.getDocumentElement();
-        String planDate = "";
-        String rosterCode = "";
-        if (root != null) {
-            planDate = normalizeDate(root.getAttribute("effective_date"));
-        }
-
-        NodeList sections = document.getElementsByTagName("section");
-        if (sections.getLength() > 0) {
-            String header = text(sections.item(0));
-            String headerDate = dateFromHeader(header);
-            if (!headerDate.isEmpty()) {
-                planDate = headerDate;
-            }
-            rosterCode = rosterFromHeader(header);
-        }
-
         if (planDate.isEmpty()) {
             planDate = todayIso();
         }
 
         JSONArray alarms = new JSONArray();
-        NodeList timeNodes = document.getElementsByTagName("alarm_time");
-        NodeList labelNodes = document.getElementsByTagName("alarm_label");
-        int xmlRowCount = Math.min(timeNodes.getLength(), labelNodes.getLength());
-        for (int i = 0; i < xmlRowCount; i++) {
-            String time = text(timeNodes.item(i));
-            String content = text(labelNodes.item(i));
-            if (time.isEmpty() || content.isEmpty()) {
+        JSONArray items = variant.optJSONArray("alarms");
+        int count = items == null ? 0 : items.length();
+        for (int i = 0; i < count; i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item == null) {
+                continue;
+            }
+            String time = item.optString("time", "").trim();
+            String label = item.optString("label", "").trim();
+            if (time.isEmpty() || label.isEmpty()) {
                 continue;
             }
             long triggerAt = triggerAt(planDate, time);
             JSONObject alarm = new JSONObject();
-            alarm.put("id", "auto-xml-" + planDate + "-" + Uri.encode(time) + "-" + i);
-            alarm.put("label", content);
+            alarm.put("id", "auto-grid-" + planDate + "-" + Uri.encode(time) + "-" + i);
+            alarm.put("label", label);
             alarm.put("trigger_at_epoch_ms", triggerAt);
             alarm.put("trigger_at", formatIso(triggerAt));
-            alarms.put(alarm);
-        }
-        if (alarms.length() > 0) {
-            return new ParsedScheduleGrid(alarms, planDate, rosterCode);
-        }
-
-        NodeList alarmNodes = document.getElementsByTagName("alarm");
-        for (int i = 0; i < alarmNodes.getLength(); i++) {
-            if (!(alarmNodes.item(i) instanceof Element)) {
-                continue;
-            }
-            Element alarmElement = (Element) alarmNodes.item(i);
-            String time = firstChildText(alarmElement, "time");
-            String content = firstChildText(alarmElement, "content");
-            if (time.isEmpty() || content.isEmpty()) {
-                continue;
-            }
-            long triggerAt = triggerAt(planDate, time);
-            JSONObject alarm = new JSONObject();
-            alarm.put("id", "auto-xml-" + planDate + "-" + Uri.encode(time) + "-" + i);
-            alarm.put("label", content);
-            alarm.put("trigger_at_epoch_ms", triggerAt);
-            alarm.put("trigger_at", formatIso(triggerAt));
+            // 停用嘅行位照樣落電話（要見到先撳得返啟用），但唔會排鬧鐘。
+            alarm.put("disabled", item.optBoolean("disabled", false));
             alarms.put(alarm);
         }
         return new ParsedScheduleGrid(alarms, planDate, rosterCode);
-    }
-
-    private static String firstChildText(Element element, String tagName) {
-        NodeList nodes = element.getElementsByTagName(tagName);
-        if (nodes.getLength() == 0) {
-            return "";
-        }
-        return text(nodes.item(0));
-    }
-
-    private static String text(org.w3c.dom.Node node) {
-        if (node == null || node.getTextContent() == null) {
-            return "";
-        }
-        return node.getTextContent().trim();
-    }
-
-    private static String dateFromHeader(String header) {
-        if (header == null) {
-            return "";
-        }
-        String[] parts = header.trim().split("\\s+");
-        for (String part : parts) {
-            String date = normalizeDate(part);
-            if (!date.isEmpty()) {
-                return date;
-            }
-        }
-        return "";
-    }
-
-    private static String rosterFromHeader(String header) {
-        if (header == null) {
-            return "";
-        }
-        String[] parts = header.trim().split("\\s+");
-        for (int i = parts.length - 1; i >= 0; i--) {
-            String value = parts[i].trim();
-            if (value.isEmpty()) {
-                continue;
-            }
-            if (normalizeDate(value).isEmpty() && !isWeekday(value)) {
-                return value;
-            }
-        }
-        return "";
-    }
-
-    private static boolean isWeekday(String value) {
-        String lower = value == null ? "" : value.trim().toLowerCase(Locale.US);
-        return "mon".equals(lower)
-                || "tue".equals(lower)
-                || "wed".equals(lower)
-                || "thu".equals(lower)
-                || "fri".equals(lower)
-                || "sat".equals(lower)
-                || "sun".equals(lower);
     }
 
     private static String normalizeDate(String raw) {
@@ -250,7 +144,7 @@ final class ScheduleGridAutoImporter {
                 SimpleDateFormat input = new SimpleDateFormat(pattern, Locale.US);
                 input.setLenient(false);
                 return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(input.parse(value));
-            } catch (ParseException ignored) {
+            } catch (java.text.ParseException ignored) {
             }
         }
         return "";
@@ -259,11 +153,17 @@ final class ScheduleGridAutoImporter {
     private static long triggerAt(String planDate, String time) {
         String[] dateParts = planDate.split("-");
         String[] timeParts = time.trim().split(":");
+        // 30 小時制：24:00–29:59 即係翌日凌晨（27:56 = 第二日 03:56）。
+        int hour = Integer.parseInt(timeParts[0]);
+        int dayOffset = hour >= 24 ? 1 : 0;
+        if (hour >= 24) {
+            hour -= 24;
+        }
         Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.YEAR, Integer.parseInt(dateParts[0]));
         calendar.set(Calendar.MONTH, Integer.parseInt(dateParts[1]) - 1);
-        calendar.set(Calendar.DAY_OF_MONTH, Integer.parseInt(dateParts[2]));
-        calendar.set(Calendar.HOUR_OF_DAY, Integer.parseInt(timeParts[0]));
+        calendar.set(Calendar.DAY_OF_MONTH, Integer.parseInt(dateParts[2]) + dayOffset);
+        calendar.set(Calendar.HOUR_OF_DAY, hour);
         calendar.set(Calendar.MINUTE, Integer.parseInt(timeParts[1]));
         calendar.set(Calendar.SECOND, 0);
         calendar.set(Calendar.MILLISECOND, 0);

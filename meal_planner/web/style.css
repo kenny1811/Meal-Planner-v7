@@ -380,7 +380,8 @@
       overflow: hidden;
     }
     #planner-panel,
-    #shopping-panel {
+    #shopping-panel,
+    #typhoon-panel {
       height: 100%;
       min-height: 0;
       overflow: auto;
@@ -1159,9 +1160,14 @@
       position: absolute;
       margin-bottom: 0;
     }
-    .target-section-block.is-target-block-selected {
+    .target-section-block.is-target-block-selected,
+    .detail-section-block.is-detail-block-selected {
       outline: 2px solid var(--accent);
       outline-offset: 2px;
+    }
+    .detail-section-block.is-detail-block-selected > h3 {
+      background: #dbeafe;
+      color: var(--text);
     }
     .target-section-block.is-target-block-selected > h3 {
       background: #dbeafe;
@@ -1500,6 +1506,29 @@
     #detail-code-definitions {
       overflow: visible;
     }
+    /* Post mapping 有成三十幾行，直接攤開會壓死下面 —— 自己捲，表頭釘住，高度可以拖。 */
+    #detail-post-mapping {
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    #detail-post-mapping table.detail-code-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    /* 捲動區會切走凸出嘅 grip，所以呢張表啲 resizer 收返入格入面。 */
+    #detail-post-mapping .form-col-resizer {
+      right: 0;
+    }
+    /* 幼身 grip：平時淨係一條淺線，撳得到但唔搶眼；hover 先至變藍。 */
+    .detail-table-resizer {
+      height: 4px;
+      cursor: row-resize;
+      background: linear-gradient(var(--grid), var(--grid)) center / 100% 1px no-repeat;
+    }
+    .detail-table-resizer:hover {
+      background: linear-gradient(rgba(11, 87, 208, 0.55), rgba(11, 87, 208, 0.55)) center / 100% 2px no-repeat;
+    }
     table.detail-code-table {
       border-collapse: collapse;
       table-layout: fixed;
@@ -1682,9 +1711,9 @@
     .catalog-col-resizer {
       position: absolute;
       top: 0;
-      right: -3px;
+      right: -1px;
       z-index: 2;
-      width: 7px;
+      width: 3px;
       height: 100%;
       cursor: col-resize;
       user-select: none;
@@ -1735,9 +1764,9 @@
     .target-col-resizer {
       position: absolute;
       top: 0;
-      right: -3px;
+      right: -1px;
       z-index: 1;
-      width: 7px;
+      width: 3px;
       height: 100%;
       cursor: col-resize;
       user-select: none;
@@ -1857,7 +1886,7 @@
       position: absolute;
       right: 0;
       top: 0;
-      width: 6px;
+      width: 3px;
       height: 100%;
       cursor: col-resize;
       user-select: none;
@@ -1866,7 +1895,7 @@
       position: absolute;
       right: 0;
       top: 0;
-      width: 6px;
+      width: 3px;
       height: 100%;
       cursor: col-resize;
       user-select: none;
@@ -1878,9 +1907,9 @@
     }
     .form-col-resizer {
       position: absolute;
-      right: -3px;
+      right: -1px;
       top: 0;
-      width: 6px;
+      width: 3px;
       height: 100%;
       cursor: col-resize;
       user-select: none;
@@ -2061,6 +2090,10 @@
     .duty-btn:hover { background: #e5edff; }
     .duty-btn-primary { background: #4169d8; border-color: #4169d8; color: #fff; }
     .duty-btn-primary:hover { background: #3557b8; }
+    /* 撳唔到就要睇得出撳唔到——唔好淨係 attribute 有 disabled 但個掣照樣鮮藍。 */
+    .duty-btn:disabled { background: #f1f3f6; border-color: var(--grid); color: #9aa1a9; cursor: not-allowed; }
+    .duty-btn-primary:disabled,
+    .duty-btn-primary:disabled:hover { background: #f1f3f6; border-color: var(--grid); color: #9aa1a9; }
     .duty-btn-on { background: #dbeafe; border-color: #93b4e8; color: #0b3ea8; font-weight: 700; }
     .duty-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
     .duty-stat-card {
@@ -2108,7 +2141,134 @@
     .onoff-card .duty-stat-value { font-size: 22px; }
     .onoff-card .duty-card-actions { margin-top: 10px; }
     .onoff-open { text-decoration: none; }
+    .onoff-history { margin-top: 6px; font-size: 11px; color: #6b7280; }
+    .onoff-history > summary { cursor: pointer; user-select: none; }
+    .onoff-history ul { margin: 4px 0 0; padding-left: 14px; line-height: 1.5; }
     .onoff-note { padding: 8px; }
+    /* ---- Typhoon panel（打風落波模擬） ---- */
+    /* Block 拖放／位置記憶／闊度跟表：全部行返 .duty-block 嗰套（planner-duty.js），
+       唔另起爐灶。有表嘅 block 闊度 = 各欄總和，見 dutyBlockWidthPx。 */
+    #typhoon-out { max-width: none; }
+    /* 底部唔留白：block、body、最後一行嘅 padding/margin 全部收乾，
+       高度就真係等於內容（.duty-block-card 本身有 5px bottom padding，一併清走）。 */
+    .typhoon-block-body { padding: 6px 6px 0; }
+    #typhoon-layout .duty-block-card { padding-bottom: 0; }
+    #typhoon-layout .duty-card-actions { margin: 6px 0 0; }
+    #typhoon-layout .duty-stats { margin-bottom: 0; }
+    /* Resize grip 平時透明，搵唔到——hover 變藍先知撳邊度（同欄闊 grip 一致）。 */
+    #typhoon-layout .duty-rs:hover { background: rgba(11, 87, 208, 0.18); }
+    /* 縮矮咗嘅 block 有捲軸：最後一欄嗰粒欄闊 grip 本身凸出 3px，捲動區會切走佢
+       ——收返入格內兼企喺捲軸前面，捲到最右都仲拖得到。 */
+    .duty-block-scroll .form-col-resizer { right: 0; z-index: 7; }
+    /* Ctrl+A 揀晒之後，拖任何一個 title 就成組一齊郁 */
+    .duty-block.typhoon-block-selected { outline: 2px solid rgba(11, 87, 208, 0.55); outline-offset: -1px; }
+    .typhoon-toolbar { margin: 0 0 6px; }
+    .typhoon-field { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
+    .typhoon-field select { height: 22px; min-width: 88px; border: 1px solid var(--grid); border-radius: 3px; font: inherit; }
+    input.typhoon-name {
+      width: 76px;
+      height: 22px;
+      border: 1px solid var(--grid);
+      border-radius: 3px;
+      padding: 1px 5px;
+      font: inherit;
+      background: #fff;
+    }
+    input.typhoon-date-input {
+      height: 22px;
+      border: 1px solid var(--grid);
+      border-radius: 3px;
+      padding: 1px 4px;
+      font: inherit;
+      font-variant-numeric: tabular-nums;
+      background: #fff;
+    }
+    input.typhoon-time {
+      width: 46px;  /* 啱啱好放到 HH:MM 五個字 */
+      height: 22px;
+      border: 1px solid var(--grid);
+      border-radius: 3px;
+      padding: 1px 4px;
+      font: inherit;
+      text-align: center;
+      background: #fff;
+    }
+    /* 頂個 block 要矮 —— 唔好逼到出捲軸。卡細啲、行距收窄、提示併入 Apply 嗰行。 */
+    .typhoon-stats { padding: 0; margin-bottom: 4px; }
+    .typhoon-stats .duty-stat-card { padding: 2px 7px; min-width: 96px; }
+    .typhoon-stats .duty-stat-value { font-size: 13px; line-height: 1.2; }
+    .typhoon-stats .duty-stat-label,
+    .typhoon-stats .duty-stat-sub { line-height: 1.2; }
+    .typhoon-apply { padding: 0; margin-top: 0; }
+    /* Apply 擺喺啲卡右邊、同一行；提示收咗做 tooltip。 */
+    .typhoon-apply-slot { display: flex; align-items: center; margin-left: 12px; }
+    .typhoon-apply-btn { height: 26px; padding: 2px 18px; }
+    .typhoon-block-body .onoff-meta { padding: 0 0 4px; }
+    .typhoon-note { padding: 2px 0 4px; }
+    .typhoon-was { color: #9aa1a9; text-decoration: line-through; }
+    .typhoon-now { color: #b45309; font-weight: 700; }
+    .typhoon-same { color: var(--text); }
+    .typhoon-state { color: #b45309; }
+    tr.typhoon-row-new td { background: #fff7ed; font-weight: 700; }
+    .duty-stat-card.typhoon-dayoff { background: #fff7ed; border-color: #f0c9a0; }
+    .typhoon-field-off { opacity: 0.45; }
+    .typhoon-dayoff-live { color: #b45309; font-weight: 700; }
+    .typhoon-maybe-off { color: #b45309; }
+    /* 兩粒掣同 Target 幾行平排擺喺張表右邊；block 闊度 = 表 + 呢忽。 */
+    .typhoon-meal-wrap { display: flex; align-items: flex-start; gap: 6px; padding-right: 8px; }
+    /* 張餐單表唔可以俾 flex 壓縮——一縮，入面 .panel-bottom 就會自己出橫向捲軸。
+       block 闊度本身已經計足（欄闊總和 + 掣嗰忽），所以呢度直接唔好捲。 */
+    /* .day-wrap 喺餐單頁有 margin-bottom: 6px（張張表之間留位）——
+       喺呢度得一張，嗰 6px 就變咗張表同 block 邊框之間嘅白位。 */
+    .typhoon-meal-wrap > .day-wrap { flex: 0 0 auto; margin-bottom: 0; }
+    .typhoon-meal-wrap .panel-top,
+    .typhoon-meal-wrap .panel-bottom { overflow: visible; }
+    .typhoon-meal-actions {
+      width: 76px;
+      flex: 0 0 76px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-top: 8px;  /* 唔好貼實張表頂 */
+    }
+    .typhoon-meal-actions .duty-btn { width: 100%; padding: 2px 4px; }
+    .typhoon-meal-hint { line-height: 1.25; }
+    tr.typhoon-row-off td { color: #9aa1a9; }
+    tr.typhoon-row-off td:first-child,
+    tr.typhoon-row-off td:nth-child(2) { text-decoration: line-through; }
+    /* 闊度由 applyFormColumnWidths 設（＝各欄總和），所以唔好喺度寫 width。 */
+    table.typhoon-table {
+      margin: 0;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-variant-numeric: tabular-nums;
+    }
+    table.typhoon-table th,
+    table.typhoon-table td {
+      border: 1px solid var(--grid);
+      padding: 2px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    /* 內容長就換行，唔好切走（行位表啲項目成日長過欄闊）。 */
+    table.typhoon-table td {
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    /* 鐘點同表頭永遠一行，唔好斷開。 */
+    table.typhoon-table th,
+    table.typhoon-table td.duty-td-time { white-space: nowrap; }
+    table.typhoon-table thead th { background: #f3f5f9; font-weight: 700; }
+    /* 有表嘅 block：body 唔要 padding，張表貼實左邊；文字提示自己補返少少。 */
+    /* 每個 block 入面統一：張表貼實邊（margin 0），文字就對齊表格第一個字
+       （＝ cell padding 6px），上下望落去一條直線。 */
+    .typhoon-block-table .typhoon-block-body { padding: 0; }
+    /* .duty-block-card 有 5px bottom padding —— 有表嘅 block 唔要，否則張表同底邊離罅。 */
+    .typhoon-block-table.duty-block-card { padding-bottom: 0; }
+    .typhoon-block-table .typhoon-note,
+    .typhoon-block-table .onoff-meta,
+    .typhoon-block-table .duty-status-muted { padding: 4px 6px; margin: 0; }
     table.duty-table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
     .duty-td-time { font-weight: 700; }
     .duty-td-actions { text-align: left; white-space: nowrap; }
@@ -2194,10 +2354,10 @@
     th[data-form-col-key] { position: relative; }
     .duty-block-card .duty-stats { padding: 5px 8px; margin-bottom: 0; }
     .duty-rs { position: absolute; z-index: 6; }
-    .duty-rs-e { top: 0; right: 0; bottom: 0; width: 6px; cursor: ew-resize; }
-    .duty-rs-w { top: 0; left: 0; bottom: 0; width: 6px; cursor: ew-resize; }
-    .duty-rs-s { left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; }
-    .duty-rs-n { left: 0; right: 0; top: 0; height: 6px; cursor: ns-resize; }
+    .duty-rs-e { top: 0; right: 0; bottom: 0; width: 3px; cursor: ew-resize; }
+    .duty-rs-w { top: 0; left: 0; bottom: 0; width: 3px; cursor: ew-resize; }
+    .duty-rs-s { left: 0; right: 0; bottom: 0; height: 3px; cursor: ns-resize; }
+    .duty-rs-n { left: 0; right: 0; top: 0; height: 3px; cursor: ns-resize; }
     .duty-block-scroll { overflow: auto; }
     input.duty-time-input {
       width: calc(100% - 12px);
@@ -2324,4 +2484,30 @@
     body.planner-offset-dragging *:not(#specificity-boost) {
       cursor: ew-resize;
       user-select: none;
+    }
+
+    /* 行位表停用：成行 dim（唔要刪除線），最前面窄欄一粒 toggle。 */
+    tr.maint-row-off > td {
+      opacity: 0.45;
+    }
+    tr.maint-row-off > td.maint-off-cell {
+      opacity: 1;
+    }
+    td.maint-off-cell {
+      text-align: center;
+      padding: 0;
+    }
+    .maint-off-toggle {
+      font-size: 10px;
+      line-height: 1;
+      padding: 2px 4px;
+      cursor: pointer;
+      border: 1px solid var(--grid);
+      border-radius: 3px;
+      background: #fff;
+      color: var(--muted);
+    }
+    .maint-off-toggle:hover {
+      border-color: var(--accent);
+      color: var(--accent);
     }

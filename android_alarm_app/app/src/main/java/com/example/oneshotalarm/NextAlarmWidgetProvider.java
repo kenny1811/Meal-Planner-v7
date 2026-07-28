@@ -89,7 +89,7 @@ public class NextAlarmWidgetProvider extends AppWidgetProvider {
             return null;
         }
         String date = new SimpleDateFormat("dd/MM/yyyy EEE", Locale.getDefault()).format(bestAt);
-        String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(bestAt);
+        String time = Clock30.format(bestAt);
         String label = best.optString("label", "鬧鐘").trim();
         if (label.isEmpty()) {
             label = "鬧鐘";

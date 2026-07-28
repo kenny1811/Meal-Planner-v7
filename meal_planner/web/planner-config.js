@@ -945,11 +945,11 @@
         });
       });
       return (mv) => {
-        const dx = mv.clientX - startX;
-        const dy = mv.clientY - startY;
+        const dx = snapBlockPx(mv.clientX - startX);
+        const dy = snapBlockPx(mv.clientY - startY);
         startOffsets.forEach((start, key) => {
-          formColumnWidths[`target_block_${key}_x`] = start.x + dx;
-          formColumnWidths[`target_block_${key}_y`] = start.y + dy;
+          formColumnWidths[`target_block_${key}_x`] = snapBlockPx(start.x) + dx;
+          formColumnWidths[`target_block_${key}_y`] = snapBlockPx(start.y) + dy;
         });
         applyTargetBlockLayout();
       };
@@ -1558,12 +1558,14 @@
           startWindowDrag({
             bodyClass: "is-dnd-dragging",
             onMove: (mv) => {
-              const dx = mv.clientX - startX;
-              const dy = mv.clientY - startY;
-              dragMoved = dragMoved || Math.abs(dx) > 2 || Math.abs(dy) > 2;
+              const rawDx = mv.clientX - startX;
+              const rawDy = mv.clientY - startY;
+              dragMoved = dragMoved || Math.abs(rawDx) > 2 || Math.abs(rawDy) > 2;
+              const dx = snapBlockPx(rawDx);
+              const dy = snapBlockPx(rawDy);
               startOffsets.forEach((start, key) => {
-                formColumnWidths[`target_block_${key}_x`] = start.x + dx;
-                formColumnWidths[`target_block_${key}_y`] = start.y + dy;
+                formColumnWidths[`target_block_${key}_x`] = snapBlockPx(start.x) + dx;
+                formColumnWidths[`target_block_${key}_y`] = snapBlockPx(start.y) + dy;
               });
               applyTargetBlockLayout();
             },
@@ -1803,32 +1805,133 @@
         if (width > 0) block.style.width = `${width}px`;
         block.style.left = `${x}px`;
         block.style.top = `${y}px`;
+        block.classList.toggle("is-detail-block-selected", detailSelectedBlocks.has(blockKey));
         editorWidth = Math.max(editorWidth, width + Math.max(0, x));
       });
       if (editorWidth > 0) container.style.width = `${editorWidth}px`;
     }
 
+    // 拖 block 一律 snap 到 10px 格：唔係嘅話兩個 block 差一兩 px，肉眼對唔到齊。
+    const BLOCK_SNAP_PX = 10;
+
+    function snapBlockPx(value) {
+      return Math.round(value / BLOCK_SNAP_PX) * BLOCK_SNAP_PX;
+    }
+
+    // ---- 系統參數 blocks 多選（同營養指標嗰套一樣）：Ctrl-A 全選、Ctrl-click 逐個揀，
+    // 揀咗就一齊拖；Esc 或者喺空白位撳一下取消。 ----
+    const detailSelectedBlocks = new Set();
+
+    function updateDetailBlockSelection() {
+      document.querySelectorAll(".detail-section-block[data-detail-block]").forEach((block) => {
+        block.classList.toggle(
+          "is-detail-block-selected",
+          detailSelectedBlocks.has(block.getAttribute("data-detail-block")),
+        );
+      });
+    }
+
+    function detailBlocksVisible() {
+      const root = document.querySelector(".detail-editor");
+      return !!(root && root.getClientRects().length);
+    }
+
+    function selectAllDetailBlocks() {
+      detailSelectedBlocks.clear();
+      document.querySelectorAll(".detail-section-block[data-detail-block]").forEach((block) => {
+        const key = block.getAttribute("data-detail-block");
+        if (key) detailSelectedBlocks.add(key);
+      });
+      updateDetailBlockSelection();
+    }
+
+    function toggleDetailBlockSelection(blockKey) {
+      if (!blockKey) return;
+      if (detailSelectedBlocks.has(blockKey)) detailSelectedBlocks.delete(blockKey);
+      else detailSelectedBlocks.add(blockKey);
+      updateDetailBlockSelection();
+    }
+
+    function clearDetailBlockSelection() {
+      if (!detailSelectedBlocks.size) return;
+      detailSelectedBlocks.clear();
+      updateDetailBlockSelection();
+    }
+
+    function bindDetailBlockSelectionKeys() {
+      if (document.body.dataset.detailBlockSelectionKeysBound === "1") return;
+      document.body.dataset.detailBlockSelectionKeysBound = "1";
+      document.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") clearDetailBlockSelection();
+      });
+      document.addEventListener("keydown", (ev) => {
+        if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || String(ev.key).toLowerCase() !== "a") return;
+        if (!detailBlocksVisible()) return;
+        const active = document.activeElement;
+        if (active && active.matches && active.matches("input,textarea,select")) return;
+        ev.preventDefault();
+        selectAllDetailBlocks();
+      });
+      document.addEventListener("click", (ev) => {
+        if (!detailSelectedBlocks.size || ev.ctrlKey) return;
+        if (ev.button != null && ev.button !== 0) return;
+        clearDetailBlockSelection();
+      });
+    }
+
     function attachDetailBlockDragHandles(root = document) {
+      bindDetailBlockSelectionKeys();
+      document.querySelectorAll(".detail-section-block[data-detail-block]").forEach((block) => {
+        if (block.dataset.detailBlockSelectBound === "1") return;
+        block.dataset.detailBlockSelectBound = "1";
+        block.addEventListener("mousedown", (ev) => {
+          if (!ev.ctrlKey || (ev.button != null && ev.button !== 0)) return;
+          const interactive = ev.target && ev.target.closest
+            ? ev.target.closest("input,textarea,select,button,a,.form-col-resizer")
+            : null;
+          if (interactive) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          toggleDetailBlockSelection(block.getAttribute("data-detail-block"));
+        });
+      });
       document.querySelectorAll(".detail-section-block[data-detail-block] > h3").forEach((handle) => {
         if (root !== document && !root.contains(handle) && handle !== root) return;
         if (handle.dataset.detailBlockDragBound === "1") return;
         handle.dataset.detailBlockDragBound = "1";
-        handle.title = handle.title || "Drag to move block";
+        handle.title = handle.title || "Drag to move block · Ctrl-A selects every block";
         handle.addEventListener("mousedown", (ev) => {
           if (ev.button != null && ev.button !== 0) return;
           ev.preventDefault();
           const block = handle.closest(".detail-section-block[data-detail-block]");
           const blockKey = block && block.getAttribute("data-detail-block");
           if (!blockKey) return;
+          if (ev.ctrlKey) {
+            ev.stopPropagation();
+            toggleDetailBlockSelection(blockKey);
+            return;
+          }
+          // 揀咗幾個就一齊拖；拖一個未揀嘅就當放棄之前嘅選擇。
+          const dragKeys = detailSelectedBlocks.has(blockKey) && detailSelectedBlocks.size > 1
+            ? Array.from(detailSelectedBlocks)
+            : [blockKey];
+          if (!detailSelectedBlocks.has(blockKey)) clearDetailBlockSelection();
           const startX = ev.clientX;
           const startY = ev.clientY;
-          const startOffsetX = detailBlockOffsetPx(blockKey, "x");
-          const startOffsetY = detailBlockOffsetPx(blockKey, "y");
+          const startOffsets = new Map();
+          dragKeys.forEach((key) => {
+            startOffsets.set(key, { x: detailBlockOffsetPx(key, "x"), y: detailBlockOffsetPx(key, "y") });
+          });
           startWindowDrag({
             bodyClass: "is-dnd-dragging",
             onMove: (mv) => {
-              formColumnWidths[`detail_block_${blockKey}_x`] = startOffsetX + (mv.clientX - startX);
-              formColumnWidths[`detail_block_${blockKey}_y`] = startOffsetY + (mv.clientY - startY);
+              const dx = snapBlockPx(mv.clientX - startX);
+              const dy = snapBlockPx(mv.clientY - startY);
+              dragKeys.forEach((key) => {
+                const start = startOffsets.get(key) || { x: 0, y: 0 };
+                formColumnWidths[`detail_block_${key}_x`] = snapBlockPx(start.x) + dx;
+                formColumnWidths[`detail_block_${key}_y`] = snapBlockPx(start.y) + dy;
+              });
               applyDetailBlockLayout();
             },
             onUp: () => {
@@ -1840,8 +1943,13 @@
           const block = handle.closest(".detail-section-block[data-detail-block]");
           const blockKey = block && block.getAttribute("data-detail-block");
           if (!blockKey) return;
-          formColumnWidths[`detail_block_${blockKey}_x`] = 0;
-          formColumnWidths[`detail_block_${blockKey}_y`] = 0;
+          const keys = detailSelectedBlocks.has(blockKey) && detailSelectedBlocks.size > 1
+            ? Array.from(detailSelectedBlocks)
+            : [blockKey];
+          keys.forEach((key) => {
+            formColumnWidths[`detail_block_${key}_x`] = 0;
+            formColumnWidths[`detail_block_${key}_y`] = 0;
+          });
           applyDetailBlockLayout();
           persistColumnWidths();
         });
@@ -1853,7 +1961,11 @@
       const rice = data && typeof data.rice === "object" && data.rice ? data.rice : {};
       const gcSync = data && typeof data.google_calendar_sync === "object" && data.google_calendar_sync ? data.google_calendar_sync : googleCalendarSync;
       const defs = Array.isArray(data && data.roster_code_definitions) ? data.roster_code_definitions : [];
-      detailSettingsPayload = { folders, rice, google_calendar_sync: gcSync, roster_code_definitions: defs };
+      const posts = Array.isArray(data && data.roster_post_mapping) ? data.roster_post_mapping : [];
+      detailSettingsPayload = {
+        folders, rice, google_calendar_sync: gcSync,
+        roster_code_definitions: defs, roster_post_mapping: posts,
+      };
       googleCalendarSync = {
         ...(googleCalendarSync || {}),
         enabled: !!(gcSync && gcSync.enabled),
@@ -1884,6 +1996,7 @@
       if (gcWakeOffset) gcWakeOffset.value = googleCalendarSync.wake_offset_hours ?? 3;
       renderRiceConversions(rice);
       renderRosterCodeDefinitions(defs);
+      renderRosterPostMapping(posts);
       const detailEditor = document.querySelector(".detail-editor");
       if (detailEditor) {
         applyFormColumnWidths(detailEditor);
@@ -1970,6 +2083,131 @@
       setUnsavedChanges("系統參數");
       detailSettingsPayload.rice = { ...(detailSettingsPayload.rice || {}), conversions: rows };
       renderRiceConversions(detailSettingsPayload.rice);
+    }
+
+    // ---- 更碼 → form Post（交報開工/收工 form 要填嗰個崗位） ----
+
+    const DETAIL_POST_TABLE_HEIGHT_KEY = "detail_post_table_height";
+    const DETAIL_POST_TABLE_HEIGHT_DEFAULT = 320;
+
+    function detailPostTableHeightPx() {
+      const saved = Number(formColumnWidths[DETAIL_POST_TABLE_HEIGHT_KEY]);
+      return Number.isFinite(saved) && saved > 0 ? saved : DETAIL_POST_TABLE_HEIGHT_DEFAULT;
+    }
+
+    function applyDetailPostTableHeight() {
+      const box = document.getElementById("detail-post-mapping");
+      if (box) box.style.maxHeight = `${detailPostTableHeightPx()}px`;
+    }
+
+    function attachDetailPostTableResizer() {
+      const grip = document.getElementById("detail-post-resizer");
+      if (!grip || grip.dataset.detailPostResizeBound === "1") return;
+      grip.dataset.detailPostResizeBound = "1";
+      grip.addEventListener("mousedown", (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const startY = ev.clientY;
+        const startH = detailPostTableHeightPx();
+        startWindowDrag({
+          bodyClass: "is-dnd-dragging",
+          onMove: (mv) => {
+            formColumnWidths[DETAIL_POST_TABLE_HEIGHT_KEY] =
+              Math.max(60, snapBlockPx(startH + (mv.clientY - startY)));
+            applyDetailPostTableHeight();
+            applyDetailBlockLayout();
+          },
+          onUp: () => {
+            persistColumnWidths();
+          },
+        });
+      });
+      grip.addEventListener("dblclick", () => {
+        formColumnWidths[DETAIL_POST_TABLE_HEIGHT_KEY] = DETAIL_POST_TABLE_HEIGHT_DEFAULT;
+        applyDetailPostTableHeight();
+        applyDetailBlockLayout();
+        persistColumnWidths();
+      });
+    }
+
+    function renderRosterPostMapping(rows) {
+      const box = document.getElementById("detail-post-mapping");
+      if (!box) return;
+      const list = Array.isArray(rows) ? rows : [];
+      const body = list.map((row, idx) => `
+        <tr data-detail-post-row="${idx}">
+          <th scope="row">${idx + 1}</th>
+          <td><textarea rows="1" data-detail-post-field="code" data-detail-post-index="${idx}" spellcheck="false">${esc(row && row.code != null ? row.code : "")}</textarea></td>
+          <td><textarea rows="1" data-detail-post-field="post" data-detail-post-index="${idx}" spellcheck="false">${esc(row && row.post != null ? row.post : "")}</textarea></td>
+        </tr>
+      `).join("");
+      box.innerHTML = `<table class="detail-code-table" data-form-table>
+        <colgroup>
+          <col data-form-col-key="detail_post_row" data-form-col-default="54" />
+          <col data-form-col-key="detail_post_code" data-form-col-default="120" />
+          <col data-form-col-key="detail_post_value" data-form-col-default="306" />
+        </colgroup>
+        <thead><tr><th data-form-col-key="detail_post_row"></th><th data-form-col-key="detail_post_code">Roster code</th><th data-form-col-key="detail_post_value">Post</th></tr></thead>
+        <tbody>${body || '<tr><td colspan="3" class="maint-empty">No post mapping</td></tr>'}</tbody>
+      </table>`;
+      applyFormColumnWidths(box);
+      attachFormColumnResizers(box);
+      applyDetailBlockLayout(document.querySelector(".detail-editor") || box);
+      attachDetailBlockDragHandles(document.querySelector(".detail-editor") || box);
+      applyTableOffsets(box);
+      attachTableDragHandles();
+      box.querySelectorAll("[data-detail-post-field]").forEach((input) => {
+        input.addEventListener("input", () => setUnsavedChanges("系統參數"));
+      });
+      applyDetailPostTableHeight();
+      attachDetailPostTableResizer();
+    }
+
+    function collectRosterPostMapping(includeEmpty = false) {
+      const rows = [];
+      document.querySelectorAll("#detail-post-mapping [data-detail-post-index]").forEach((input) => {
+        const idx = Number(input.getAttribute("data-detail-post-index"));
+        const field = input.getAttribute("data-detail-post-field");
+        if (!Number.isInteger(idx) || idx < 0 || !field) return;
+        while (rows.length <= idx) rows.push({ code: "", post: "" });
+        rows[idx][field] = input.value.trim();
+      });
+      if (includeEmpty) return rows;
+      return rows.filter((row) => row.code !== "" || row.post !== "");
+    }
+
+    function hideDetailPostRowMenu() {
+      const menu = document.getElementById("detail-post-row-menu");
+      if (!menu) return;
+      menu.hidden = true;
+      menu.removeAttribute("data-detail-post-row-index");
+    }
+
+    function showDetailPostRowMenu(ev, rowIndex) {
+      const menu = document.getElementById("detail-post-row-menu");
+      if (!menu) return;
+      ev.preventDefault();
+      menu.hidden = false;
+      menu.setAttribute("data-detail-post-row-index", Number.isInteger(rowIndex) ? String(rowIndex) : "-1");
+      const rect = menu.getBoundingClientRect();
+      menu.style.left = `${Math.max(2, Math.min(ev.clientX, window.innerWidth - rect.width - 2))}px`;
+      menu.style.top = `${Math.max(2, Math.min(ev.clientY, window.innerHeight - rect.height - 2))}px`;
+    }
+
+    function applyDetailPostRowAction(action, rowIndex) {
+      const rows = collectRosterPostMapping(true);
+      const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
+      if (action === "insert") {
+        rows.splice(Math.min(idx, rows.length), 0, { code: "", post: "" });
+      } else if (action === "delete") {
+        if (idx < rows.length) rows.splice(idx, 1);
+      } else if (action === "append") {
+        rows.push({ code: "", post: "" });
+      }
+      setUnsavedChanges("系統參數");
+      detailSettingsPayload.roster_post_mapping = rows;
+      renderRosterPostMapping(rows);
     }
 
     function renderRosterCodeDefinitions(defs) {
@@ -2114,6 +2352,7 @@
             wake_offset_hours: gcWakeOffset,
           },
           roster_code_definitions: collectRosterCodeDefinitions(),
+          roster_post_mapping: collectRosterPostMapping(),
         });
         fillDetailSettings(data);
         clearUnsavedChanges("系統參數");

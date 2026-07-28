@@ -1,7 +1,8 @@
-"""行位表 XML：parse / merge / export ——純 domain 邏輯，唔識 HTTP。
+"""行位表電話同步：parse / merge / export ——純 domain 邏輯，唔識 HTTP。
 
-以前成 640 行擺喺 app.py 入面，同 route handler 撈埋一齊。呢度只 raise
-ScheduleGridDataError／ScheduleGridNotFound，由 app.py 譯做 HTTP status。
+電腦同電話之間行 JSON（電腦讀 sqlite 出 alarms、電話推返上嚟亦係 alarms），
+以前嗰套 XML 中轉已經拆走。呢度只 raise ScheduleGridDataError／
+ScheduleGridNotFound，由 app.py 譯做 HTTP status。
 """
 
 from __future__ import annotations
@@ -9,17 +10,19 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 import re
 from typing import Any
-import xml.etree.ElementTree as ET
 from zoneinfo import ZoneInfo
 
-from meal_planner.maintenance_db import MaintenanceDatabaseError, load_sheet_rows
-from meal_planner.roster import code_for_date, is_work_day, roster_map_from_sheet_rows
+from meal_planner.maintenance_db import MaintenanceDatabaseError, load_sheet_rows, roster_code_defs
+from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
+from meal_planner.roster_codes import is_work_day
 from meal_planner.schedule_grid import (
     grid_row_matches_roster,
     load_schedule_rows_from_rows,
+    report_start_end,
     rows_for_roster,
 )
 from meal_planner.settings import get_settings
+from meal_planner.timeparse import hhmm30
 
 
 class ScheduleGridDataError(ValueError):
@@ -31,87 +34,10 @@ class ScheduleGridNotFound(LookupError):
 
 
 _TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
-SCHEDULE_GRID_HEADER_RE = re.compile(
-    r"^\s*(\d{4}-\d{2}-\d{2}|(\d{1,2})/(\d{1,2})/(\d{4}))\s+(.+)\s*$"
-)
+_TRAILING_DURATION_RE = re.compile(r"\s+\d{1,3}$")
 _SCHEDULE_GRID_DATE_ONLY_RE = re.compile(r"^\s*(\d{4}-\d{2}-\d{2}|(\d{1,2})/(\d{1,2})/(\d{4}))\s*$")
-_SCHEDULE_GRID_NOISE_TEXTS = {
-    "",
-    "時間",
-    "內容",
-    "操作",
-    "插入",
-    "刪除",
-    "刪除全部",
-    "append",
-    "append all",
-    "insert",
-    "delete",
-    "delete all",
-    "sync",
-    "synchronize",
-}
-SCHEDULE_GRID_HEADER = ["更碼", "時間", "內容", "時長", "生效日期"]
+SCHEDULE_GRID_HEADER = ["更碼", "時間", "內容", "時長", "生效日期", "停用"]
 _BLANK_EFFECTIVE_DATE_SENTINEL = "0001-01-01"
-
-
-def extract_xml_texts(xml_bytes: bytes) -> list[str]:
-    root = ET.fromstring(xml_bytes)
-    return [
-        text.strip()
-        for text in root.itertext()
-        if isinstance(text, str) and text.strip()
-    ]
-
-
-def schedule_grid_xml_metadata(xml_bytes: bytes) -> tuple[str | None, str]:
-    try:
-        root = ET.fromstring(xml_bytes)
-    except ET.ParseError:
-        return None, ""
-    effective = normalize_schedule_grid_effective_date(root.attrib.get("effective_date", ""))
-    roster_code = str(root.attrib.get("roster_code", "") or "").strip()
-    return (effective or None), roster_code
-
-
-def apply_schedule_grid_xml_metadata(
-    rows: list[list[Any]],
-    *,
-    effective_version: str | None,
-    roster_code: str,
-) -> list[list[Any]]:
-    normalized_version = (
-        normalize_schedule_grid_effective_date(str(effective_version).strip())
-        if effective_version
-        else ""
-    )
-    normalized_code = str(roster_code or "").strip()
-    if not normalized_version and not normalized_code:
-        return rows
-
-    for row in rows[1:]:
-        if not isinstance(row, list):
-            continue
-        while len(row) < 5:
-            row.append("")
-        if normalized_code:
-            row[0] = normalized_code
-        if normalized_version and not normalize_schedule_grid_effective_date(row[4]):
-            row[4] = normalized_version
-    return rows
-
-
-def parse_header_date(raw: str) -> str:
-    text = raw.strip()
-    match = SCHEDULE_GRID_HEADER_RE.fullmatch(text)
-    if match:
-        if match.group(1).count("-") == 2:
-            return match.group(1)
-        day = int(match.group(2))
-        month = int(match.group(3))
-        year = int(match.group(4))
-        return f"{year:04d}-{month:02d}-{day:02d}"
-    raise ScheduleGridDataError(f"Invalid header date: {raw}")
 
 
 def _parse_date_iso(raw: str) -> str:
@@ -139,9 +65,12 @@ def check_roster_codes_against_schedule_grid(roster_rows: list[Any]) -> dict[str
     """
     更表檢查：今日及之後每個返工日，行位表有冇當日可用嘅版本。
 
-    分兩類問題：
+    三類問題：
       unknown_code        — 行位表根本冇呢個更碼（例如打錯字）
       no_effective_version — 更碼存在，但當日冇任何已生效版本（生效日期全部遲過嗰日）
+      missing_report_rows  — 當日版本喺度，但入面冇齊「報開工／報收工」兩行。
+                             呢兩行係全系統嘅實務時間軸（報開工/收工 form、報平安更、
+                             日曆返工 event、起身鬧鐘），冇就成日冇時間可用。
 
     過去嘅日子唔檢查（改唔到亦冇影響）。喺前端離開更表行嗰陣逐行叫，
     俾用戶即刻更正；儲存時唔再重覆檢查。
@@ -160,24 +89,30 @@ def check_roster_codes_against_schedule_grid(roster_rows: list[Any]) -> dict[str
     known_codes = {str(getattr(row, "code", "") or "").strip() for row in parsed_rows}
     known_codes.discard("")
 
+    code_defs = roster_code_defs(settings)
     today = datetime.now(ZoneInfo(settings.dates.timezone)).date()
     grouped: dict[tuple[str, str], list[str]] = {}
     for (year, month), month_map in sorted(roster_map_from_sheet_rows(roster_rows).items()):
         for day, raw_code in sorted(month_map.day_to_code.items()):
             code = str(raw_code or "").strip()
-            if not code or not is_work_day(code):
+            if not code or not is_work_day(code_defs, code):
                 continue
             try:
                 day_date = date(year, month, day)
             except ValueError:
                 continue
-            if day_date < today or rows_for_roster(parsed_rows, code, day_date):
+            if day_date < today:
                 continue
-            reason = (
-                "no_effective_version"
-                if any(grid_row_matches_roster(known, code) for known in known_codes)
-                else "unknown_code"
-            )
+            day_rows = rows_for_roster(parsed_rows, code, day_date)
+            if day_rows:
+                start, end = report_start_end(day_rows, day_date)
+                if start is not None and end is not None:
+                    continue
+                reason = "missing_report_rows"
+            elif any(grid_row_matches_roster(known, code) for known in known_codes):
+                reason = "no_effective_version"
+            else:
+                reason = "unknown_code"
             grouped.setdefault((code, reason), []).append(day_date.isoformat())
 
     issues = [
@@ -206,7 +141,7 @@ def _next_workday_from(
     for _ in range(max_days + 1):
         month_map = roster_map.get((current.year, current.month))
         code = code_for_date(month_map, current) if month_map else None
-        if code and is_work_day(code):
+        if code and is_work_day(roster_code_defs(), code):
             return current, code
         current += timedelta(days=1)
     return None, None
@@ -235,7 +170,7 @@ def _latest_workday_schedule_before(
     for _ in range(max_days + 1):
         month_map = roster_map.get((current.year, current.month))
         code = code_for_date(month_map, current) if month_map else None
-        if code and is_work_day(code):
+        if code and is_work_day(roster_code_defs(), code):
             candidate_rows = rows_for_roster(parsed_rows, code, current)
             if candidate_rows:
                 return current, code, candidate_rows
@@ -260,10 +195,11 @@ def _schedule_rows_to_grid_rows(rows: list[Any]) -> list[list[Any]]:
         out.append(
             [
                 getattr(row, "code", "") or "",
-                t.strftime("%H:%M"),
+                hhmm30(t),
                 getattr(row, "content", "") or "",
                 "" if getattr(row, "duration_min", None) is None else str(getattr(row, "duration_min")),
                 "" if effective is None else effective.isoformat(),
+                "1" if getattr(row, "disabled", False) else "",
             ]
         )
     return out
@@ -360,76 +296,48 @@ def collect_schedule_grid_import_codes(rows: list[list[Any]]) -> set[str]:
     return codes
 
 
-def parse_schedule_grid_texts(rows: list[str]) -> tuple[list[list[Any]], set[str]]:
+def split_content_duration(label: Any) -> tuple[str, str]:
+    """電話送返嚟嘅 label 係「內容 + 時長」；拆返做兩欄存入行位表。"""
+    text = ("" if label is None else str(label)).strip()
+    match = _TRAILING_DURATION_RE.search(text)
+    if not match:
+        return text, ""
+    content = text[: match.start()].rstrip()
+    if not content:
+        return text, ""
+    return content, match.group(0).strip()
+
+
+def parse_schedule_grid_push_payload(payload: Any) -> tuple[list[list[Any]], set[str]]:
+    """電話推上嚟嘅 JSON → 行位表 rows。
+
+    payload：{"effective_date": "2026-07-26", "roster_code": "PenBM",
+              "alarms": [{"time": "10:20", "label": "報開工 10", "disabled": false}, ...]}
+    """
+    if not isinstance(payload, dict):
+        raise ScheduleGridDataError("Phone push payload must be a JSON object.")
+    roster_code = str(payload.get("roster_code", "") or "").strip()
+    effective = normalize_schedule_grid_effective_date(payload.get("effective_date", ""))
+    alarms = payload.get("alarms")
+    if not isinstance(alarms, list):
+        raise ScheduleGridDataError("Phone push payload has no alarms list.")
+
     rows_out: list[list[Any]] = [SCHEDULE_GRID_HEADER[:]]
-    current_code = ""
-    current_effective = ""
-    i = 0
-    n = len(rows)
-
-    while i < n:
-        token = rows[i].strip()
-        if not token:
-            i += 1
+    for item in alarms:
+        if not isinstance(item, dict):
             continue
-
-        if _SCHEDULE_GRID_NOISE_TEXTS and token.lower() in _SCHEDULE_GRID_NOISE_TEXTS:
-            i += 1
+        time_value = str(item.get("time", "") or "").strip()
+        if not _TIME_RE.fullmatch(time_value):
             continue
-
-        date_only = _SCHEDULE_GRID_DATE_ONLY_RE.fullmatch(token)
-        if date_only and not _TIME_RE.match(token):
-            current_effective = normalize_schedule_grid_effective_date(parse_header_date(token))
-            i += 1
+        content, duration = split_content_duration(item.get("label", ""))
+        if not content:
             continue
-
-        header_match = SCHEDULE_GRID_HEADER_RE.fullmatch(token)
-        if header_match:
-            current_effective = normalize_schedule_grid_effective_date(parse_header_date(token))
-            current_code = (header_match.group(5) or "").strip()
-            i += 1
-            continue
-
-        if _TIME_RE.match(token):
-            content = None
-            j = i + 1
-            while j < n:
-                next_token = rows[j].strip()
-                if not next_token or next_token.lower() in _SCHEDULE_GRID_NOISE_TEXTS:
-                    j += 1
-                    continue
-                if _TIME_RE.match(next_token) or _SCHEDULE_GRID_DATE_ONLY_RE.fullmatch(next_token) or SCHEDULE_GRID_HEADER_RE.fullmatch(next_token):
-                    break
-                content = next_token
-                j = j + 1
-                break
-            if content is None:
-                i += 1
-                continue
-
-            minutes_duration = ""
-            content_value = content
-            m = re.match(r"^(.*)\s+(\d{1,3})$", content_value)
-            if m and m.group(1).strip() and m.group(2):
-                content_value = m.group(1).strip()
-                minutes_duration = m.group(2)
-
-            rows_out.append([current_code, token, content_value, minutes_duration, current_effective])
-            i = j
-            continue
-
-        i += 1
+        disabled = "1" if item.get("disabled") else ""
+        rows_out.append([roster_code, time_value, content, duration, effective, disabled])
 
     if len(rows_out) <= 1:
-        raise ScheduleGridDataError("No alarm rows found in the uploaded XML.")
-
-    imported_dates: set[str] = set()
-    for row in rows_out[1:]:
-        if not isinstance(row, (list, tuple)) or len(row) < 5:
-            continue
-        effective = normalize_schedule_grid_effective_date(row[4])
-        if effective:
-            imported_dates.add(effective)
+        raise ScheduleGridDataError("No alarm rows found in the phone push payload.")
+    imported_dates = {effective} if effective else set()
     return rows_out, imported_dates
 
 
@@ -459,9 +367,6 @@ def merge_schedule_grid_rows_for_import(
     return merged
 
 
-_TRAILING_DURATION_RE = re.compile(r"\s+\d{1,3}$")
-
-
 def _label_with_duration(content: str, duration: str) -> str:
     """行位表 label 一律「內容 + 時長」：先剝走內容尾巴嘅舊數字，再貼返時長欄嘅值。"""
     base = _TRAILING_DURATION_RE.sub("", content).rstrip()
@@ -470,85 +375,6 @@ def _label_with_duration(content: str, duration: str) -> str:
     if not duration or base == duration:
         return base
     return f"{base} {duration}".strip()
-
-
-def _escape_xml_text(value: Any) -> str:
-    return (
-        ""
-        if value is None
-        else (
-            str(value)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&apos;")
-        )
-    )
-
-
-def build_schedule_grid_xml(
-    rows: list[list[Any]],
-    *,
-    fallback_effective_date: str | None = None,
-    section_date: str | None = None,
-) -> bytes:
-    root_effective_version: str | None = (
-        normalize_schedule_grid_effective_date(str(fallback_effective_date).strip())
-        if fallback_effective_date is not None
-        else None
-    )
-    if root_effective_version is None:
-        for row in rows[1:]:
-            if not isinstance(row, (list, tuple)) or len(row) < 5:
-                continue
-            row_version = normalize_schedule_grid_effective_date(row[4])
-            if row_version:
-                root_effective_version = row_version
-                break
-    root_roster_code = ""
-    for row in rows[1:]:
-        if not isinstance(row, (list, tuple)) or not row:
-            continue
-        code = ("" if row[0] is None else str(row[0])).strip()
-        if code:
-            root_roster_code = code
-            break
-    root_roster_attr = f' roster_code="{_escape_xml_text(root_roster_code)}"' if root_roster_code else ""
-    lines: list[str] = [
-        "<?xml version='1.0' encoding='UTF-8' standalone='yes'?>",
-    ]
-    if fallback_effective_date is not None:
-        lines.append(f'<schedule_grid effective_date="{root_effective_version or ""}"{root_roster_attr}>')
-    elif root_effective_version:
-        lines.append(f'<schedule_grid effective_date="{root_effective_version}"{root_roster_attr}>')
-    else:
-        lines.append(f"<schedule_grid{root_roster_attr}>")
-    last_header = ""
-    for row in rows[1:]:
-        if not isinstance(row, (list, tuple)) or len(row) < 4:
-            continue
-        roster_code = ("" if row[0] is None else str(row[0])).strip()
-        time_value = ("" if row[1] is None else str(row[1])).strip()
-        content_value = ("" if row[2] is None else str(row[2])).strip()
-        if not _TIME_RE.fullmatch(time_value):
-            continue
-        date_value = normalize_schedule_grid_effective_date(row[4]) if len(row) >= 5 else ""
-        iso = (
-            normalize_schedule_grid_effective_date(section_date)
-            if section_date is not None
-            else (date_value if date_value else _BLANK_EFFECTIVE_DATE_SENTINEL)
-        )
-        header = f"{iso} {roster_code}".strip()
-        if header != last_header:
-            lines.append(f"<section>{_escape_xml_text(header)}</section>")
-            last_header = header
-        duration_value = ("" if len(row) < 4 or row[3] is None else str(row[3])).strip()
-        text_label = _label_with_duration(content_value, duration_value)
-        lines.append(f"<alarm_time>{_escape_xml_text(time_value)}</alarm_time>")
-        lines.append(f"<alarm_label>{_escape_xml_text(text_label)}</alarm_label>")
-    lines.append("</schedule_grid>")
-    return ("\n".join(lines) + "\n").encode("utf-8")
 
 
 def _exact_schedule_rows_for_code_on_day(
@@ -607,26 +433,53 @@ def build_schedule_grid_all_variants_export() -> dict[str, Any]:
         if code and code not in code_order:
             code_order.append(code)
 
+    # 打風日：當日更碼嗰個 variant 換成模擬出嚟嗰份（返唔到嘅位 disabled、加開報更）。
+    # 行位表 sheet 冇改過——呢度淨係出 payload 嗰刻按加班表 + 4 小時規則砌返出嚟。
+    from meal_planner.typhoon import typhoon_grid_rows
+
+    typhoon_rows = typhoon_grid_rows(settings, target_day, roster_code) if roster_code else None
+
     variants: list[dict[str, Any]] = []
     for code in code_order:
+        # 停用行都要送落電話——電話要見到佢先撳得返啟用；停用資訊喺 alarm 個 disabled 欄。
         variant_rows = _exact_schedule_rows_for_code_on_day(parsed_rows, code, target_day)
         exported_rows = _schedule_rows_to_grid_rows(variant_rows)
         if not exported_rows:
             continue
         variant_version = _schedule_grid_effective_iso(variant_rows) or export_version
-        xml_data = build_schedule_grid_xml(
-            [SCHEDULE_GRID_HEADER[:], *exported_rows],
-            fallback_effective_date=variant_version,
-            section_date=target_date,
-        )
+        is_current = grid_row_matches_roster(code, roster_code)
+        if is_current and typhoon_rows is not None:
+            alarms = [
+                {
+                    "time": item["time"],
+                    "label": _label_with_duration(
+                        item["content"], "" if item["duration_min"] is None else str(item["duration_min"])
+                    ),
+                    "disabled": bool(item["disabled"]),
+                }
+                for item in typhoon_rows
+                if _TIME_RE.fullmatch(str(item["time"] or ""))
+            ]
+        else:
+            alarms = [
+                {
+                    "time": row[1],
+                    "label": _label_with_duration(str(row[2] or ""), str(row[3] or "")),
+                    "disabled": bool(len(row) > 5 and str(row[5] or "").strip()),
+                }
+                for row in exported_rows
+                if _TIME_RE.fullmatch(str(row[1] or ""))
+            ]
+        if not alarms:
+            continue
         variants.append(
             {
                 "roster_code": code,
                 "target_date": target_date,
                 "effective_date": variant_version,
-                "alarm_count": len(exported_rows),
-                "is_current": grid_row_matches_roster(code, roster_code),
-                "xml": xml_data.decode("utf-8"),
+                "alarm_count": len(alarms),
+                "is_current": is_current,
+                "alarms": alarms,
             }
         )
     if not variants:

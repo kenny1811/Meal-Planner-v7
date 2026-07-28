@@ -16,7 +16,7 @@
         return;
       }
       const customContextMenuArea = ev.target.closest(
-        "#maint-editor, #catalog-editor, #detail-code-definitions, #detail-rice-conversions, #maint-row-menu, #catalog-row-menu, #detail-row-menu, #detail-rice-row-menu, #oos-menu"
+        "#maint-editor, #catalog-editor, #detail-code-definitions, #detail-post-mapping, #detail-rice-conversions, #maint-row-menu, #catalog-row-menu, #detail-row-menu, #detail-post-row-menu, #detail-rice-row-menu, #oos-menu"
       );
       if (customContextMenuArea) return;
       const insideApp = ev.target.closest(".app-shell") || ev.target.closest("#menu-context-menu");
@@ -418,6 +418,16 @@
       if (!(await resolveUnsavedBeforeLeaving())) return;
       await openOnOffDutyPanel();
     });
+    // 撳任何 menu 離開 Typhoon 畫面之前，先存低嗰版嘢。
+    document.querySelectorAll(".menu-item").forEach((item) => {
+      item.addEventListener("mousedown", () => {
+        if (typeof leaveTyphoonPanel === "function") leaveTyphoonPanel();
+      });
+    });
+    document.getElementById("menu-typhoon").addEventListener("click", async () => {
+      if (!(await resolveUnsavedBeforeLeaving())) return;
+      await openTyphoonPanel();
+    });
     document.getElementById("menu-shopping").addEventListener("click", async () => {
       if (!(await resolveUnsavedBeforeLeaving())) return;
       setActiveMenuPathForKey("shopping");
@@ -450,6 +460,19 @@
       const idx = Number(menu.getAttribute("data-detail-row-index"));
       hideDetailRowMenu();
       applyDetailRowAction(action.getAttribute("data-detail-row-action"), Number.isInteger(idx) ? idx : -1);
+    });
+    document.getElementById("detail-post-mapping").addEventListener("contextmenu", (ev) => {
+      const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-detail-post-row]") : null;
+      const idx = row ? Number(row.getAttribute("data-detail-post-row")) : -1;
+      showDetailPostRowMenu(ev, Number.isInteger(idx) ? idx : -1);
+    });
+    document.getElementById("detail-post-row-menu").addEventListener("click", (ev) => {
+      const action = ev.target && ev.target.closest ? ev.target.closest("[data-detail-post-row-action]") : null;
+      const menu = document.getElementById("detail-post-row-menu");
+      if (!action || !menu) return;
+      const idx = Number(menu.getAttribute("data-detail-post-row-index"));
+      hideDetailPostRowMenu();
+      applyDetailPostRowAction(action.getAttribute("data-detail-post-row-action"), Number.isInteger(idx) ? idx : -1);
     });
     document.getElementById("detail-rice-conversions").addEventListener("contextmenu", (ev) => {
       const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-detail-rice-row]") : null;
@@ -584,12 +607,14 @@
       if (!ev.target || !ev.target.closest || !ev.target.closest("#catalog-row-menu")) hideCatalogRowMenu();
       if (!ev.target || !ev.target.closest || !ev.target.closest("#maint-row-menu")) hideMaintRowMenu();
       if (!ev.target || !ev.target.closest || !ev.target.closest("#detail-row-menu")) hideDetailRowMenu();
+      if (!ev.target || !ev.target.closest || !ev.target.closest("#detail-post-row-menu")) hideDetailPostRowMenu();
       if (!ev.target || !ev.target.closest || !ev.target.closest("#detail-rice-row-menu")) hideDetailRiceRowMenu();
     });
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") hideCatalogRowMenu();
       if (ev.key === "Escape") hideMaintRowMenu();
       if (ev.key === "Escape") hideDetailRowMenu();
+      if (ev.key === "Escape") hideDetailPostRowMenu();
       if (ev.key === "Escape") hideDetailRiceRowMenu();
     });
     document.getElementById("catalog-editor").addEventListener("scroll", hideCatalogRowMenu);

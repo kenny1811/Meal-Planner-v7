@@ -106,7 +106,7 @@ public class AlarmAlertService extends Service {
 
     private String formatAlarmMessage(String label, long triggerAtMillis) {
         long millis = triggerAtMillis > 0L ? triggerAtMillis : System.currentTimeMillis();
-        String time = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(millis);
+        String time = Clock30.format(millis);
         String text = label == null ? "" : label.trim();
         if (text.isEmpty()) {
             text = "鬧鐘";

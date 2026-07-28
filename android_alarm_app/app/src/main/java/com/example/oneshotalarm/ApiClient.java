@@ -21,6 +21,13 @@ import java.nio.charset.StandardCharsets;
 final class ApiClient {
     static final int CONNECT_TIMEOUT_MS = 2500;
 
+    /**
+     * 電話每次打上電腦都報上名——電腦記低嗰個來源 IP，就可以反過來 push 落電話
+     * （例如打風改咗行位表，即刻叫電話重新匯入），唔使喺 config 寫死電話 IP。
+     */
+    private static final String CLIENT_HEADER = "X-Alarm-Client";
+    private static final String CLIENT_HEADER_VALUE = "phone";
+
     /** last-good server index（對應 candidates 排陣）；volatile 俾唔同 thread 嘅 view/worker 共用。 */
     private static volatile int serverIndex = 0;
 
@@ -81,6 +88,7 @@ final class ApiClient {
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
             conn.setReadTimeout(readTimeoutMs);
+            conn.setRequestProperty(CLIENT_HEADER, CLIENT_HEADER_VALUE);
             return readResponse(conn, endpoint);
         } finally {
             if (conn != null) {
@@ -96,6 +104,7 @@ final class ApiClient {
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
             conn.setReadTimeout(readTimeoutMs);
+            conn.setRequestProperty(CLIENT_HEADER, CLIENT_HEADER_VALUE);
             if (body != null) {
                 conn.setDoOutput(true);
                 conn.setRequestProperty("Content-Type", contentType);

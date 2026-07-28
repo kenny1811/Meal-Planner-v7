@@ -70,6 +70,9 @@ final class AlarmScheduler {
             if (alarm == null) {
                 continue;
             }
+            if (alarm.optBoolean("disabled", false)) {
+                continue;  // 停用嘅行位：留喺表入面睇得到，但唔排鬧鐘
+            }
             String id = alarm.optString("id", "alarm-" + i);
             String label = alarm.optString("label", "鬧鐘");
             long triggerAtMillis = alarm.optLong("trigger_at_epoch_ms", 0L);

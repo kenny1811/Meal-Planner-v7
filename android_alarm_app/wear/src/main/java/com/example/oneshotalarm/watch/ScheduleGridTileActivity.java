@@ -95,7 +95,9 @@ public class ScheduleGridTileActivity extends Activity {
                         root,
                         row.optString("time", "--:--"),
                         row.optString("content", "沒有資料"),
-                        isPastDisplayTime(row.optString("time", ""), row.optLong("at", 0L), now, planDate)
+                        // 停用咗嘅行位同過咗鐘一樣暗色——錶面淨係睇，改要去電話／電腦。
+                        row.optBoolean("disabled", false)
+                                || isPastDisplayTime(row.optString("time", ""), row.optLong("at", 0L), now, planDate)
                 );
             }
         }
@@ -117,7 +119,7 @@ public class ScheduleGridTileActivity extends Activity {
 
     private void updateClock() {
         if (headerView != null) {
-            headerView.setClock(new SimpleDateFormat("HH:mm", Locale.US).format(new Date()));
+            headerView.setClock(Clock30.format(System.currentTimeMillis()));
         }
     }
 

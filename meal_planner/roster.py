@@ -95,15 +95,6 @@ def load_roster_map(settings: Any | None = None) -> dict[tuple[int, int], Roster
     return roster_map_from_sheet_rows(sheet.get("rows", []))
 
 
-def is_work_day(code: str) -> bool:
-    if code == "SB":
-        return False
-    for prefix in ("WL", "SH", "AL", "SL"):
-        if code.startswith(prefix):
-            return False
-    return True
-
-
 def code_for_date(rm: RosterMonth, d: date) -> str | None:
     if d.year != rm.year or d.month != rm.month:
         return None

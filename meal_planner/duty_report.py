@@ -24,23 +24,24 @@ from zoneinfo import ZoneInfo
 from meal_planner.duty_common import (
     GRACE_DETAIL,
     GRACE_MINUTES,
-    POST_MAPPING,
     RETRY_SECONDS,
     load_kv_config,
     retry_backoff_active,
 )
 from meal_planner.duty_scheduler import notify_change
-from meal_planner.maintenance_db import load_sheet_rows
+from meal_planner.maintenance_db import load_sheet_rows, roster_post_for_code
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import (
     ScheduleRow,
     load_overtime_overrides_from_rows,
     load_schedule_rows_from_rows,
     rows_for_roster,
+    weekday_allows,  # (日-四)/(五六) 標記，同行位表 report_start_end 共用一份
 )
 from meal_planner.settings import AppSettings, get_settings
 from meal_planner.timeparse import (
     business_date,
+    hhmm30,
     normalize_hhmm,
     slot_datetime as _slot_datetime,
     to_minutes as _parse_hhmm,
@@ -58,25 +59,12 @@ DEFAULT_GROUP_MAPPING: dict[str, str] = {
 }
 EVENTS_KEEP = 50
 
-_RE_SUN_THU = re.compile(r"[（(]\s*日-四\s*[)）]")
-_RE_FRI_SAT = re.compile(r"[（(]\s*五六\s*[)）]")
-
 _DB_LOCK = threading.Lock()
 _ACTION_LOCK = threading.Lock()
 
 
 def _now(settings: AppSettings) -> datetime:
     return datetime.now(ZoneInfo(settings.dates.timezone))
-
-
-def weekday_allows(content: str, biz_date: date) -> bool:
-    """(日-四)/(五六) 標記：唔匹配當日星期就唔算該 slot；冇標記一律算。"""
-    wd = biz_date.weekday()  # Mon=0 .. Sun=6
-    if _RE_SUN_THU.search(content):
-        return wd in (6, 0, 1, 2, 3)
-    if _RE_FRI_SAT.search(content):
-        return wd in (4, 5)
-    return True
 
 
 # ---------------------------------------------------------------- SQLite
@@ -313,9 +301,14 @@ def safe_slots_for_code(parsed_rows: list[ScheduleRow], code: str, biz_date: dat
             continue
         if not weekday_allows(content, biz_date):
             continue
-        out.append((row.t.strftime("%H:%M"), content.strip()))
+        out.append((hhmm30(row.t), content.strip()))
     out.sort(key=lambda item: _parse_hhmm(item[0]))
     return out
+
+
+# 30 小時制之下，一日由 06:00 開始——「全日都係呢個更碼」嘅 segment 就係由 06:00 起。
+# 舊資料寫 "00:00"（嗰陣一日由午夜起計）照認做全日，唔會排錯去最尾。
+DAY_START_HHMM = "06:00"
 
 
 def normalize_segments(segments: Any) -> list[dict[str, str]]:
@@ -327,11 +320,38 @@ def normalize_segments(segments: Any) -> list[dict[str, str]]:
         if not isinstance(seg, dict):
             continue
         code = str(seg.get("code") or "").strip()
-        from_text = normalize_hhmm(str(seg.get("from") or "00:00").strip() or "00:00")
+        raw_from = str(seg.get("from") or "").strip()
+        from_text = DAY_START_HHMM if raw_from in ("", "00:00") else normalize_hhmm(raw_from)
         if not code or not from_text:
             continue
         cleaned.append({"from": from_text, "code": code})
     cleaned.sort(key=lambda seg: _parse_hhmm(seg["from"]))
+    return cleaned
+
+
+def normalize_extra_slots(extra: Any) -> list[dict[str, str]]:
+    """整理 overlay 加開嘅 slot：[{time, content, code}...]，按時間排序；無效項剔走。
+
+    行位表冇、但當日要報嘅更（打風改成每 4 個鐘報一次嗰啲）就係經呢度加。
+    純 overlay，行位表一個字都唔會郁。
+    """
+    if not isinstance(extra, list):
+        return []
+    cleaned: list[dict[str, str]] = []
+    for item in extra:
+        if not isinstance(item, dict):
+            continue
+        time_text = normalize_hhmm(str(item.get("time") or "").strip())
+        if not time_text:
+            continue
+        cleaned.append(
+            {
+                "time": time_text,
+                "content": str(item.get("content") or SAFE_KEYWORD).strip() or SAFE_KEYWORD,
+                "code": str(item.get("code") or "").strip(),
+            }
+        )
+    cleaned.sort(key=lambda item: _parse_hhmm(item["time"]))
     return cleaned
 
 
@@ -343,12 +363,16 @@ def compute_slots(
     template: str,
     slot_overrides: dict[str, Any],
     overtime: tuple[time | None, time | None] = (None, None),
+    extra_slots: Any = None,
 ) -> list[dict[str, Any]]:
     """由 segments（更碼時間軸）+ 加班表 + overlay 推導當日 slot 清單（未計 sent 狀態）。
 
     時間優先序：panel 改時間 override＞加班表（開工 override 套落有「報開工」嘅 slot、
     收工 override 套落有「報收工」嘅 slot）＞行位表原時間。slot id 一律用行位表原時間，
     唔會因 override 而變。
+
+    overlay 嘅 extra_slots 係行位表以外加開嘅更（id 用 `code@+HH:MM` 分開），
+    訊息／群組同一般 slot 一模一樣——收訊息嗰邊睇唔出分別。
     """
     ot_start, ot_end = overtime
     slots: list[dict[str, Any]] = []
@@ -363,10 +387,14 @@ def compute_slots(
             slot_id = f"{code}@{hhmm}"
             base_time = hhmm
             if ot_end is not None and "報收工" in content:
-                base_time = ot_end.strftime("%H:%M")
+                base_time = hhmm30(ot_end)
             elif ot_start is not None and "報開工" in content:
-                base_time = ot_start.strftime("%H:%M")
+                base_time = hhmm30(ot_start)
             override = slot_overrides.get(slot_id) if isinstance(slot_overrides.get(slot_id), dict) else {}
+            if override.get("hidden"):
+                # 呢個 slot 當日根本唔存在（打風改晒報更節奏嗰陣，舊時間永遠唔會再用）。
+                # 同 skip 唔同：skip 係「見到但唔射」，hidden 係「當佢冇」。
+                continue
             effective_time = str(override.get("time") or base_time)
             if _parse_hhmm(effective_time) < 0:
                 effective_time = base_time
@@ -387,6 +415,32 @@ def compute_slots(
                     "skipped": bool(override.get("skip")),
                 }
             )
+    default_code = segments[-1]["code"] if segments else ""
+    for item in normalize_extra_slots(extra_slots):
+        code = item["code"] or default_code
+        if not code:
+            continue
+        slot_id = f"{code}@+{item['time']}"
+        override = slot_overrides.get(slot_id) if isinstance(slot_overrides.get(slot_id), dict) else {}
+        effective_time = str(override.get("time") or item["time"])
+        if _parse_hhmm(effective_time) < 0:
+            effective_time = item["time"]
+        default_message = template.replace("{code}", code)
+        slots.append(
+            {
+                "id": slot_id,
+                "code": code,
+                "original_time": item["time"],
+                "ot_override": False,
+                "extra": True,
+                "time": effective_time,
+                "content": item["content"],
+                "group": str(override.get("group") or mapping.get(code, "")),
+                "message": str(override.get("message") or default_message),
+                "default_message": default_message,
+                "skipped": bool(override.get("skip")),
+            }
+        )
     slots.sort(key=lambda s: (_parse_hhmm(s["time"]), s["id"]))
     return slots
 
@@ -460,7 +514,7 @@ def build_plan(
         segments = overlay_segments
         source = "override"
     elif roster_code:
-        segments = [{"from": "00:00", "code": roster_code}]
+        segments = [{"from": DAY_START_HHMM, "code": roster_code}]
         source = "roster"
     else:
         segments = []
@@ -471,7 +525,7 @@ def build_plan(
 
     slots = compute_slots(
         parsed_rows, segments, biz_date, config["mapping"], config["message_template"], slot_overrides,
-        overtime=overtime,
+        overtime=overtime, extra_slots=overlay.get("extra_slots"),
     )
     for slot in slots:
         entry = log.get(slot["id"])
@@ -500,7 +554,7 @@ def build_plan(
     next_slot = next((s for s in slots if s["status"] in {"pending", "due"}), None)
 
     return {
-        "known_codes": sorted(POST_MAPPING),
+        "known_codes": sorted(roster_post_for_code(settings)),
         "ok": True,
         "date_iso": biz_date.isoformat(),
         "today_iso": today.isoformat(),
@@ -531,6 +585,7 @@ def apply_override(
     mode: str | None = None,
     segments: list[dict[str, str]] | None = None,
     slot_patch: dict[str, Any] | None = None,
+    extra_slots: list[dict[str, Any]] | None = None,
     source: str = "web",
     biz_date: date | None = None,
 ) -> dict[str, Any]:
@@ -551,15 +606,29 @@ def apply_override(
         if cleaned:
             overlay["segments"] = cleaned
             desc = "、".join(
-                f"{seg['code']}(由{seg['from']})" if seg["from"] != "00:00" else seg["code"]
+                f"{seg['code']}(由{seg['from']})" if seg["from"] != DAY_START_HHMM else seg["code"]
                 for seg in cleaned
             )
             record_event(settings, "segments", f"{day_label}改 {desc}", source=source)
         else:
             overlay.pop("segments", None)
             record_event(settings, "segments", f"{day_label}還原跟更表", source=source)
-        # 轉更碼 = 由頭重排：舊 slot overrides 唔再對應，一併清走。
+        # 轉更碼 = 由頭重排：舊 slot overrides／加開嘅 slot 唔再對應，一併清走。
         overlay.pop("slots", None)
+        overlay.pop("extra_slots", None)
+
+    if extra_slots is not None:
+        cleaned_extra = normalize_extra_slots(extra_slots)
+        if cleaned_extra:
+            overlay["extra_slots"] = cleaned_extra
+            record_event(
+                settings, "extra_slots",
+                f"{day_label}加開 {'、'.join(item['time'] for item in cleaned_extra)}",
+                source=source,
+            )
+        else:
+            overlay.pop("extra_slots", None)
+            record_event(settings, "extra_slots", f"{day_label}清走加開嘅更", source=source)
 
     if slot_patch is not None:
         slot_id = str(slot_patch.get("id") or "").strip()
@@ -573,6 +642,9 @@ def apply_override(
         if "skip" in slot_patch and slot_patch["skip"] is not None:
             entry["skip"] = bool(slot_patch["skip"])
             parts.append("skip" if entry["skip"] else "unskip")
+        if "hidden" in slot_patch and slot_patch["hidden"] is not None:
+            entry["hidden"] = bool(slot_patch["hidden"])
+            parts.append("hidden" if entry["hidden"] else "unhidden")
         if "time" in slot_patch and slot_patch["time"] is not None:
             raw_time = str(slot_patch["time"]).strip()
             if raw_time:
@@ -600,7 +672,8 @@ def apply_override(
             else:
                 entry.pop("message", None)
                 parts.append("message→預設")
-        entry = {k: v for k, v in entry.items() if v not in (False, "", None)} if not entry.get("skip") else entry
+        if not entry.get("skip") and not entry.get("hidden"):
+            entry = {k: v for k, v in entry.items() if v not in (False, "", None)}
         if entry:
             slots_overlay[slot_id] = entry
         else:

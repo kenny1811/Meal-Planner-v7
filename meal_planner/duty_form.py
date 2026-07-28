@@ -2,16 +2,15 @@
 
 同 Report_Normal（報平安更 WhatsApp，duty_report.py）係兩件事：
 - Report_Normal → 行位表「報平安更」rows。
-- OnOff_Duty → 呢度，時間來源係 **更時表（payroll_times）**，唔係行位表。
+- OnOff_Duty → 呢度，行位表「報開工／報收工」rows。
 
 核心：
 - 揀 form：更碼 V*/Lecole* → VCA form；其餘 → 其他 form。
-- 時間（用戶 22/07/2026 定案）：Form 內容同自動發射一律用**實際時間**——
-  加班表 override＞行位表「報開工/報收工」行（行位表係當日實際時間軸）；
-  hold / send now 先會再改變（send now 用「而家」做實際收工）。
-  更時表（計糧官方時間）唔會出現喺 Form，喺呢度淨係用嚟判斷遲收工
-  寫唔寫加班表（late_off_send_now 嘅標準窗口 + >10.25 小時）。
+- 時間：加班表 override＞**行位表**「報開工／報收工」行（當日實際時間軸）；
+  更時表（計糧官方時間）唔會出現喺 Form，淨係做遲收工寫加班表嘅標準窗口。
+  hold / send now 先會再改變（send now 用「而家」做實際開工／收工）。
 - 一日兩個 action：開工（填開工時間、收工留空）、收工（開工留空、填收工時間），各自獨立提交。
+  兩個 action 都有 hold / send now：打風唔知幾點開工，就 hold 住開工，真開工先撳 send now。
 - 交法：預設出預填連結（手機一 tap → 自己撳提交）；可選全自動 POST（auto_send）。
 """
 
@@ -27,15 +26,15 @@ from urllib.parse import quote_plus
 from meal_planner.duty_common import (
     GRACE_DETAIL,
     GRACE_MINUTES,
-    POST_MAPPING,
     RETRY_SECONDS,
     load_kv_config,
     retry_backoff_active,
 )
 from meal_planner.duty_report import apply_override, build_plan as build_report_normal_plan, send_slot
 from meal_planner.duty_scheduler import notify_change
-from meal_planner.maintenance_db import load_sheet_rows, save_sheet_rows
+from meal_planner.maintenance_db import load_sheet_rows, roster_post_for_code, save_sheet_rows
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
+from meal_planner.roster_codes import form_key_for_code
 from meal_planner.schedule_grid import (
     load_overtime_overrides_from_rows,
     load_schedule_rows_from_rows,
@@ -48,6 +47,7 @@ from meal_planner.shift_time import holiday_dates_from_rows, resolve_shift_time
 from meal_planner.timeparse import (
     business_date,
     minutes_30h as _minutes_30h,
+    hhmm30,
     normalize_hhmm,
     slot_datetime as _slot_datetime,
 )
@@ -109,6 +109,24 @@ def _connect(settings: AppSettings) -> sqlite3.Connection:
         " value_json TEXT NOT NULL,"
         " updated_at TEXT NOT NULL)"
     )
+    # onoffduty_log 一日一個 action 得一行（＝而家個狀態），改時間會蓋走上一個。
+    # history 係 append-only：交過、hold 過、重新武裝過，全部留底，永遠唔 delete。
+    # 「今朝到底交咗未」呢類問題就係靠佢答。
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS onoffduty_history ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " date_iso TEXT NOT NULL,"
+        " kind TEXT NOT NULL,"
+        " status TEXT NOT NULL,"
+        " time_text TEXT NOT NULL DEFAULT '',"
+        " source TEXT NOT NULL DEFAULT '',"
+        " detail TEXT NOT NULL DEFAULT '',"
+        " recorded_at TEXT NOT NULL)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_onoffduty_history_day"
+        " ON onoffduty_history (date_iso, kind, id)"
+    )
     try:
         conn.execute("ALTER TABLE onoffduty_log ADD COLUMN detail TEXT NOT NULL DEFAULT ''")
     except sqlite3.OperationalError:
@@ -156,7 +174,11 @@ def record_onoff_log(
     source: str = "web",
     detail: str = "",
 ) -> None:
-    """記低邊日邊個 action（start/end）做咗咩（opened/sent/failed/missed）。同一 (日, action) 最新覆蓋。"""
+    """記低邊日邊個 action（start/end）做咗咩（opened/sent/failed/missed）。
+
+    onoffduty_log 同一 (日, action) 最新覆蓋（＝而家個狀態）；同時 append 一行落
+    onoffduty_history，永遠唔會俾之後嘅改動洗走。
+    """
     from zoneinfo import ZoneInfo
 
     now_iso = datetime.now(ZoneInfo(settings.dates.timezone)).isoformat()
@@ -171,10 +193,55 @@ def record_onoff_log(
                 " recorded_at = excluded.recorded_at, detail = excluded.detail",
                 (biz_date.isoformat(), kind, status, time_text, source, now_iso, detail),
             )
+            _append_history(conn, biz_date, kind, status, time_text, source, detail, now_iso)
             conn.commit()
         finally:
             conn.close()
     notify_change()
+
+
+def _append_history(
+    conn: sqlite3.Connection,
+    biz_date: date,
+    kind: str,
+    status: str,
+    time_text: str,
+    source: str,
+    detail: str,
+    now_iso: str,
+) -> None:
+    conn.execute(
+        "INSERT INTO onoffduty_history"
+        " (date_iso, kind, status, time_text, source, detail, recorded_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (biz_date.isoformat(), kind, status, time_text, source, detail, now_iso),
+    )
+
+
+def load_onoff_history(settings: AppSettings, biz_date: date) -> dict[str, list[dict[str, Any]]]:
+    """當日每個 action 嘅完整經過（由舊到新）。append-only，唔會少過真實發生過嘅嘢。"""
+    with _DB_LOCK:
+        conn = _connect(settings)
+        try:
+            rows = conn.execute(
+                "SELECT kind, status, time_text, source, detail, recorded_at"
+                " FROM onoffduty_history WHERE date_iso = ? ORDER BY id",
+                (biz_date.isoformat(),),
+            ).fetchall()
+        finally:
+            conn.close()
+    out: dict[str, list[dict[str, Any]]] = {}
+    for kind, status, time_text, source, detail, recorded_at in rows:
+        out.setdefault(kind, []).append(
+            {
+                "status": status,
+                "time_text": time_text,
+                "source": source,
+                "detail": detail,
+                "recorded_at": recorded_at,
+            }
+        )
+    return out
 
 
 def load_onoff_log(settings: AppSettings, biz_date: date) -> dict[str, dict[str, Any]]:
@@ -231,7 +298,23 @@ def build_prefill_url(
     return f"https://docs.google.com/forms/d/e/{form.form_id}/viewform?" + "&".join(params)
 
 
-def clear_onoff_log_entry(settings: AppSettings, biz_date: date, kind: str) -> None:
+def clear_onoff_log_entry(
+    settings: AppSettings,
+    biz_date: date,
+    kind: str,
+    *,
+    status: str = "cleared",
+    time_text: str = "",
+    source: str = "web",
+    detail: str = "",
+) -> None:
+    """清走「而家個狀態」（重新武裝／resume），但 history 一定會 append 一行講明點解。
+
+    交過就係交過 —— 之前嗰個 sent 永遠留喺 history，唔會因為改時間而消失。
+    """
+    from zoneinfo import ZoneInfo
+
+    now_iso = datetime.now(ZoneInfo(settings.dates.timezone)).isoformat()
     with _DB_LOCK:
         conn = _connect(settings)
         try:
@@ -239,6 +322,7 @@ def clear_onoff_log_entry(settings: AppSettings, biz_date: date, kind: str) -> N
                 "DELETE FROM onoffduty_log WHERE date_iso = ? AND kind = ?",
                 (biz_date.isoformat(), kind),
             )
+            _append_history(conn, biz_date, kind, status, time_text, source, detail, now_iso)
             conn.commit()
         finally:
             conn.close()
@@ -256,7 +340,8 @@ def set_time_override(
     """現場改開工/收工：直接 upsert 入加班表（權威來源）——報更、計糧、日曆、餐單全部跟住變。
 
     start/end：None=唔郁；""=清走該格（兩格都空成行刪走，還原跟更時表）；"21:30"/"2130"=設定。
-    改完如果該格原本標咗 missed 而新時間重新趕得切，會清返個 log 俾 scheduler 重新處理。
+    改完會重新武裝（見 _rearm_missed_actions）：新時間仲未到就當件事未發生，
+    舊 log（missed／sent／hold…）清走，scheduler 照新時間再交。
     """
     payload = load_sheet_rows("overtime", settings)
     rows = [list(r) if isinstance(r, list) else [] for r in (payload.get("rows") or [])]
@@ -312,19 +397,45 @@ def set_time_override(
 
 
 def _rearm_missed_actions(settings: AppSettings, biz_date: date) -> None:
-    """missed 重新武裝：改完時間/更碼後，新時間仲趕得切（未過 grace）就清 log，
-    俾 scheduler／狀態重新計。"""
+    """改完時間／更碼 = 重新武裝：件事改咗去一個仲未過（未過 grace）嘅時間，
+    即係當佢**未發生**——清走舊 log，俾 scheduler 照新時間重新交。
+
+    包括之前已經 sent 嗰啲（例如打風日 auto 早咗交、跟住現場改真開工時間），
+    亦包括 hold（改到實際時間就當 resume，連 ReportNormal 對應 slot 一齊放返）。
+    只郁時間真係變咗嘅 action——log 記低嗰個時間仲啱嘅就唔掂。
+    """
     from zoneinfo import ZoneInfo
 
     tz = ZoneInfo(settings.dates.timezone)
     now = datetime.now(tz)
+    log = load_onoff_log(settings, biz_date)
     plan = build_day_plan(settings, biz_date=biz_date)
     for action in plan.get("actions") or []:
-        if action.get("status") != "missed" or not action.get("time"):
+        kind, time_text = str(action.get("kind") or ""), str(action.get("time") or "")
+        entry = log.get(kind) or {}
+        if not kind or not time_text or not entry:
             continue
-        slot_dt = _slot_datetime(biz_date, str(action["time"]), tz)
-        if now < slot_dt + timedelta(minutes=GRACE_MINUTES):
-            clear_onoff_log_entry(settings, biz_date, str(action["kind"]))
+        if str(entry.get("time_text") or "") == time_text:
+            continue  # 呢個 action 個時間冇變過
+        slot_dt = _slot_datetime(biz_date, time_text, tz)
+        if now >= slot_dt + timedelta(minutes=GRACE_MINUTES):
+            continue
+        old_status = str(entry.get("status") or "")
+        old_time = str(entry.get("time_text") or "") or "—"
+        clear_onoff_log_entry(
+            settings, biz_date, kind, status="rearmed",
+            time_text=time_text, source="rearm",
+            detail=f"時間 {old_time} → {time_text}（之前：{old_status or '冇記錄'}），照新時間重新等",
+        )
+        if old_status == "hold" and biz_date == business_date(now):
+            slot = _find_report_slot(settings, kind)
+            if slot is not None and slot.get("status") != "sent":
+                apply_override(
+                    settings,
+                    slot_patch={"id": slot["id"], "skip": False},
+                    source="onoffduty-holdsend",
+                    biz_date=biz_date,
+                )
 
 
 def _replace_code_in_cell(cell_text: str, day: int, new_code: str) -> str | None:
@@ -372,7 +483,7 @@ def _replace_code_in_cell(cell_text: str, day: int, new_code: str) -> str | None
 def set_roster_code(settings: AppSettings, biz_date: date, code: str) -> None:
     """現場轉更：直接改更表（權威來源）——報開工/收工、報平安更、日曆、餐單全部跟住變。
 
-    改完如果該日 action 原本標咗 missed 而新更時間重新趕得切，會清返 log 俾 scheduler 重新處理
+    改完新更時間如果仲未到，會清返舊 log 俾 scheduler 照新時間重新交
     （同 set_time_override 一樣嘅重新武裝邏輯）。
     """
     from meal_planner.roster import parse_roster_line
@@ -452,108 +563,159 @@ def _round_to_5min(value: datetime) -> time:
 OVERTIME_MIN_TOTAL_MINUTES = int(10.25 * 60)  # 615
 
 
-def _find_report_off_slot(settings: AppSettings) -> dict[str, Any] | None:
-    """今日 ReportNormal（報平安更）slots 入面，內容含「報收工」嘅最後一個。"""
-
-    plan = build_report_normal_plan(settings)
-    slots = [s for s in plan.get("slots") or [] if "報收工" in str(s.get("content") or "")]
-    return slots[-1] if slots else None
+ACTION_LABEL = {"start": "報開工", "end": "報收工"}
 
 
-def late_off_hold(settings: AppSettings, hold: bool) -> dict[str, Any]:
-    """遲收工 hold：一個掣兩邊——OnOffDuty end 唔自動交唔標 missed；
-    ReportNormal 嘅「報收工」slot skip 埋（唔會夠鐘自動出 WhatsApp）。"""
+def _standard_shift_time(
+    settings: AppSettings, roster_code: str, biz_date: date
+) -> tuple[time | None, time | None]:
+    """更時表（計糧官方時間）按適用日 resolve —— **唔套**加班表 override。"""
+    payroll_rows = load_sheet_rows("payroll_times", settings).get("rows") or []
+    return resolve_shift_time(payroll_rows, roster_code, biz_date, _holiday_dates(settings), {})
+
+
+def pick_report_slot(slots: list[dict[str, Any]] | None, kind: str) -> dict[str, Any] | None:
+    """ReportNormal slots 入面，內容含「報開工」／「報收工」嗰個。
+
+    開工攞最早嗰個、收工攞最後嗰個（一日只會有一次真開工／真收工）。
+    """
+    keyword = ACTION_LABEL[kind]
+    hits = [s for s in slots or [] if keyword in str(s.get("content") or "")]
+    if not hits:
+        return None
+    return hits[0] if kind == "start" else hits[-1]
+
+
+def _find_report_slot(settings: AppSettings, kind: str) -> dict[str, Any] | None:
+    return pick_report_slot(build_report_normal_plan(settings).get("slots"), kind)
+
+
+def _today_action(settings: AppSettings, kind: str) -> tuple[date, dict[str, Any], dict[str, Any]]:
     from zoneinfo import ZoneInfo
 
-
-    now = datetime.now(ZoneInfo(settings.dates.timezone))
-    biz_date = business_date(now)
+    if kind not in ACTION_LABEL:
+        raise ValueError(f"唔認得嘅 action：{kind}")
+    biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
     plan = build_day_plan(settings, biz_date=biz_date)
-    end_action = next((a for a in plan.get("actions") or [] if a.get("kind") == "end"), None)
-    if end_action is None:
-        raise ValueError("今日冇報收工")
-    if hold:
-        if end_action.get("status") == "sent":
-            raise ValueError("報收工已經交咗，唔使 hold")
-        record_onoff_log(
-            settings, biz_date, "end", "hold",
-            time_text=str(end_action.get("time") or ""), source="lateoff",
-            detail="waiting real off-duty",
-        )
-    elif end_action.get("status") == "hold":
-        clear_onoff_log_entry(settings, biz_date, "end")
+    action = next((a for a in plan.get("actions") or [] if a.get("kind") == kind), None)
+    if action is None:
+        raise ValueError(f"今日冇{ACTION_LABEL[kind]}")
+    return biz_date, plan, action
 
-    slot = _find_report_off_slot(settings)
+
+def duty_hold(settings: AppSettings, kind: str, hold: bool) -> dict[str, Any]:
+    """Hold／resume 一個 action：一個掣兩邊——OnOffDuty 嗰格唔自動交唔標 missed；
+    ReportNormal 對應嘅「報開工／報收工」slot skip 埋（唔會夠鐘自動出 WhatsApp）。
+
+    打風未定幾點開工、或者未走得（遲收工），就 hold 住，真發生嗰陣先撳 send now。
+    """
+    biz_date, _plan, action = _today_action(settings, kind)
+    if hold:
+        if action.get("status") == "sent":
+            raise ValueError(f"{ACTION_LABEL[kind]}已經交咗，唔使 hold")
+        record_onoff_log(
+            settings, biz_date, kind, "hold",
+            time_text=str(action.get("time") or ""), source="holdsend",
+            detail=f"waiting real {'on' if kind == 'start' else 'off'}-duty",
+        )
+    elif action.get("status") == "hold":
+        clear_onoff_log_entry(
+            settings, biz_date, kind, status="resumed",
+            time_text=str(action.get("time") or ""), source="holdsend",
+            detail="放返 hold，照原定時間等",
+        )
+
+    slot = _find_report_slot(settings, kind)
     if slot is not None and slot.get("status") not in {"sent"}:
         apply_override(
             settings,
             slot_patch={"id": slot["id"], "skip": hold},
-            source="onoffduty-lateoff",
+            source="onoffduty-holdsend",
             biz_date=biz_date,
         )
     return build_day_plan(settings, biz_date=biz_date)
 
 
-def late_off_send_now(settings: AppSettings, *, note: str = "") -> dict[str, Any]:
-    """真收工齊發：用「而家」做實際收工時間——
-    1) 遲 ≥15 分鐘先寫加班表（否則唔算 OT，加班表唔記）；
-    2) 報收工 form 即交（實際時間）；
-    3) ReportNormal「報收工」slot 即發 WhatsApp。"""
+def _write_overtime_for_send_now(
+    settings: AppSettings,
+    biz_date: date,
+    plan: dict[str, Any],
+    kind: str,
+    actual_text: str,
+    note: str,
+) -> bool:
+    """Send now 之後寫唔寫加班表（權威實際時間）。回傳有冇寫。
+
+    - 開工：實際開工同預設（加班表 override＞更時表）唔同就寫——打風遲開工咁樣，
+      報平安更 slots／餐單／日曆要跟住郁。
+    - 收工：兩個條件都要中先寫——① 超出更時表窗口（實際開工早過標準開工 或
+      實際收工遲過標準收工）；② 總工時 > 10.25 小時。唔算 OT 就唔好污染加班表。
+    """
+    if kind == "start":
+        if actual_text == str(plan.get("start") or ""):
+            return False
+        set_time_override(settings, biz_date, start=actual_text, note=note or "現場真開工")
+        return True
+
+    std_start, std_end = _standard_shift_time(settings, str(plan.get("roster_code") or ""), biz_date)
+    start_text = str(plan.get("start") or "")
+    if std_start is None or std_end is None or not start_text:
+        return False
+    early_start = _minutes_30h(start_text) < _minutes_30h(std_start.strftime("%H:%M"))
+    late_end = _minutes_30h(actual_text) > _minutes_30h(std_end.strftime("%H:%M"))
+    total_minutes = _minutes_30h(actual_text) - _minutes_30h(start_text)
+    if (early_start or late_end) and total_minutes > OVERTIME_MIN_TOTAL_MINUTES:
+        set_time_override(settings, biz_date, end=actual_text, note=note or "現場真收工")
+        return True
+    return False
+
+
+def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[str, Any]:
+    """真開工／真收工齊發：用「而家」做實際時間——
+    1) 按 kind 決定寫唔寫加班表（見 _write_overtime_for_send_now）；
+    2) 對應 form 即交（實際時間）；
+    3) ReportNormal 對應 slot 即發 WhatsApp。"""
     from zoneinfo import ZoneInfo
 
+    now = datetime.now(ZoneInfo(settings.dates.timezone))
+    biz_date, plan, action = _today_action(settings, kind)
+    if not plan.get("form") or not plan.get("post"):
+        raise ValueError("未有 Post 對照")
+    if action.get("status") == "sent":
+        raise ValueError(f"{ACTION_LABEL[kind]}已經交咗")
 
-    tz = ZoneInfo(settings.dates.timezone)
-    now = datetime.now(tz)
-    biz_date = business_date(now)
-    plan = build_day_plan(settings, biz_date=biz_date)
-    end_action = next((a for a in plan.get("actions") or [] if a.get("kind") == "end"), None)
-    if end_action is None or not plan.get("form") or not plan.get("post"):
-        raise ValueError("今日冇報收工／未有 Post 對照")
-    if end_action.get("status") == "sent":
-        raise ValueError("報收工已經交咗")
-
-    # 實際收工時間：5 分鐘為單位四捨五入（:32→:30、:33→:35）。
+    # 實際時間：5 分鐘為單位四捨五入（:32→:30、:33→:35）。
     actual_time = _round_to_5min(now)
-    actual_text = actual_time.strftime("%H:%M")
-
-    # 寫加班表條件（兩個都要中）：
-    # 1) 超出更時表窗口：實際開工早過標準開工 或 實際收工遲過標準收工（唔理超幾多分鐘）；
-    # 2) 總工時（實際開工→實際收工）> 10.25 小時。實際開工=plan start（已含加班表 override）。
-    payroll_rows = load_sheet_rows("payroll_times", settings).get("rows") or []
-    holidays = _holiday_dates(settings)
-    std_start, std_end = resolve_shift_time(payroll_rows, plan["roster_code"], biz_date, holidays, {})
-    overtime_written = False
-    start_text = str(plan.get("start") or "")
-    if std_start is not None and std_end is not None and start_text:
-        early_start = _minutes_30h(start_text) < _minutes_30h(std_start.strftime("%H:%M"))
-        late_end = _minutes_30h(actual_text) > _minutes_30h(std_end.strftime("%H:%M"))
-        total_minutes = _minutes_30h(actual_text) - _minutes_30h(start_text)
-        if (early_start or late_end) and total_minutes > OVERTIME_MIN_TOTAL_MINUTES:
-            set_time_override(settings, biz_date, end=actual_text, note=note or "現場真收工")
-            overtime_written = True
+    actual_text = hhmm30(actual_time)
+    overtime_written = _write_overtime_for_send_now(settings, biz_date, plan, kind, actual_text, note)
 
     form = FORMS[str(plan["form"])]
-    submit_form(form, str(plan["post"]), biz_date, start=None, end=actual_time)
+    submit_form(
+        form, str(plan["post"]), biz_date,
+        start=actual_time if kind == "start" else None,
+        end=actual_time if kind == "end" else None,
+    )
     record_onoff_log(
-        settings, biz_date, "end", "sent",
-        time_text=actual_text, source="lateoff",
-        detail="real off-duty" + (" +OT" if overtime_written else ""),
+        settings, biz_date, kind, "sent",
+        time_text=actual_text, source="holdsend",
+        detail=f"real {'on' if kind == 'start' else 'off'}-duty" + (" +OT" if overtime_written else ""),
     )
 
     whatsapp = "no slot"
-    slot = _find_report_off_slot(settings)
+    slot = _find_report_slot(settings, kind)
     if slot is not None:
         if slot.get("status") == "sent":
             whatsapp = "already sent"
         else:
             try:
-                send_slot(settings, str(slot["id"]), manual=True, source="onoffduty-lateoff")
+                send_slot(settings, str(slot["id"]), manual=True, source="onoffduty-holdsend")
                 whatsapp = "sent"
             except Exception as e:  # noqa: BLE001 - form 交咗就唔好冧，WhatsApp 可以去 ReportNormal 度 retry
                 whatsapp = f"failed: {e}"
 
     result_plan = build_day_plan(settings, biz_date=biz_date)
-    result_plan["lateoff_result"] = {
+    result_plan["sendnow_result"] = {
+        "kind": kind,
         "actual": actual_text,
         "overtime_written": overtime_written,
         "whatsapp": whatsapp,
@@ -654,13 +816,14 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
     biz_date = biz_date or today
 
     roster_code = roster_code_for(settings, biz_date)
+    code_posts = roster_post_for_code(settings)
     result: dict[str, Any] = {
         "date_iso": biz_date.isoformat(),
         "today_iso": today.isoformat(),
         "relation": "today" if biz_date == today else ("past" if biz_date < today else "future"),
         "staff_number": STAFF_NUMBER,
         "roster_code": roster_code,
-        "known_codes": sorted(POST_MAPPING),
+        "known_codes": sorted(code_posts),
         "actions": [],
         "note": "",
     }
@@ -668,47 +831,48 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
         result["note"] = "當日冇更碼"
         return result
 
-    mapping = POST_MAPPING.get(roster_code)
-    if mapping is None:
+    post = code_posts.get(roster_code)
+    if post is None:
         result["note"] = f"更碼 {roster_code} 未有 Post 對照（未 map 或非返工更）"
         return result
-    form_key, post = mapping
-    form = FORMS[form_key]
+    form = FORMS[form_key_for_code(roster_code)]
 
-    # 時間一律用「實際時間」：加班表 override＞行位表「報開工/報收工」行。
+    # 時間：加班表 override＞行位表「報開工／報收工」行（當日實際時間軸）。
     # Form 內容同自動發射都係呢個時間（hold / send now 先會再改變）。
-    # 更時表係計糧官方時間，喺 OnOff_Duty 淨係用嚟判斷遲收工寫唔寫加班表
-    # （late_off_send_now 嘅標準窗口），唔會出現喺 Form。
-    overtime_rows = load_sheet_rows("overtime", settings).get("rows") or []
-    overtime_by_date = load_overtime_overrides_from_rows(overtime_rows)
-    ot_start, ot_end = overtime_by_date.get(biz_date, (None, None))
+    # 更時表（計糧官方時間）淨係用嚟做遲收工寫加班表嘅標準窗口，唔會出現喺 Form。
     grid_rows = load_schedule_rows_from_rows(load_sheet_rows("schedule_grid", settings).get("rows") or [])
-    grid_start, grid_end = report_start_end(rows_for_roster(grid_rows, roster_code, biz_date))
+    grid_start, grid_end = report_start_end(rows_for_roster(grid_rows, roster_code, biz_date), biz_date)
+    std_start, std_end = _standard_shift_time(settings, roster_code, biz_date)
+    overtime_rows = load_sheet_rows("overtime", settings).get("rows") or []
+    ot_start, ot_end = load_overtime_overrides_from_rows(overtime_rows).get(biz_date, (None, None))
     start = ot_start if ot_start is not None else grid_start
     end = ot_end if ot_end is not None else grid_end
 
     result["form"] = form.key
     result["post"] = post
-    result["start"] = start.strftime("%H:%M") if start else ""
-    result["end"] = end.strftime("%H:%M") if end else ""
+    result["start"] = hhmm30(start) if start else ""
+    result["end"] = hhmm30(end) if end else ""
+    result["std_start"] = hhmm30(std_start) if std_start else ""
+    result["std_end"] = hhmm30(std_end) if std_end else ""
     result["start_override"] = ot_start is not None
     result["end_override"] = ot_end is not None
     if start is None and end is None:
-        result["note"] = f"更碼 {roster_code} 喺行位表搵唔到「報開工/報收工」行"
+        result["note"] = f"更碼 {roster_code} 喺行位表搵唔到「報開工/報收工」行（亦冇加班表 override）"
         return result
 
     log = load_onoff_log(settings, biz_date)
+    history = load_onoff_history(settings, biz_date)
     result["actions"] = [
         {
             "kind": "start",
             "label": "On Duty",
-            "time": start.strftime("%H:%M") if start else "",
+            "time": hhmm30(start) if start else "",
             "url": build_prefill_url(form, post, biz_date, start=start, end=None),
         },
         {
             "kind": "end",
             "label": "Off Duty",
-            "time": end.strftime("%H:%M") if end else "",
+            "time": hhmm30(end) if end else "",
             "url": build_prefill_url(form, post, biz_date, start=None, end=end),
         },
     ]
@@ -718,5 +882,7 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
         action["logged_at"] = str(entry.get("recorded_at") or "")
         action["log_source"] = str(entry.get("source") or "")
         action["detail"] = str(entry.get("detail") or "")
+        # 完整經過（append-only）：交過幾多次、hold 過、重新武裝過，全部見得到。
+        action["history"] = history.get(action["kind"], [])
     result["auto_send"] = load_onoff_config(settings)["auto_send"]
     return result

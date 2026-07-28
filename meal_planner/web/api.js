@@ -136,6 +136,16 @@
             if (key && !(key in menuTreeOpen)) menuTreeOpen[key] = !!value;
           });
         }
+        if (data && typeof data.typhoon_state === "object" && data.typhoon_state) {
+          typhoonSavedState = {
+            date_iso: String(data.typhoon_state.date_iso || ""),
+            signal_time: String(data.typhoon_state.signal_time || ""),
+            name: String(data.typhoon_state.name || ""),
+            confirmed: !!data.typhoon_state.confirmed,
+            day_off: !!data.typhoon_state.day_off,
+            code: String(data.typhoon_state.code || ""),
+          };
+        }
         if (data && typeof data.google_calendar_sync === "object" && data.google_calendar_sync) {
           googleCalendarSync = {
             enabled: !!data.google_calendar_sync.enabled,
@@ -211,6 +221,15 @@
       const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Google Calendar login failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function postGoogleCalendarRosterSync() {
+      const r = await fetch("/api/google-calendar/roster-sync", { method: "POST" });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Google Calendar sync failed.", r.status));
       }
       return data || {};
     }
@@ -411,15 +430,15 @@
       return data || {};
     }
 
-    async function postOnOffDutyLateOff(action, note) {
+    async function postOnOffDutyHoldSend(action, kind, note) {
       const r = await fetch("/api/onoffduty/lateoff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, note: note || "" }),
+        body: JSON.stringify({ action, kind: kind || "end", note: note || "" }),
       });
       const data = await parseJsonSafe(r);
       if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "OnOffDuty late-off failed.", r.status));
+        throw new Error(apiErrorMessage(data, "OnOffDuty hold/send failed.", r.status));
       }
       return data || {};
     }
@@ -433,6 +452,84 @@
       const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "OnOffDuty config failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function loadTyphoonPlan(params) {
+      const q = new URLSearchParams();
+      if (params && params.dateIso) q.set("date_iso", params.dateIso);
+      if (params && params.signalTime) q.set("signal_time", params.signalTime);
+      if (params && params.code) q.set("code", params.code);
+      if (params && params.name) q.set("name", params.name);
+      if (params && params.confirmed) q.set("confirmed", "true");
+      if (params && params.dayOff) q.set("day_off", "true");
+      const query = q.toString();
+      const r = await fetch(query ? `/api/typhoon/plan?${query}` : "/api/typhoon/plan");
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Load typhoon plan failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function loadTyphoonCurrentName() {
+      const r = await fetch("/api/typhoon/current-name");
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Load typhoon name failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function postTyphoonMealPlan(params) {
+      const r = await fetch("/api/typhoon/meal-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date_iso: (params && params.dateIso) || null,
+          signal_time: (params && params.signalTime) || "",
+          code: (params && params.code) || null,
+          day_off: !!(params && params.dayOff),
+          reroll_nonce: Number((params && params.rerollNonce) || 0),
+        }),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Typhoon meal plan failed.", r.status));
+      }
+      return data || {};
+    }
+
+    // 淨係推指定嘅日子入 memory payload（後端會按日期 merge，唔會蓋走其他日）。
+    async function persistMemoryDays(payload) {
+      const r = await fetch("/api/memory-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: payload || {} }),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Save meal plan failed.", r.status));
+      }
+      return data || {};
+    }
+
+    async function postTyphoonApply(params) {
+      const r = await fetch("/api/typhoon/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date_iso: (params && params.dateIso) || null,
+          signal_time: (params && params.signalTime) || "",
+          code: (params && params.code) || null,
+          day_off: !!(params && params.dayOff),
+          name: (params && params.name) || "",
+        }),
+      });
+      const data = await parseJsonSafe(r);
+      if (!r.ok) {
+        throw new Error(apiErrorMessage(data, "Typhoon apply failed.", r.status));
       }
       return data || {};
     }

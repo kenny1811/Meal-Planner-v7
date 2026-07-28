@@ -28,7 +28,9 @@ from meal_planner.indicators import (
     profile_from_json_map,
 )
 from meal_planner.nutrition_db import load_catalog_entries, load_target_rows
-from meal_planner.roster import code_for_date, is_work_day, load_roster_map
+from meal_planner.roster import code_for_date, load_roster_map
+from meal_planner.maintenance_db import roster_code_defs
+from meal_planner.roster_codes import is_work_day
 from meal_planner.settings import AppSettings, get_settings
 
 
@@ -122,6 +124,8 @@ def _is_meal_visible(meal: str, meal_plan: dict[str, Any]) -> bool:
     r = resolved.get(meal) if isinstance(resolved, dict) else None
     if r is not None and str(r).strip() != "":
         return True
+    if isinstance(resolved, dict) and meal in (resolved.get("_skipped") or {}):
+        return False  # 行位表食位喺開工前，食唔到 —— 唔好經飯時原文復活佢
     primary = meal_plan.get("primary_rule", {}) if isinstance(meal_plan, dict) else {}
     raw = primary.get(meal) if isinstance(primary, dict) else None
     if raw is None:
@@ -294,7 +298,7 @@ def preview_days(
             is_wd = None
             nutrients = DayIndicatorProfile.empty()
         else:
-            is_wd = is_work_day(code)
+            is_wd = is_work_day(roster_code_defs(settings), code)
             prof_kind = "workday" if is_wd else "nonworkday"
             nutrients = work_prof if is_wd else nonwork_prof
 
@@ -558,7 +562,7 @@ def resolve_day_out_of_stock(
     code = code_for_date(rm, d) if rm else None
     if code is None:
         raise ValueError(f"無 {date_s} 更表更碼，無法重解。")
-    is_wd = is_work_day(code)
+    is_wd = is_work_day(roster_code_defs(settings), code)
 
     old_items = meal_plan_in.get("meal_items", {}) if isinstance(meal_plan_in.get("meal_items"), dict) else {}
     old_ings = meal_plan_in.get("meal_ingredients", {}) if isinstance(meal_plan_in.get("meal_ingredients"), dict) else {}

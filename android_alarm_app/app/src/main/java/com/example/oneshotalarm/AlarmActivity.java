@@ -184,7 +184,7 @@ public class AlarmActivity extends Activity {
 
     private String formatAlarmTime(long triggerAtMillis) {
         long millis = triggerAtMillis > 0L ? triggerAtMillis : System.currentTimeMillis();
-        return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(millis);
+        return Clock30.format(millis);
     }
 
     private void acquireWakeLock() {

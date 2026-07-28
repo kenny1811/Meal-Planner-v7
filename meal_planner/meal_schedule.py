@@ -422,6 +422,7 @@ def build_day_meal_plan(
     cache: MealPlanningCache | None = None,
     locked_meals: dict[str, dict[str, Any]] | None = None,
     bound_overrides: dict[int, dict[str, float]] | None = None,
+    meal_time_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """組合飯時主規則、各餐 Pattern、返工日午餐餐廳（第一命中）；可選 `day` 以解析行位表實際用餐時間。"""
     if not roster_code:
@@ -464,6 +465,13 @@ def build_day_meal_plan(
             "餐名": None,
             "pattern": None,
         }
+
+    # 打風加開嘅一餐（例如飯鐘食唔到，改為喺長 break 帶小食）：直接寫死鐘點入主規則，
+    # 之後照走 resolve_meal_times_display 同一條路，唔會另開一套時間邏輯。
+    if primary_dict and meal_time_overrides:
+        for meal, hhmm in meal_time_overrides.items():
+            if meal in MEAL_LABELS and str(hhmm or "").strip():
+                primary_dict[meal] = str(hhmm).strip()
 
     meal_times_resolved: dict[str, Any] = {}
     if day is not None and primary_dict:
@@ -600,5 +608,8 @@ def build_day_meal_plan(
         "meal_times_resolved": meal_times_resolved,
         "optimization": optimization_meta,
         "peninsula_stack_applied": False,
-        "note": None,
+        # 開工遲過行位表食位嗰啲餐次唔會出，要喺呢度講明點解（唔好靜靜哋消失）。
+        "note": "；".join(
+            f"{meal}：{why}" for meal, why in (meal_times_resolved.get("_skipped") or {}).items()
+        ) or None,
     }

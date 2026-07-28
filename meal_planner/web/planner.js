@@ -24,13 +24,15 @@
     let activeConfigView = "targets";
     let activeMenuPath = ["top", "planner"];
     let shoppingRiceConfig = null;
-    let detailSettingsPayload = { rice: {}, roster_code_definitions: [] };
+    let detailSettingsPayload = { rice: {}, roster_code_definitions: [], roster_post_mapping: [] };
     let maintSheets = [];
     let activeMaintSheetKey = null;
     let maintSheetPayload = { sheet_key: null, display_name: "", rows: [] };
     let rosterReportSources = { payroll_times: [], overtime: [], wake_alarms: [], public_holidays: [], medical_appointments: [] };
     let googleCalendarSync = { enabled: false, write: false, client_secret_file: "", token_file: "", service_account_file: "", nonwork_calendar_id: "", work_calendar_id: "", alarm_calendar_id: "", wake_offset_hours: 3 };
     let googleCalendarAuth = { authenticated: false, status: "" };
+    // Typhoon panel 上次嘅輸入，離開畫面即存，下次開返同一個畫面
+    let typhoonSavedState = { date_iso: "", signal_time: "", name: "", confirmed: false, day_off: false, code: "" };
     let generateBusy = false;
     let plannerDefaultDateIso = "";
     let plannerDateInputsTouched = false;
@@ -38,7 +40,7 @@
     let unsavedArea = "";
     let unsavedAreaKey = "";
     let menuOrder = {
-      top: ["config", "maint", "planner", "shopping", "duty_report", "onoffduty"],
+      top: ["config", "maint", "planner", "shopping", "duty_report", "onoffduty", "typhoon"],
       config: ["target", "catalog", "details"],
       maint: [],
       reports: ["shift_code_analysis"],
@@ -60,13 +62,14 @@
       mtr_doors: "地鐵車門",
     };
     const MENU_TREE_KEYS = ["config", "maint", "reports"];
-    const MENU_STATIC_LEAF_KEYS = ["planner", "shopping", "duty_report", "onoffduty", "target", "catalog", "details", "shift_code_analysis"];
+    const MENU_STATIC_LEAF_KEYS = ["planner", "shopping", "duty_report", "onoffduty", "typhoon", "target", "catalog", "details", "shift_code_analysis"];
     const REMOVED_MENU_KEYS = new Set(["runtime_import", "diagnostics", "wake_alarms", "alarm_sync"]);
     const MENU_DEFAULT_GROUPS = {
       planner: "top",
       shopping: "top",
       duty_report: "top",
       onoffduty: "top",
+      typhoon: "top",
       target: "config",
       catalog: "config",
       details: "config",
@@ -658,8 +661,13 @@
       top.style.paddingRight = `${gutter}px`;
     }
 
-    function attachColumnResizers() {
-      const hdr = document.querySelector("tr.hdr-labels");
+    // root 唔傳就成份文件——Typhoon panel 有自己一張餐單表，要淨係綁佢嗰張，
+    // 唔可以齋用 document.querySelector（會捉咗 planner panel 嗰張）。
+    function attachColumnResizers(root = document) {
+      root.querySelectorAll("tr.hdr-labels").forEach(attachColumnResizersForHeader);
+    }
+
+    function attachColumnResizersForHeader(hdr) {
       if (!hdr) return;
       hdr.querySelectorAll("td[data-col-key]").forEach((cell) => {
         if (cell.querySelector(".col-resizer")) return;
@@ -674,6 +682,8 @@
             onMove: (mv) => {
               columnWidths[key] = Math.max(36, startW + (mv.clientX - startX));
               applyColumnWidths();
+              // 張表闊度變咗，裝住佢個 block 都要即刻跟住變（Typhoon panel 用緊）。
+              if (typeof applyDutyBlockLayout === "function") applyDutyBlockLayout();
             },
             onUp: () => {
               persistColumnWidths();
@@ -692,6 +702,7 @@
       const shopping = document.getElementById("shopping-panel");
       const duty = document.getElementById("duty-report-panel");
       const onoff = document.getElementById("onoffduty-panel");
+      const typhoon = document.getElementById("typhoon-panel");
       const mPlanner = document.getElementById("menu-planner");
       const mConfig = document.getElementById("menu-config");
       const mConfigTarget = document.getElementById("menu-config-target");
@@ -703,8 +714,9 @@
       const mShopping = document.getElementById("menu-shopping");
       const mDuty = document.getElementById("menu-duty-report");
       const mOnOff = document.getElementById("menu-onoffduty");
+      const mTyphoon = document.getElementById("menu-typhoon");
       const target = panel || "planner";
-      activePanel = ["planner", "config", "maint", "shopping", "reports", "duty_report", "onoffduty"].includes(target) ? target : "planner";
+      activePanel = ["planner", "config", "maint", "shopping", "reports", "duty_report", "onoffduty", "typhoon"].includes(target) ? target : "planner";
       planner.style.display = activePanel === "planner" ? "" : "none";
       config.style.display = activePanel === "config" ? "" : "none";
       maint.style.display = activePanel === "maint" ? "" : "none";
@@ -712,6 +724,7 @@
       shopping.style.display = activePanel === "shopping" ? "" : "none";
       if (duty) duty.style.display = activePanel === "duty_report" ? "" : "none";
       if (onoff) onoff.style.display = activePanel === "onoffduty" ? "" : "none";
+      if (typhoon) typhoon.style.display = activePanel === "typhoon" ? "" : "none";
       mPlanner.classList.toggle("active", activePanel === "planner");
       mConfig.classList.toggle("active", activePanel === "config");
       mConfigTarget.classList.remove("active");
@@ -726,6 +739,7 @@
       mShopping.classList.toggle("active", activePanel === "shopping");
       if (mDuty) mDuty.classList.toggle("active", activePanel === "duty_report");
       if (mOnOff) mOnOff.classList.toggle("active", activePanel === "onoffduty");
+      if (mTyphoon) mTyphoon.classList.toggle("active", activePanel === "typhoon");
       if (persist) persistColumnWidths();
       return true;
     }

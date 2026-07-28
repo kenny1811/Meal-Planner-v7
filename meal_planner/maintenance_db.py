@@ -9,6 +9,8 @@ import sqlite3
 from typing import Any
 
 from meal_planner.duty_scheduler import notify_change
+from meal_planner.duty_common import POST_MAPPING_SEED
+from meal_planner.roster_codes import RosterCodeDef, defs_from_rows
 from meal_planner.settings import AppSettings, get_settings
 
 
@@ -84,6 +86,12 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             label TEXT NOT NULL,
             sort_order INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS roster_post_mapping (
+            code TEXT PRIMARY KEY,
+            post TEXT NOT NULL,
+            sort_order INTEGER NOT NULL
+        );
         """
     )
     conn.commit()
@@ -124,7 +132,8 @@ def _cell_to_json_value(value: Any) -> Any:
     if isinstance(value, date):
         return value.isoformat()
     if isinstance(value, time):
-        return value.strftime("%H:%M")
+        # 30 小時制：凌晨 00:00–05:59 顯示做 24:00–29:59（存入去嘅文字都係咁）。
+        return f"{value.hour + 24 if value.hour < 6 else value.hour:02d}:{value.minute:02d}"
     return value
 
 
@@ -201,6 +210,66 @@ def load_roster_code_definitions(settings: AppSettings | None = None) -> list[di
         }
         for row in rows
     ]
+
+
+def load_roster_post_mapping(settings: AppSettings | None = None) -> list[dict[str, Any]]:
+    """更碼 → Google Form 個「Post」崗位。第一次會由內建清單 seed，之後喺
+    Config → 系統參數 改；交報開工／報收工 form 就係靠佢填 Post 嗰欄。"""
+    settings = settings or get_settings()
+    with closing(_connect(settings)) as conn:
+        _ensure_schema(conn)
+        if not conn.execute("SELECT 1 FROM roster_post_mapping LIMIT 1").fetchone():
+            conn.executemany(
+                "INSERT INTO roster_post_mapping(code, post, sort_order) VALUES (?, ?, ?)",
+                [(code, post, i) for i, (code, post) in enumerate(POST_MAPPING_SEED.items(), start=1)],
+            )
+            conn.commit()
+        rows = conn.execute(
+            "SELECT code, post, sort_order FROM roster_post_mapping ORDER BY sort_order, code"
+        ).fetchall()
+    return [
+        {"code": str(row["code"]), "post": str(row["post"]), "sort_order": int(row["sort_order"])}
+        for row in rows
+    ]
+
+
+def save_roster_post_mapping(
+    rows: list[dict[str, Any]],
+    settings: AppSettings | None = None,
+) -> list[dict[str, Any]]:
+    settings = settings or get_settings()
+    clean_rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for idx, raw in enumerate(rows, start=1):
+        if not isinstance(raw, dict):
+            continue
+        code = str(raw.get("code") or "").strip()
+        post = str(raw.get("post") or "").strip()
+        if not code and not post:
+            continue
+        if not code or not post:
+            raise ValueError(f"Roster post mapping row {idx} requires 更碼 and Post.")
+        if code in seen:
+            raise ValueError(f"Roster post mapping code is duplicated: {code}")
+        seen.add(code)
+        clean_rows.append({"code": code, "post": post, "sort_order": len(clean_rows) + 1})
+
+    with closing(_connect(settings)) as conn:
+        _ensure_schema(conn)
+        conn.execute("DELETE FROM roster_post_mapping")
+        conn.executemany(
+            "INSERT INTO roster_post_mapping(code, post, sort_order)"
+            " VALUES (:code, :post, :sort_order)",
+            clean_rows,
+        )
+        conn.commit()
+    notify_change()
+    return load_roster_post_mapping(settings)
+
+
+def roster_post_for_code(settings: AppSettings | None = None) -> dict[str, str]:
+    """更碼 → Post 崗位 dict（OnOff_Duty 交 form 用；亦係「全套已知更碼」嘅來源）。"""
+    return {row["code"]: row["post"] for row in load_roster_post_mapping(settings)}
 
 
 def save_roster_code_definitions(
@@ -317,3 +386,8 @@ def load_sheet_rows(
         "updated_at": meta["updated_at"] if meta else None,
         "rows": [json.loads(row["cells_json"]) for row in rows],
     }
+
+
+def roster_code_defs(settings: AppSettings | None = None) -> list[RosterCodeDef]:
+    """更碼定義 → defs（Config → 系統參數 → 更碼定義改得到）。列咗＝唔使返工。"""
+    return defs_from_rows(load_roster_code_definitions(settings))

@@ -19,6 +19,9 @@ public class AlarmBootReceiver extends BroadcastReceiver {
         try {
             AlarmScheduler.rescheduleStoredPlan(context);
             AlarmAutoSyncReceiver.schedulePolling(context);
+            // 開機／裝完新版即刻開返本機 server，唔使等用戶開一次 app
+            // 電腦嗰邊先 push 得到（例如打風改咗行位表）。
+            PhoneCaptureHttpServer.start(context);
             // 開機後如錯過咗今日 05:00 / 05:30 匯入，即刻補跑一次（唔使等聽日或人手插手）。
             AlarmAutoSyncReceiver.catchUpMissedDailyImport(context);
         } catch (Exception e) {

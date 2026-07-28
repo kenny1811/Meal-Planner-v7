@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Meal Planner v7</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260709-bowl" />
-  <link rel="stylesheet" href="style.css?v=20260723-changelog-v1" />
+  <link rel="stylesheet" href="style.css?v=20260727-typhoon-v1" />
 </head>
 <body>
   <div id="clock-top-right" class="clock-top-right">--/--/---- --- --:--:--</div>
@@ -90,6 +90,7 @@
       </div>
       <button type="button" class="menu-item" data-panel="duty_report" data-menu-group="top" data-menu-key="duty_report" id="menu-duty-report"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">ReportNormal</span></button>
       <button type="button" class="menu-item" data-panel="onoffduty" data-menu-group="top" data-menu-key="onoffduty" id="menu-onoffduty"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">OnOffDuty</span></button>
+      <button type="button" class="menu-item" data-panel="typhoon" data-menu-group="top" data-menu-key="typhoon" id="menu-typhoon"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Typhoon</span></button>
       <button type="button" class="menu-item active" data-panel="planner" data-menu-group="top" data-menu-key="planner" id="menu-planner"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Menu Planner</span></button>
       <button type="button" class="menu-item" data-panel="shopping" data-menu-group="top" data-menu-key="shopping" id="menu-shopping"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Shopping List</span></button>
     </div>
@@ -254,11 +255,11 @@
                   <td data-form-col-key="detail_google_calendar_value"><input type="text" id="detail-gc-work-calendar" spellcheck="false" placeholder="留空＝用內建預設" /></td>
                 </tr>
                 <tr>
-                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-alarm-calendar">起身 Calendar ID</label></th>
+                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-alarm-calendar">alarm Calendar ID</label></th>
                   <td data-form-col-key="detail_google_calendar_value"><input type="text" id="detail-gc-alarm-calendar" spellcheck="false" placeholder="留空＝用內建預設" /></td>
                 </tr>
                 <tr>
-                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-wake-offset">起身＝開工前（小時）</label></th>
+                  <th scope="row" data-form-col-key="detail_google_calendar_label"><label for="detail-gc-wake-offset">起身 event＝開工前（小時）</label></th>
                   <td data-form-col-key="detail_google_calendar_value"><input type="number" id="detail-gc-wake-offset" step="0.25" min="0.25" spellcheck="false" /></td>
                 </tr>
               </tbody>
@@ -268,11 +269,21 @@
             <h3>Roster code definitions</h3>
             <div id="detail-code-definitions"></div>
           </section>
+          <section class="detail-section-block detail-section-table" data-detail-block="posts">
+            <h3>Roster code &rarr; form Post</h3>
+            <div id="detail-post-mapping"></div>
+            <div id="detail-post-resizer" class="detail-table-resizer" title="Drag to resize table height"></div>
+          </section>
         </div>
         <div id="detail-row-menu" class="maint-row-menu" hidden>
           <button type="button" data-detail-row-action="insert">Insert Row</button>
           <button type="button" data-detail-row-action="delete">Delete Row</button>
           <button type="button" data-detail-row-action="append">Append Row</button>
+        </div>
+        <div id="detail-post-row-menu" class="maint-row-menu" hidden>
+          <button type="button" data-detail-post-row-action="insert">Insert Row</button>
+          <button type="button" data-detail-post-row-action="delete">Delete Row</button>
+          <button type="button" data-detail-post-row-action="append">Append Row</button>
         </div>
         <div id="detail-rice-row-menu" class="maint-row-menu" hidden>
           <button type="button" data-detail-rice-row-action="insert">Insert Row</button>
@@ -317,6 +328,11 @@
     <div id="onoffduty-err" class="err"></div>
     <div id="onoffduty-out" class="duty-report-out"></div>
   </section>
+  <section id="typhoon-panel" style="display:none;">
+    <h1 data-title-key="typhoon">Typhoon</h1>
+    <div id="typhoon-err" class="err"></div>
+    <div id="typhoon-out" class="duty-report-out"></div>
+  </section>
   <section id="shopping-panel" style="display:none;">
     <div id="shopping-content" class="shopping-content">
       <h1 data-title-key="shopping">Shopping List</h1>
@@ -355,16 +371,17 @@
       <div class="changelog-body" id="changelog-body"></div>
     </div>
   </div>
-    <script defer src="api.js?v=20260723-celledit-shared-v1"></script>
+    <script defer src="api.js?v=20260727-typhoon-v1"></script>
   <script defer src="shopping.js?v=20260723-drag-helper-v1"></script>
-  <script defer src="planner.js?v=20260723-drag-helper-v1"></script>
-  <script defer src="planner-menu.js?v=20260723-drag-helper-v1"></script>
+  <script defer src="planner.js?v=20260727-typhoon-v1"></script>
+  <script defer src="planner-menu.js?v=20260727-typhoon-v1"></script>
   <script defer src="planner-maint.js?v=20260723-celledit-shared-v1"></script>
   <script defer src="planner-maint-editor.js?v=20260723-celledit-shared-v1"></script>
   <script defer src="planner-config.js?v=20260723-celledit-shared-v1"></script>
   <script defer src="planner-render.js?v=20260723-drag-helper-v1"></script>
   <script defer src="planner-duty.js?v=20260723-drag-helper-v1"></script>
   <script defer src="planner-onoffduty.js?v=20260715-onoffduty-v7"></script>
-    <script defer src="planner-events.js?v=20260723-oos-resolve-v5"></script>
+  <script defer src="planner-typhoon.js?v=20260727-typhoon-v1"></script>
+    <script defer src="planner-events.js?v=20260727-typhoon-v1"></script>
 </body>
 </html>

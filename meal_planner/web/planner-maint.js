@@ -186,8 +186,30 @@
       if (focus) focusMaintCell(focus, true);
     }
 
+    // 行位表「停用」欄係 logical field：唔會當一般欄 render，改為每行一粒 toggle + 成行 dim。
+    const SCHEDULE_GRID_DISABLED_HEADER = "停用";
+
+    function scheduleGridDisabledColIdx() {
+      if (maintSheetPayload.sheet_key !== "schedule_grid") return -1;
+      const header = Array.isArray(maintSheetPayload.rows && maintSheetPayload.rows[0]) ? maintSheetPayload.rows[0] : [];
+      return header.findIndex((cell) => String(cell || "").trim() === SCHEDULE_GRID_DISABLED_HEADER);
+    }
+
+    function isScheduleGridRowDisabled(row) {
+      const idx = scheduleGridDisabledColIdx();
+      if (idx < 0 || !Array.isArray(row)) return false;
+      return String(row[idx] || "").trim() !== "";
+    }
+
     function maintRowHtml(row, rIdx, cols, formKey, isShiftCodeCol) {
-      return Array.from({ length: cols }, (_, cIdx) => {
+      const disabledColIdx = scheduleGridDisabledColIdx();
+      const toggleCell = disabledColIdx < 0
+        ? ""
+        : (rIdx === 0
+          ? `<td data-form-col-key="${formKey}_col_off"></td>`
+          : `<td class="maint-off-cell"><button type="button" class="maint-off-toggle" data-maint-disable-row="${rIdx}" title="停用／啟用呢格行位（停用＝當日冇咗，時長會自動吸收）">${isScheduleGridRowDisabled(row) ? "Enable" : "Disable"}</button></td>`);
+      return toggleCell + Array.from({ length: cols }, (_, cIdx) => {
+        if (cIdx === disabledColIdx) return "";
         const value = formatMaintTimeValue(maintSheetPayload.sheet_key, rIdx, cIdx, Array.isArray(row) ? row[cIdx] : "");
         const resizeKey = rIdx === 0 ? ` data-form-col-key="${formKey}_col_${cIdx}"` : "";
         if (rIdx > 0 && isShiftCodeCol(cIdx)) {
@@ -1020,13 +1042,16 @@
       return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] || "";
     }
 
+    // 30 小時制：凌晨 00:00–05:59 一律寫成 24:00–29:59（唔會有兩個寫法指同一個鐘點）。
     function normalTime(value) {
       const s = String(value || "").trim();
       const compact = s.match(/^(\d{1,2})(\d{2})$/);
-      if (compact) return `${String(Number(compact[1])).padStart(2, "0")}:${compact[2]}`;
-      const m = s.match(/(\d{1,2}):(\d{2})/);
+      const m = compact || s.match(/(\d{1,2}):(\d{2})/);
       if (!m) return "";
-      return `${String(Number(m[1])).padStart(2, "0")}:${m[2]}`;
+      let hour = Number(m[1]);
+      if (hour > 29) return "";
+      if (hour < 6) hour += 24;
+      return `${String(hour).padStart(2, "0")}:${m[2]}`;
     }
 
     function timeMinutes(value) {
@@ -1114,7 +1139,9 @@
     function clockFromMinutes(minutes) {
       if (!Number.isFinite(minutes)) return "";
       const n = ((Math.round(minutes) % 1440) + 1440) % 1440;
-      return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+      // 30 小時制顯示：凌晨嗰段屬前一日嘅 24:00–29:59。
+      const hour = Math.floor(n / 60);
+      return `${String(hour < 6 ? hour + 24 : hour).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
     }
 
     function wakeOffsetMinutes() {

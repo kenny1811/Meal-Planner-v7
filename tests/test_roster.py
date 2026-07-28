@@ -1,7 +1,7 @@
 import unittest
 from datetime import date
 
-from meal_planner.roster import code_for_date, is_work_day, last_day_of_month, parse_roster_line, roster_for_month
+from meal_planner.roster import code_for_date, last_day_of_month, parse_roster_line, roster_for_month
 
 
 class RosterTests(unittest.TestCase):
@@ -42,12 +42,6 @@ class RosterTests(unittest.TestCase):
         self.assertEqual(out[(2026, 5)].day_to_code, {1: "Z"})
         self.assertEqual(code_for_date(out[(2026, 5)], date(2026, 5, 1)), "Z")
         self.assertIsNone(code_for_date(out[(2026, 5)], date(2026, 6, 1)))
-
-    def test_is_work_day_matches_non_work_prefix_rules(self):
-        for code in ("SB", "WL", "WLx", "SH", "AL123", "SL"):
-            self.assertFalse(is_work_day(code))
-        for code in ("PenC", "IFCM", "SBA", "XWL"):
-            self.assertTrue(is_work_day(code))
 
     def test_last_day_of_month_handles_leap_year(self):
         self.assertEqual(last_day_of_month(2024, 2), 29)

@@ -4,6 +4,13 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.3.7 — 28/07/2026 27:10
+- Typhoon panel: simulate a signal-down day (schedule grid, meal plan, safety reports,
+  on/off-duty forms, overtime, calendar) and apply it everywhere in one press — the
+  phone is pushed straight away so its alarms follow without waiting for the 05:00 import.
+- 30-hour clock everywhere: 00:00–05:59 is entered, stored and shown as 24:00–29:59 —
+  on the computer, the phone and the watch.
+
 ## 7.2.7 — 24/07/2026 29:42
 - Fix: the schedule grid sent to the phone lost each row's duration when the grid
   version came from a phone push. Labels now always carry it (e.g. "M 75").

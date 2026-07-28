@@ -12,7 +12,6 @@ import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-import xml.etree.ElementTree as ET
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
@@ -29,8 +28,10 @@ from meal_planner.maintenance_db import (
     MaintenanceDatabaseError,
     list_maintenance_sheets,
     load_roster_code_definitions,
+    load_roster_post_mapping,
     load_sheet_rows,
     save_roster_code_definitions,
+    save_roster_post_mapping,
     save_sheet_rows,
 )
 from meal_planner.nutrition_db import (
@@ -55,30 +56,30 @@ from meal_planner.settings import (
     save_folder_settings,
     save_rice_detail_settings,
 )
-from meal_planner.roster import code_for_date, is_work_day, roster_map_from_sheet_rows
+from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import (
     grid_row_matches_roster,
     load_schedule_rows_from_rows,
     rows_for_roster,
 )
-from meal_planner.schedule_grid_xml import (
-    SCHEDULE_GRID_HEADER,
-    SCHEDULE_GRID_HEADER_RE,
+from meal_planner.schedule_grid_sync import (
     ScheduleGridDataError,
     ScheduleGridNotFound,
-    apply_schedule_grid_xml_metadata,
     build_schedule_grid_all_variants_export,
-    build_schedule_grid_xml,
     check_roster_codes_against_schedule_grid,
     collect_schedule_grid_import_codes,
     extract_schedule_grid_effective_dates,
-    extract_xml_texts,
     merge_schedule_grid_rows_for_import,
     normalize_schedule_grid_effective_date,
-    parse_header_date,
-    parse_schedule_grid_texts,
+    parse_schedule_grid_push_payload,
     rows_for_dates,
-    schedule_grid_xml_metadata,
+)
+from meal_planner.phone_push import (
+    CLIENT_HEADER,
+    CLIENT_HEADER_VALUE,
+    phone_endpoint,
+    push_schedule_grid,
+    remember_phone_host,
 )
 from meal_planner.shift_time import payroll_coverage_issues
 from meal_planner.timeparse import business_date
@@ -100,6 +101,7 @@ from meal_planner.storage import (
     load_sidebar_width,
     load_show_past,
     load_target_editor_layout,
+    load_typhoon_state,
     merge_memory_payload,
     save_active_panel,
     save_active_config_view,
@@ -115,6 +117,7 @@ from meal_planner.storage import (
     save_show_past,
     save_sidebar_width,
     save_target_editor_layout,
+    save_typhoon_state,
 )
 
 _WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -194,6 +197,9 @@ def _health_payload() -> dict[str, Any]:
 
 @app.middleware("http")
 async def record_debug_stats(request: Request, call_next):
+    # 電話會喺 header 報上名——記低佢個 IP，之後打風 Apply 就 push 得返落電話。
+    if request.headers.get(CLIENT_HEADER) == CLIENT_HEADER_VALUE:
+        remember_phone_host(request.client.host if request.client else "")
     started = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -299,6 +305,7 @@ class UiStateRequest(BaseModel):
     menu_hidden_keys: list[str] | None = None
     menu_tree_open: dict[str, bool] | None = None
     google_calendar_sync: dict[str, Any] | None = None
+    typhoon_state: dict[str, Any] | None = None
 
 
 class MemoryPayloadRequest(BaseModel):
@@ -328,6 +335,7 @@ class DetailSettingsRequest(BaseModel):
     data_folder: str | None = None
     google_calendar_sync: dict[str, Any] | None = None
     roster_code_definitions: list[dict[str, Any]] = Field(default_factory=list)
+    roster_post_mapping: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class MaintenanceSheetRequest(BaseModel):
@@ -338,6 +346,7 @@ class DutyReportOverrideRequest(BaseModel):
     mode: str | None = None
     segments: list[dict[str, str]] | None = None
     slot: dict[str, Any] | None = None
+    extra_slots: list[dict[str, Any]] | None = None
     source: str = "web"
     date_iso: str | None = None
 
@@ -372,14 +381,23 @@ class OnOffDutyOverrideRequest(BaseModel):
     note: str | None = None
 
 
-class OnOffDutyLateOffRequest(BaseModel):
+class OnOffDutyHoldSendRequest(BaseModel):
     action: str  # hold | release | send_now
+    kind: str = "end"  # start | end（舊版電話 app 冇呢個欄，當收工）
     note: str = ""
 
 
 class OnOffDutyRosterCodeRequest(BaseModel):
     date_iso: str | None = None
     code: str
+
+
+class TyphoonApplyRequest(BaseModel):
+    date_iso: str | None = None
+    signal_time: str = ""
+    code: str | None = None
+    day_off: bool = False
+    name: str = ""
 
 
 def _stored_meal_plan_payloads(
@@ -722,6 +740,7 @@ def web_asset(asset_name: str) -> FileResponse:
         "planner-events.js",
         "planner-duty.js",
         "planner-onoffduty.js",
+        "planner-typhoon.js",
         "favicon.svg",
     }:
         raise HTTPException(status_code=404, detail="Cannot find web asset")
@@ -982,6 +1001,7 @@ def _detail_settings_payload() -> dict[str, Any]:
         },
         "google_calendar_sync": load_google_calendar_sync_settings(),
         "roster_code_definitions": load_roster_code_definitions(settings),
+        "roster_post_mapping": load_roster_post_mapping(settings),
     }
 
 
@@ -1008,6 +1028,7 @@ def api_set_detail_settings(body: DetailSettingsRequest) -> dict[str, Any]:
         if body.google_calendar_sync is not None:
             save_google_calendar_sync_settings(body.google_calendar_sync)
         save_roster_code_definitions(body.roster_code_definitions, get_settings())
+        save_roster_post_mapping(body.roster_post_mapping, get_settings())
         return {"ok": True, **_detail_settings_payload()}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1096,28 +1117,12 @@ def api_google_calendar_roster_sync() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Google Calendar roster sync failed: {e}") from e
 
 
-def _normalize_schedule_grid_xml(data: bytes) -> tuple[list[list[Any]], set[str], str | None]:
-    """三條 import path（檔案 upload / phone push / phone IP preview）共用嘅
-    「XML bytes → 正規化 rows」流程——以前每條 path 抄一份，改一處要人手抄三處。
-    回傳 (rows, imported_dates, effective_version)。"""
+def _normalize_schedule_grid_push(payload: Any) -> tuple[list[list[Any]], set[str]]:
+    """電話推上嚟嘅 JSON payload → 正規化 rows + 生效日期。"""
     try:
-        rows = parse_schedule_grid_texts(extract_xml_texts(data))[0]
-        effective_version, root_roster_code = schedule_grid_xml_metadata(data)
-        if effective_version is None:
-            effective_version = _extract_seed_effective_version_from_xml_bytes(data)
-        rows = apply_schedule_grid_xml_metadata(
-            rows,
-            effective_version=effective_version,
-            roster_code=root_roster_code,
-        )
-        rows, imported_dates = _fill_missing_schedule_grid_version(rows, effective_version)
-        return rows, imported_dates, effective_version
-    except HTTPException:
-        raise
-    except ET.ParseError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid XML: {e}") from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid XML content: {e}") from e
+        return parse_schedule_grid_push_payload(payload)
+    except ScheduleGridDataError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 def _import_normalized_schedule_grid_rows(
@@ -1145,7 +1150,7 @@ def _import_normalized_schedule_grid_rows(
         if has_existing_rows:
             raise HTTPException(
                 status_code=400,
-                detail="Uploaded schedule_grid XML has no effective date version. "
+                detail="Pushed schedule_grid has no effective date version. "
                        "請重新從電腦匯出再更新 seed。",
             )
     imported_row_count = max(0, len(rows) - 1)
@@ -1167,76 +1172,21 @@ def _import_normalized_schedule_grid_rows(
     }
 
 
-@app.get("/api/maint/sheets/schedule_grid/export-all-xml")
-def api_export_all_schedule_grid_to_xml() -> dict[str, Any]:
+@app.get("/api/maint/sheets/schedule_grid/export-all")
+def api_export_all_schedule_grid() -> dict[str, Any]:
     return build_schedule_grid_all_variants_export()
-
-
-def _extract_seed_effective_version_from_xml_bytes(data: bytes) -> str | None:
-    try:
-        ET.fromstring(data)
-    except ET.ParseError:
-        return None
-    for token in extract_xml_texts(data):
-        token = (token or "").strip()
-        if not token:
-            continue
-        header_match = SCHEDULE_GRID_HEADER_RE.fullmatch(token)
-        if header_match:
-            normalized = normalize_schedule_grid_effective_date(parse_header_date(token))
-            if normalized:
-                return normalized
-
-
-def _fill_missing_schedule_grid_version(
-    rows: list[list[Any]],
-    fallback_version: str | None,
-) -> tuple[list[list[Any]], set[str]]:
-    if not rows:
-        return rows, set()
-
-    version_candidates: set[str] = set()
-    for row in rows[1:]:
-        if not isinstance(row, (list, tuple)) or len(row) < 5:
-            continue
-        version_candidates.add(normalize_schedule_grid_effective_date(row[4]))
-    version_candidates.discard("")
-    if version_candidates:
-        return rows, version_candidates
-
-    if fallback_version is None:
-        return rows, set()
-
-    normalized = normalize_schedule_grid_effective_date(str(fallback_version).strip())
-    if not normalized:
-        return rows, set()
-
-    for row in rows[1:]:
-        if not isinstance(row, (list, tuple)):
-            continue
-        while len(row) < 5:
-            row.append("")
-        row[4] = normalized
-    return rows, {normalized}
-
-
-def _import_schedule_grid_from_phone_bytes(data: bytes) -> dict[str, Any]:
-    if not data:
-        raise HTTPException(status_code=400, detail="No XML content uploaded.")
-    rows, imported_dates, _ = _normalize_schedule_grid_xml(data)
-    import_result = _import_normalized_schedule_grid_rows(rows, imported_dates)
-    return {
-        **import_result,
-        "ok": True,
-    }
 
 
 @app.post("/api/maint/sheets/schedule_grid/import-phone-push")
 async def api_import_schedule_grid_from_phone_push(request: Request) -> dict[str, Any]:
-    data = await request.body()
-    result = _import_schedule_grid_from_phone_bytes(data)
+    try:
+        payload = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON body: {e}") from e
+    rows, imported_dates = _normalize_schedule_grid_push(payload)
+    import_result = _import_normalized_schedule_grid_rows(rows, imported_dates)
     return {
-        **result,
+        **import_result,
         "ok": True,
         "source": "phone_push",
     }
@@ -1362,6 +1312,7 @@ def api_get_ui_state() -> dict[str, Any]:
         "menu_hidden_keys": load_menu_hidden_keys(ui),
         "menu_tree_open": load_menu_tree_open(ui),
         "google_calendar_sync": load_google_calendar_sync_settings(ui),
+        "typhoon_state": load_typhoon_state(ui),
     }
 
 
@@ -1400,6 +1351,8 @@ def _apply_ui_state_patch(body: UiStateRequest) -> None:
         save_menu_tree_open(body.menu_tree_open)
     if body.google_calendar_sync is not None:
         save_google_calendar_sync_settings(body.google_calendar_sync)
+    if body.typhoon_state is not None:
+        save_typhoon_state(body.typhoon_state)
     if body.sidebar_width is not None:
         save_sidebar_width(body.sidebar_width)
     if body.show_past is not None:
@@ -1466,6 +1419,7 @@ def api_duty_report_override(body: DutyReportOverrideRequest) -> dict[str, Any]:
             mode=body.mode,
             segments=body.segments,
             slot_patch=body.slot,
+            extra_slots=body.extra_slots,
             source=body.source,
             biz_date=biz_date,
         )
@@ -1612,24 +1566,27 @@ def api_onoffduty_roster_code(body: OnOffDutyRosterCodeRequest) -> dict[str, Any
 
 
 @app.post("/api/onoffduty/lateoff")
-def api_onoffduty_lateoff(body: OnOffDutyLateOffRequest) -> dict[str, Any]:
-    from meal_planner.duty_form import late_off_hold, late_off_send_now
+def api_onoffduty_holdsend(body: OnOffDutyHoldSendRequest) -> dict[str, Any]:
+    """開工／收工嘅 hold・resume・send now（路徑保留舊名，舊版電話 app 仲用緊）。"""
+    from meal_planner.duty_form import duty_hold, duty_send_now
 
+    if body.kind not in {"start", "end"}:
+        raise HTTPException(status_code=400, detail=f"Invalid kind: {body.kind}")
     try:
         settings = get_settings()
         if body.action == "hold":
-            return late_off_hold(settings, True)
+            return duty_hold(settings, body.kind, True)
         if body.action == "release":
-            return late_off_hold(settings, False)
+            return duty_hold(settings, body.kind, False)
         if body.action == "send_now":
-            return late_off_send_now(settings, note=body.note)
+            return duty_send_now(settings, body.kind, note=body.note)
         raise HTTPException(status_code=400, detail=f"Invalid action: {body.action}")
     except HTTPException:
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OnOffDuty lateoff failed: {e}") from e
+        raise HTTPException(status_code=500, detail=f"OnOffDuty hold/send failed: {e}") from e
 
 
 @app.post("/api/onoffduty/config")
@@ -1642,6 +1599,122 @@ def api_onoffduty_config(body: OnOffDutyConfigRequest) -> dict[str, Any]:
         return build_day_plan(settings)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OnOffDuty config failed: {e}") from e
+
+
+@app.get("/api/typhoon/plan")
+def api_typhoon_plan(
+    date_iso: str | None = None,
+    signal_time: str = "",
+    code: str | None = None,
+    confirmed: bool = False,
+    day_off: bool = False,
+    name: str = "",
+) -> dict[str, Any]:
+    from meal_planner.typhoon import build_typhoon_plan
+
+    biz_date: date | None = None
+    if date_iso:
+        try:
+            biz_date = date.fromisoformat(date_iso)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date_iso: {date_iso}") from e
+    try:
+        return build_typhoon_plan(
+            get_settings(),
+            biz_date=biz_date,
+            signal_time=signal_time,
+            roster_code=code,
+            confirmed=confirmed,
+            day_off_announced=day_off,
+            name=name,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Typhoon plan failed: {e}") from e
+
+
+@app.get("/api/typhoon/current-name")
+def api_typhoon_current_name() -> dict[str, Any]:
+    from meal_planner.typhoon import current_typhoon_names
+
+    data = current_typhoon_names()
+    first = data["names"][0] if data["names"] else {}
+    return {
+        "name": first.get("zh", ""),
+        "english": first.get("en", ""),
+        "names": data["names"],
+        "note": data["note"],
+        "source": data["source"],
+    }
+
+
+class TyphoonMealPlanRequest(BaseModel):
+    date_iso: str | None = None
+    signal_time: str = ""
+    code: str | None = None
+    day_off: bool = False
+    reroll_nonce: int = 0
+
+
+@app.post("/api/typhoon/meal-plan")
+def api_typhoon_meal_plan(body: TyphoonMealPlanRequest) -> dict[str, Any]:
+    """當日餐單按打風時間重新計一次（要行 LP，所以係 POST，唔會自動跑）。"""
+    from meal_planner.typhoon import build_typhoon_meal_plan
+
+    biz_date: date | None = None
+    if body.date_iso:
+        try:
+            biz_date = date.fromisoformat(body.date_iso)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date_iso: {body.date_iso}") from e
+    if biz_date is None:
+        biz_date = business_date(datetime.now(ZoneInfo(get_settings().dates.timezone)))
+    try:
+        return build_typhoon_meal_plan(
+            get_settings(), biz_date=biz_date, signal_time=body.signal_time,
+            roster_code=body.code, day_off_announced=body.day_off,
+            reroll_nonce=body.reroll_nonce,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Typhoon meal plan failed: {e}") from e
+
+
+@app.get("/api/phone/endpoint")
+def api_phone_endpoint() -> dict[str, Any]:
+    """電腦最後一次見到電話嘅位置（電話每次打上嚟會報上名）。"""
+    return phone_endpoint()
+
+
+@app.post("/api/phone/push-schedule-grid")
+def api_phone_push_schedule_grid() -> dict[str, Any]:
+    """叫電話即刻重新匯入行位表（電話跟住會排鬧鐘 + 通知手錶）。"""
+    return push_schedule_grid()
+
+
+@app.post("/api/typhoon/apply")
+def api_typhoon_apply(body: TyphoonApplyRequest) -> dict[str, Any]:
+    from meal_planner.typhoon import apply_typhoon
+
+    biz_date: date | None = None
+    if body.date_iso:
+        try:
+            biz_date = date.fromisoformat(body.date_iso)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date_iso: {body.date_iso}") from e
+    try:
+        return apply_typhoon(
+            get_settings(),
+            biz_date=biz_date,
+            signal_time=body.signal_time,
+            roster_code=body.code,
+            day_off_announced=body.day_off,
+            name=body.name,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Typhoon apply failed: {e}") from e
 
 
 def main() -> None:

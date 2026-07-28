@@ -19,20 +19,36 @@ from meal_planner.google_calendar_sync import (
     sync_roster_to_google_calendar,
     _upsert_events,
 )
+from meal_planner.roster_codes import defs_from_rows
 from meal_planner.settings import clear_settings_cache, get_settings
 from meal_planner.storage import save_google_calendar_sync_settings
+
+
+CODE_DEFS = defs_from_rows([
+    {"pattern": "WL*", "label": "週假"},
+    {"pattern": "SH*", "label": "勞工假"},
+    {"pattern": "SB", "label": "Stand by"},
+    {"pattern": "TP", "label": "颱風假"},
+    {"pattern": "其他", "label": "返工日"},
+])
+
+
+def grid_rows(*shifts: tuple[str, str, str], effective: str = "") -> list[list[str]]:
+    """行位表 rows：每個更碼一對「報開工／報收工」行（GC 時間就係喺呢兩行嚟）。"""
+    rows = [["更碼", "時間", "內容", "時長", "生效日期"]]
+    for code, start, end in shifts:
+        rows.append([code, start, "報開工", "", effective])
+        rows.append([code, end, "報收工", "", effective])
+    return rows
 
 
 class GoogleCalendarSyncPlanTests(unittest.TestCase):
     def test_builds_shift_and_alarm_events_for_workday_roster_codes(self):
         roster_rows = [["2026年6月 16 SH08 17 Lecole Event 18 SB"]]
-        payroll_rows = [
-            ["更碼", "開工", "收工", "適用", "優先"],
-            ["Lecole event", "0900", "19:00", "", 10],
-            ["SH*", "08:00", "16:00", "", 1],
-        ]
+        # 行位表更碼只忽略大小寫／前後空格，冇 wildcard。
+        rows = grid_rows(("Lecole event", "0900", "19:00"))
 
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows)
+        plan = build_roster_calendar_plan(roster_rows, rows, roster_code_defs=CODE_DEFS)
 
         self.assertEqual([event.roster_code for event in plan.work_events], ["Lecole Event"])
         self.assertEqual(plan.work_events[0].summary, "Lecole Event")
@@ -46,19 +62,14 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
 
     def test_mtr_door_rows_set_work_event_location(self):
         roster_rows = [["2026年6月 1 TSB 2 Pen 3 Zzz"]]
-        payroll_rows = [
-            ["更碼", "開工", "收工"],
-            ["TSB", "09:00", "18:00"],
-            ["Pen", "10:00", "19:00"],
-            ["Zzz", "08:00", "17:00"],
-        ]
+        rows = grid_rows(("TSB", "09:00", "18:00"), ("Pen", "10:00", "19:00"), ("Zzz", "08:00", "17:00"))
         mtr_door_rows = [
             ["更碼", "目的地", "上車卡門", "轉車", "轉車卡門", "落車出口"],
             ["Pen*", "半島", "2-3", "直達", "", "尖沙咀 E"],
             ["TS*", "時代廣場", "2-3", "金鐘轉港島綫", "8-4", "銅鑼灣 A"],
         ]
 
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows, None, None, mtr_door_rows)
+        plan = build_roster_calendar_plan(roster_rows, rows, None, None, mtr_door_rows, roster_code_defs=CODE_DEFS)
 
         by_code = {event.roster_code: event for event in plan.work_events}
         self.assertEqual(by_code["TSB"].location, "2-3 8-4")
@@ -69,7 +80,8 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
     def test_non_workday_events_are_all_day_leave_calendar_events(self):
         plan = build_roster_calendar_plan(
             [["2026年6月 1 WL21 2 SB"]],
-            [["更碼", "開工", "收工"]],
+            grid_rows(),
+            roster_code_defs=CODE_DEFS,
             leave_calendar_id="leave-calendar",
         )
 
@@ -83,10 +95,9 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
 
     def test_non_workday_with_wake_row_can_have_wake_alarm(self):
         roster_rows = [["2026年6月 1 SB 2 WL21"]]
-        payroll_rows = [["更碼", "開工", "收工"]]
         wake_rows = [["日期", "起身時間", "備註"], ["2026-06-01", "08:15", "appointment"]]
 
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows, None, wake_rows)
+        plan = build_roster_calendar_plan(roster_rows, grid_rows(), None, wake_rows, roster_code_defs=CODE_DEFS)
 
         self.assertEqual([event.roster_code for event in plan.leave_events], ["SB", "WL21"])
         self.assertEqual(len(plan.alarm_events), 1)
@@ -96,29 +107,35 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
 
     def test_non_workday_without_wake_row_has_no_wake_alarm(self):
         roster_rows = [["2026年6月 1 SB"]]
-        payroll_rows = [["更碼", "開工", "收工"]]
         wake_rows = [["日期", "起身時間", "備註"]]
 
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows, None, wake_rows)
+        plan = build_roster_calendar_plan(roster_rows, grid_rows(), None, wake_rows, roster_code_defs=CODE_DEFS)
 
         self.assertEqual([event.roster_code for event in plan.leave_events], ["SB"])
         self.assertEqual(plan.alarm_events, [])
 
     def test_alarm_three_hours_before_start_can_land_on_previous_date(self):
+        # 30 小時制：7/2 嗰更寫 25:00 開工 ＝ 7/3 凌晨 01:00，起身鬧鐘就跌返 7/2 夜晚。
         roster_rows = [["2026年7月 2 Night"]]
-        payroll_rows = [["更碼", "開工", "收工"], ["Night", "01:00", "09:00"]]
+        plan = build_roster_calendar_plan(roster_rows, grid_rows(("Night", "25:00", "09:00")))
 
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows)
-
-        self.assertEqual(plan.work_events[0].start_at.isoformat(), "2026-07-02T01:00:00+08:00")
-        self.assertEqual(plan.alarm_events[0].start_at.isoformat(), "2026-07-01T22:00:00+08:00")
+        self.assertEqual(plan.work_events[0].start_at.isoformat(), "2026-07-03T01:00:00+08:00")
+        self.assertEqual(plan.alarm_events[0].start_at.isoformat(), "2026-07-02T22:00:00+08:00")
         self.assertEqual(plan.alarm_events[0].roster_date, date(2026, 7, 2))
+
+    def test_legacy_early_morning_time_reads_as_the_30_hour_form(self):
+        # 舊資料寫 "01:00"（未改制之前）：一樣當 25:00，即係嗰個更嘅翌日凌晨。
+        roster_rows = [["2026年7月 2 Night"]]
+        plan = build_roster_calendar_plan(roster_rows, grid_rows(("Night", "01:00", "09:00")))
+
+        self.assertEqual(plan.work_events[0].start_at.isoformat(), "2026-07-03T01:00:00+08:00")
 
     def test_wake_offset_hours_is_configurable(self):
         roster_rows = [["2026年7月 1 Lecole Event"]]
-        payroll_rows = [["更碼", "開工", "收工"], ["Lecole Event", "1000", "19:00"]]
-
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows, wake_offset_hours=2.5)
+        plan = build_roster_calendar_plan(
+            roster_rows, grid_rows(("Lecole Event", "1000", "19:00")),
+            roster_code_defs=CODE_DEFS, wake_offset_hours=2.5
+        )
 
         self.assertEqual(plan.work_events[0].start_at.isoformat(), "2026-07-01T10:00:00+08:00")
         # 開工 10:00 − 2.5 鐘 = 07:30（default 3 鐘會係 07:00）
@@ -126,10 +143,12 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
 
     def test_overtime_rows_override_payroll_times_for_work_and_alarm_events(self):
         roster_rows = [["2026年7月 1 Lecole Event"]]
-        payroll_rows = [["更碼", "開工", "收工"], ["Lecole Event", "1000", "19:00"]]
         overtime_rows = [["日期", "開工", "收工", "備註"], ["2026-07-01", "11:30", "20:15", "特別更"]]
 
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows, overtime_rows)
+        plan = build_roster_calendar_plan(
+            roster_rows, grid_rows(("Lecole Event", "1000", "19:00")), overtime_rows,
+            roster_code_defs=CODE_DEFS
+        )
 
         self.assertEqual(plan.work_events[0].start_at.isoformat(), "2026-07-01T11:30:00+08:00")
         self.assertEqual(plan.work_events[0].end_at.isoformat(), "2026-07-01T20:15:00+08:00")
@@ -137,10 +156,12 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
 
     def test_overtime_override_uses_header_names_and_report_date_time_formats(self):
         roster_rows = [["2026年7月 1 Lecole Event"]]
-        payroll_rows = [["更碼", "開工", "收工"], ["Lecole Event", "1000", "19:00"]]
         overtime_rows = [["備註", "收工", "日期", "開工"], ["特別更", "2015", "01/07/2026 Wed", "1130"]]
 
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows, overtime_rows)
+        plan = build_roster_calendar_plan(
+            roster_rows, grid_rows(("Lecole Event", "1000", "19:00")), overtime_rows,
+            roster_code_defs=CODE_DEFS
+        )
 
         self.assertEqual(plan.work_events[0].start_at.isoformat(), "2026-07-01T11:30:00+08:00")
         self.assertEqual(plan.work_events[0].end_at.isoformat(), "2026-07-01T20:15:00+08:00")
@@ -148,44 +169,51 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
 
     def test_wake_alarm_rows_override_default_alarm_time_only(self):
         roster_rows = [["2026年7月 1 Lecole Event"]]
-        payroll_rows = [["更碼", "開工", "收工"], ["Lecole Event", "1000", "19:00"]]
         wake_rows = [["日期", "起身時間", "備註"], ["2026-07-01", "08:15", "早少少"]]
 
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows, None, wake_rows)
+        plan = build_roster_calendar_plan(
+            roster_rows, grid_rows(("Lecole Event", "1000", "19:00")), None, wake_rows,
+            roster_code_defs=CODE_DEFS
+        )
 
         self.assertEqual(plan.work_events[0].start_at.isoformat(), "2026-07-01T10:00:00+08:00")
         self.assertEqual(plan.alarm_events[0].start_at.isoformat(), "2026-07-01T08:15:00+08:00")
         self.assertEqual(plan.alarm_events[0].end_at.isoformat(), "2026-07-01T10:00:00+08:00")
         self.assertEqual(plan.alarm_events[0].description, "起身")
 
-    def test_payroll_applicable_day_rows_pick_weekday_and_holiday_times(self):
-        # 2026-07-01 係星期三、2026-07-03 係星期五。
+    def test_newest_effective_grid_version_wins(self):
+        # 同一個更碼兩個版本，靠「生效日期」分辨：當日只用最新嗰個生效版本。
         roster_rows = [["2026年7月 1 FJA 3 FJA"]]
-        payroll_rows = [
-            ["更碼", "開工", "收工", "適用日", "優先序"],
-            ["FJA", "09:00", "18:30", "公眾假期", 1],
-            ["FJA", "09:00", "19:30", "一二三四", 2],
-            ["FJA", "09:00", "20:30", "五六", 2],
-            ["FJA", "09:00", "18:30", "日", 2],
-        ]
+        rows = grid_rows(("FJA", "09:00", "19:30"), effective="2026-06-01")
+        rows += grid_rows(("FJA", "09:00", "20:30"), effective="2026-07-02")[1:]
 
-        plan = build_roster_calendar_plan(roster_rows, payroll_rows)
+        plan = build_roster_calendar_plan(roster_rows, rows, roster_code_defs=CODE_DEFS)
         by_date = {event.roster_date: event for event in plan.work_events}
         self.assertEqual(by_date[date(2026, 7, 1)].end_at.isoformat(), "2026-07-01T19:30:00+08:00")
         self.assertEqual(by_date[date(2026, 7, 3)].end_at.isoformat(), "2026-07-03T20:30:00+08:00")
 
-        # 同一日如果係公眾假期 → 用「公眾假期」行，唔理星期幾。
-        plan_holiday = build_roster_calendar_plan(roster_rows, payroll_rows, holidays={date(2026, 7, 1)})
-        by_date_holiday = {event.roster_date: event for event in plan_holiday.work_events}
-        self.assertEqual(by_date_holiday[date(2026, 7, 1)].end_at.isoformat(), "2026-07-01T18:30:00+08:00")
-        self.assertEqual(by_date_holiday[date(2026, 7, 3)].end_at.isoformat(), "2026-07-03T20:30:00+08:00")
-
-    def test_missing_payroll_time_is_skipped_without_event(self):
-        plan = build_roster_calendar_plan([["2026年6月 1 EleB"]], [["更碼", "開工", "收工"]])
+    def test_missing_grid_report_row_is_skipped_without_event(self):
+        # 行位表冇嗰個更碼嘅「報開工／報收工」→ 明明白白 skip，唔會靜靜哋用更時表補飛。
+        plan = build_roster_calendar_plan([["2026年6月 1 EleB"]], grid_rows(), roster_code_defs=CODE_DEFS)
 
         self.assertEqual(plan.work_events, [])
         self.assertEqual(plan.alarm_events, [])
-        self.assertEqual(plan.skipped, [{"date": "2026-06-01", "code": "EleB", "reason": "missing_shift_time"}])
+        self.assertEqual(
+            plan.skipped, [{"date": "2026-06-01", "code": "EleB", "reason": "missing_grid_report_row"}]
+        )
+
+    def test_only_report_rows_decide_the_shift_window(self):
+        # 行位表其他行（飯／小食／廁）唔會影響開工收工時間。
+        roster_rows = [["2026年7月 1 VOC"]]
+        rows = grid_rows(("VOC", "09:15", "21:30"))
+        rows.insert(1, ["VOC", "12:30", "食飯 60", "60", ""])
+        rows.append(["VOC", "17:15", "- 報平安更 30", "30", ""])
+
+        plan = build_roster_calendar_plan(roster_rows, rows, roster_code_defs=CODE_DEFS)
+
+        self.assertEqual(plan.work_events[0].start_at.isoformat(), "2026-07-01T09:15:00+08:00")
+        self.assertEqual(plan.work_events[0].end_at.isoformat(), "2026-07-01T21:30:00+08:00")
+        self.assertEqual(plan.alarm_events[0].start_at.isoformat(), "2026-07-01T06:15:00+08:00")
 
 
 class GoogleCalendarSyncRuntimeTests(unittest.TestCase):
@@ -229,11 +257,10 @@ class GoogleCalendarSyncRuntimeTests(unittest.TestCase):
             oauth_token_file=None,
         )
         sheets = {
-            "payroll_times": {"rows": [["更碼", "開工", "收工"], ["EleB", "10:45", "21:00"]]},
+            "schedule_grid": {"rows": grid_rows(("EleB", "10:45", "21:00"))},
             "overtime": {"rows": [["日期", "開工", "收工", "備註"]]},
             "wake_alarms": {"rows": [["日期", "起身時間", "備註"]]},
             "mtr_doors": {"rows": [["更碼", "目的地", "上車卡門", "轉車", "轉車卡門", "落車出口"]]},
-            "public_holidays": {"rows": [["日期"]]},
         }
 
         with patch("meal_planner.google_calendar_sync.load_sheet_rows", side_effect=lambda key, settings: sheets[key]):

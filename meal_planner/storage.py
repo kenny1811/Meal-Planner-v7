@@ -88,6 +88,8 @@ def _default_ui() -> dict[str, Any]:
         },
         "menu_hidden_keys": [],
         "menu_tree_open": {"config": True, "maint": False, "reports": False},
+        "typhoon_state": {},
+        "phone_endpoint": {},
         "google_calendar_sync": {
             "enabled": False,
             "write": False,
@@ -107,6 +109,10 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict):
         if isinstance(raw.get("column_widths"), dict):
             ui["column_widths"] = raw["column_widths"]
+        if isinstance(raw.get("typhoon_state"), dict):
+            ui["typhoon_state"] = dict(raw["typhoon_state"])
+        if isinstance(raw.get("phone_endpoint"), dict):
+            ui["phone_endpoint"] = dict(raw["phone_endpoint"])
         try:
             ui["sidebar_width"] = float(raw.get("sidebar_width", ui["sidebar_width"]))
         except Exception:
@@ -656,6 +662,38 @@ def save_menu_tree_open(open_state: dict[str, bool]) -> None:
         ui["menu_tree_open"] = current
 
     _update_ui(mutate)
+
+
+def save_typhoon_state(state: dict[str, Any]) -> None:
+    """Typhoon panel 上次嘅輸入（日期／落波／個名／確實／更碼）——下次開返同一個畫面。"""
+    clean = {
+        str(k): ("" if v is None else v)
+        for k, v in state.items()
+        if str(k) in {"date_iso", "signal_time", "name", "confirmed", "day_off", "code"}
+    } if isinstance(state, dict) else {}
+    _update_ui(lambda ui: ui.update({"typhoon_state": clean}))
+
+
+def save_phone_endpoint(endpoint: dict[str, Any]) -> None:
+    """電話最後一次打上嚟嘅位置（IP + 時間）——電腦要 push 落電話嗰陣用。"""
+    clean = {
+        str(k): endpoint[k]
+        for k in ("host", "seen_at")
+        if isinstance(endpoint, dict) and k in endpoint
+    }
+    _update_ui(lambda ui: ui.update({"phone_endpoint": clean}))
+
+
+def load_phone_endpoint(ui: dict[str, Any] | None = None) -> dict[str, Any]:
+    ui = _load_ui() if ui is None else ui
+    raw = ui.get("phone_endpoint", {})
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def load_typhoon_state(ui: dict[str, Any] | None = None) -> dict[str, Any]:
+    ui = _load_ui() if ui is None else ui
+    raw = ui.get("typhoon_state", {})
+    return dict(raw) if isinstance(raw, dict) else {}
 
 
 def load_menu_tree_open(ui: dict[str, Any] | None = None) -> dict[str, bool]:

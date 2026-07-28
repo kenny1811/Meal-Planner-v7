@@ -10,13 +10,19 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from meal_planner.maintenance_db import load_sheet_rows
+from meal_planner.maintenance_db import load_sheet_rows, roster_code_defs as load_roster_code_defs
 from meal_planner.meal_schedule import roster_matches_rule
-from meal_planner.roster import is_work_day, roster_map_from_sheet_rows
-from meal_planner.schedule_grid import load_overtime_overrides_from_rows, load_wake_alarm_overrides_from_rows
+from meal_planner.roster import roster_map_from_sheet_rows
+from meal_planner.roster_codes import RosterCodeDef, is_work_day
+from meal_planner.schedule_grid import (
+    load_overtime_overrides_from_rows,
+    load_schedule_rows_from_rows,
+    load_wake_alarm_overrides_from_rows,
+    report_start_end,
+    rows_for_roster,
+)
 from meal_planner.atomic_io import write_text_atomic
 from meal_planner.settings import AppSettings
-from meal_planner.shift_time import holiday_dates_from_rows, resolve_shift_time
 
 
 GC_ACCOUNT_EMAIL = "kenny1811@gmail.com"
@@ -169,6 +175,15 @@ def _combine(day: date, value: time, tz: ZoneInfo) -> datetime:
     return datetime(day.year, day.month, day.day, value.hour, value.minute, tzinfo=tz)
 
 
+def _combine_shift(day: date, value: time, tz: ZoneInfo) -> datetime:
+    """更嘅開工／收工鐘點 → 真正時刻：30 小時制之下 06:00 前嗰段屬翌日凌晨。
+
+    （起身鬧鐘唔行呢條——05:30 起身係當日朝早，唔係第二日。）
+    """
+    at = _combine(day, value, tz)
+    return at + timedelta(days=1) if value.hour < 6 else at
+
+
 def _combine_alarm(day: date, wake: time, start_time: time, tz: ZoneInfo) -> datetime:
     alarm_at = _combine(day, wake, tz)
     if wake > start_time:
@@ -178,22 +193,29 @@ def _combine_alarm(day: date, wake: time, start_time: time, tz: ZoneInfo) -> dat
 
 def build_roster_calendar_plan(
     roster_rows: list[list[Any]],
-    payroll_rows: list[list[Any]],
+    schedule_grid_rows: list[list[Any]],
     overtime_rows: list[list[Any]] | None = None,
     wake_alarm_rows: list[list[Any]] | None = None,
     mtr_door_rows: list[list[Any]] | None = None,
     *,
+    roster_code_defs: list[RosterCodeDef] | None = None,
     work_calendar_id: str = WORK_CALENDAR_ID,
     alarm_calendar_id: str = ALARM_CALENDAR_ID,
     leave_calendar_id: str = NONWORK_CALENDAR_ID,
     wake_offset_hours: float = DEFAULT_WAKE_OFFSET_HOURS,
     time_zone: str = DEFAULT_TIME_ZONE,
     from_date: date | None = None,
-    holidays: set[date] | None = None,
 ) -> RosterCalendarPlan:
+    """更表 → 日曆 event（返工／起身／假期）。
+
+    時間＝**行位表**「報開工／報收工」＋加班表 override —— 同 OnOff_Duty、報平安更
+    同一條實務時間軸。更時表（計糧）唔會喺呢度出現。行位表搵唔到該更碼嗰兩行就
+    skip（reason=missing_grid_report_row），唔會靜靜哋搵第二個來源補飛。
+    """
     tz = ZoneInfo(time_zone)
     roster_map = roster_map_from_sheet_rows(roster_rows)
-    holidays = holidays or set()
+    grid_rows = load_schedule_rows_from_rows(schedule_grid_rows or [])
+    code_defs = roster_code_defs or []
     overtime_by_date = load_overtime_overrides_from_rows(overtime_rows or [])
     wake_alarm_by_date = load_wake_alarm_overrides_from_rows(wake_alarm_rows or [])
     door_lookup = mtr_door_lookup(mtr_door_rows)
@@ -214,7 +236,7 @@ def build_roster_calendar_plan(
                 skipped.append({"date": roster_day.isoformat(), "code": code, "reason": "before_sync_start"})
                 continue
             roster_dates.add(roster_day)
-            if not is_work_day(code):
+            if not is_work_day(code_defs, code):
                 leave_start = datetime(roster_day.year, roster_day.month, roster_day.day, tzinfo=tz)
                 leave_events.append(
                     CalendarEventPlan(
@@ -235,13 +257,16 @@ def build_roster_calendar_plan(
                         _alarm_event(alarm_calendar_id, roster_day, code, _combine(roster_day, wake_time, tz))
                     )
                 continue
-            start_time, end_time = resolve_shift_time(payroll_rows, code, roster_day, holidays, overtime_by_date)
+            grid_start, grid_end = report_start_end(rows_for_roster(grid_rows, code, roster_day), roster_day)
+            ot_start, ot_end = overtime_by_date.get(roster_day, (None, None))
+            start_time = ot_start if ot_start is not None else grid_start
+            end_time = ot_end if ot_end is not None else grid_end
             if start_time is None or end_time is None:
-                skipped.append({"date": roster_day.isoformat(), "code": code, "reason": "missing_shift_time"})
+                skipped.append({"date": roster_day.isoformat(), "code": code, "reason": "missing_grid_report_row"})
                 continue
 
-            start_at = _combine(roster_day, start_time, tz)
-            end_at = _combine(roster_day, end_time, tz)
+            start_at = _combine_shift(roster_day, start_time, tz)
+            end_at = _combine_shift(roster_day, end_time, tz)
             if end_at <= start_at:
                 end_at += timedelta(days=1)
             summary = code
@@ -681,29 +706,27 @@ def sync_roster_to_google_calendar(
                 "auth": auth_status,
             }
 
-    payroll_payload = load_sheet_rows("payroll_times", settings)
-    payroll_rows = payroll_payload.get("rows", []) if isinstance(payroll_payload, dict) else []
+    grid_payload = load_sheet_rows("schedule_grid", settings)
+    grid_rows = grid_payload.get("rows", []) if isinstance(grid_payload, dict) else []
     overtime_payload = load_sheet_rows("overtime", settings)
     overtime_rows = overtime_payload.get("rows", []) if isinstance(overtime_payload, dict) else []
     wake_alarm_payload = load_sheet_rows("wake_alarms", settings)
     wake_alarm_rows = wake_alarm_payload.get("rows", []) if isinstance(wake_alarm_payload, dict) else []
     mtr_door_payload = load_sheet_rows("mtr_doors", settings)
     mtr_door_rows = mtr_door_payload.get("rows", []) if isinstance(mtr_door_payload, dict) else []
-    holiday_payload = load_sheet_rows("public_holidays", settings)
-    holiday_rows = holiday_payload.get("rows", []) if isinstance(holiday_payload, dict) else []
     plan = build_roster_calendar_plan(
         roster_rows,
-        payroll_rows if isinstance(payroll_rows, list) else [],
+        grid_rows if isinstance(grid_rows, list) else [],
         overtime_rows if isinstance(overtime_rows, list) else [],
         wake_alarm_rows if isinstance(wake_alarm_rows, list) else [],
         mtr_door_rows if isinstance(mtr_door_rows, list) else [],
+        roster_code_defs=load_roster_code_defs(settings),
         work_calendar_id=config.work_calendar_id,
         alarm_calendar_id=config.alarm_calendar_id,
         leave_calendar_id=config.leave_calendar_id,
         wake_offset_hours=config.wake_offset_hours,
         time_zone=config.time_zone,
         from_date=datetime.now(ZoneInfo(config.time_zone)).date(),
-        holidays=holiday_dates_from_rows(holiday_rows if isinstance(holiday_rows, list) else []),
     )
     result: dict[str, Any] = {
         "enabled": config.enabled,

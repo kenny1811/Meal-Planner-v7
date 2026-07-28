@@ -28,31 +28,23 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.xml.parsers.DocumentBuilderFactory;
 
 public class MainActivity extends Activity {
     private static final String TAG = "OneShotAlarm";
-    private static final String EXPORT_FILE_NAME = "export.xml";
     private static final int HTTP_READ_TIMEOUT_MS = 7000;
     private static final int PAGE_MEAL = 0;
     private static final int PAGE_SHIFT = 1;
@@ -71,24 +63,6 @@ public class MainActivity extends Activity {
     private static final Pattern SCHEDULE_GRID_DATE_RE = Pattern.compile(
             "^\\s*(\\d{4}-\\d{2}-\\d{2}|(\\d{1,2})/(\\d{1,2})/(\\d{4}))\\s*$"
     );
-    private static final HashSet<String> XML_NOISE_TEXTS = new HashSet<>();
-
-    static {
-        XML_NOISE_TEXTS.add("時間");
-        XML_NOISE_TEXTS.add("內容");
-        XML_NOISE_TEXTS.add("操作");
-        XML_NOISE_TEXTS.add("插入");
-        XML_NOISE_TEXTS.add("刪除");
-        XML_NOISE_TEXTS.add("刪除全部");
-        XML_NOISE_TEXTS.add("append");
-        XML_NOISE_TEXTS.add("append all");
-        XML_NOISE_TEXTS.add("insert");
-        XML_NOISE_TEXTS.add("delete");
-        XML_NOISE_TEXTS.add("delete all");
-        XML_NOISE_TEXTS.add("sync");
-        XML_NOISE_TEXTS.add("synchronize");
-    }
-
     private TextView headerView;
     private TextView statusView;
     private TextView mealPlanView;
@@ -149,6 +123,7 @@ public class MainActivity extends Activity {
         handleTestDailyImportIntent(getIntent());
         NextAlarmWidgetProvider.updateAll(this);
         requestNotificationPermissionIfNeeded();
+        maybeRequestBatteryExemption();
         AppUpdater.autoCheck(this);
     }
 
@@ -165,6 +140,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         loadDraftFromStore();
+        mealExpandedKey = "";  // 每次返返嚟都用返當時嘅 default 餐
         render();
         NextAlarmWidgetProvider.updateAll(this);
         scheduleServerStatusChecks();
@@ -604,6 +580,9 @@ public class MainActivity extends Activity {
                 : page == PAGE_DUTY ? PAGE_DUTY
                 : page == PAGE_ONOFF ? PAGE_ONOFF
                 : PAGE_SHIFT;
+        if (currentPage == PAGE_MEAL) {
+            mealExpandedKey = "";  // 每次撳返「餐單」都用返當時嘅 default 餐
+        }
         updatePageVisibility();
         render();
         if (currentPage == PAGE_MEAL && !wasMeal) {
@@ -714,8 +693,7 @@ public class MainActivity extends Activity {
                 this,
                 "POST",
                 "/api/maint/sheets/schedule_grid/import-phone-push",
-                buildScheduleGridXml().getBytes("UTF-8"),
-                "application/xml; charset=utf-8",
+                buildScheduleGridPushPayload().toString(),
                 HTTP_READ_TIMEOUT_MS
         );
         JSONObject json = new JSONObject(response);
@@ -745,173 +723,34 @@ public class MainActivity extends Activity {
         return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(System.currentTimeMillis());
     }
 
-    private String buildScheduleGridXml() {
+    /** 推去電腦嘅 payload：{effective_date, roster_code, alarms:[{time,label}]}。 */
+    private JSONObject buildScheduleGridPushPayload() throws JSONException {
         String exportDate = parseDateTextToIso(draftDate == null ? "" : draftDate);
         if (exportDate.isEmpty()) {
             exportDate = todayIso();
         }
-        StringBuilder builder = new StringBuilder();
-        builder.append("<?xml version='1.0' encoding='UTF-8' standalone='yes'?>").append('\n');
-        String code = draftRosterCode == null ? "" : draftRosterCode.trim();
-        builder.append("<schedule_grid effective_date=\"").append(escapeXml(exportDate))
-                .append("\" roster_code=\"").append(escapeXml(code)).append("\">").append('\n');
-        String header = exportDate.trim();
-        if (!header.isEmpty()) {
-            String headerLine = header + (code.isEmpty() ? "" : " " + code);
-            builder.append("  <section>").append(escapeXml(headerLine)).append("</section>").append('\n');
-        }
+        JSONArray alarms = new JSONArray();
         for (int i = 0; i < draftAlarms.length(); i++) {
             JSONObject alarm = draftAlarms.optJSONObject(i);
             if (alarm == null) {
                 continue;
             }
-            String trigger = clockOnly(alarm.optLong("trigger_at_epoch_ms"));
+            String time = clockOnly(alarm.optLong("trigger_at_epoch_ms"));
             String label = alarm.optString("label", "").trim();
-            if (trigger.isEmpty() || label.isEmpty()) {
+            if (time.isEmpty() || label.isEmpty()) {
                 continue;
             }
-            builder.append("  <alarm>").append('\n');
-            builder.append("    <time>").append(escapeXml(trigger)).append("</time>").append('\n');
-            builder.append("    <content>").append(escapeXml(label)).append("</content>").append('\n');
-            builder.append("  </alarm>").append('\n');
+            JSONObject item = new JSONObject();
+            item.put("time", time);
+            item.put("label", label);
+            item.put("disabled", alarm.optBoolean("disabled", false));
+            alarms.put(item);
         }
-        builder.append("</schedule_grid>").append('\n');
-        return builder.toString();
-    }
-
-    private String escapeXml(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&apos;");
-    }
-
-    private ParsedScheduleGridImport parseScheduleGridXml(String xml) throws Exception {
-        String rootEffectiveDate = parseScheduleGridRootEffectiveDate(xml);
-        ArrayList<String> tokens = extractXmlTexts(xml);
-        ArrayList<String> cleaned = new ArrayList<>();
-        for (String token : tokens) {
-            String v = token == null ? "" : token.trim();
-            if (!v.isEmpty()) {
-                cleaned.add(v);
-            }
-        }
-        JSONArray alarms = new JSONArray();
-        String planDate = "";
-        String rosterCode = "";
-        String currentDate = "";
-        String currentCode = rosterCode;
-        int i = 0;
-        while (i < cleaned.size()) {
-            String token = cleaned.get(i).trim();
-            if (token.isEmpty()) {
-                i += 1;
-                continue;
-            }
-            String lowered = token.toLowerCase(Locale.getDefault());
-            if (XML_NOISE_TEXTS.contains(lowered)) {
-                i += 1;
-                continue;
-            }
-            Matcher headerMatch = SCHEDULE_GRID_HEADER_RE.matcher(token);
-            if (headerMatch.matches()) {
-                currentDate = parseHeaderDateIso(
-                        headerMatch.group(1),
-                        headerMatch.group(2),
-                        headerMatch.group(3),
-                        headerMatch.group(4)
-                );
-                currentCode = headerMatch.group(5) == null ? currentCode : headerMatch.group(5).trim();
-                if (!currentDate.isEmpty() && planDate.isEmpty()) {
-                    planDate = currentDate;
-                }
-                if (!currentCode.isEmpty()) {
-                    rosterCode = currentCode;
-                }
-                i++;
-                continue;
-            }
-
-            if (TIME_RE.matcher(token).matches()) {
-                String content = null;
-                int j = i + 1;
-                while (j < cleaned.size()) {
-                    String next = cleaned.get(j).trim();
-                    if (next.isEmpty()) {
-                        j++;
-                        continue;
-                    }
-                    if (XML_NOISE_TEXTS.contains(next.toLowerCase(Locale.getDefault()))) {
-                        j++;
-                        continue;
-                    }
-                    if (TIME_RE.matcher(next).matches()
-                            || SCHEDULE_GRID_DATE_RE.matcher(next).matches()
-                            || SCHEDULE_GRID_HEADER_RE.matcher(next).matches()) {
-                        break;
-                    }
-                    content = next;
-                    j++;
-                    break;
-                }
-                if (content == null) {
-                    i++;
-                    continue;
-                }
-                if ((currentDate == null || currentDate.isEmpty()) && !planDate.isEmpty()) {
-                    currentDate = planDate;
-                }
-                if ((currentDate == null || currentDate.isEmpty()) && !draftDate.isEmpty()) {
-                    currentDate = draftDate;
-                }
-                if (currentDate == null || currentDate.isEmpty()) {
-                    currentDate = todayIso();
-                }
-                long triggerAt = parseAlarmTimeOnDate(currentDate, token);
-                JSONObject alarm = new JSONObject();
-                alarm.put("id", "xml-" + System.currentTimeMillis() + "-" + i);
-                alarm.put("label", content);
-                alarm.put("trigger_at_epoch_ms", triggerAt);
-                alarm.put("trigger_at", formatIso(triggerAt));
-                alarms.put(alarm);
-                i = j;
-                continue;
-            }
-            i++;
-        }
-        if (planDate.isEmpty() && !rootEffectiveDate.isEmpty()) {
-            planDate = rootEffectiveDate;
-        }
-        if (planDate.isEmpty() && !draftDate.isEmpty()) {
-            planDate = draftDate;
-        }
-        if (rosterCode.isEmpty()) {
-            rosterCode = draftRosterCode == null ? "" : draftRosterCode;
-        }
-        return new ParsedScheduleGridImport(alarms, planDate, rosterCode);
-    }
-
-    private String parseHeaderDateIso(String rawDate, String dayPart, String monthPart, String yearPart) {
-        String normalized = parseDateTextToIso(rawDate);
-        if (!normalized.isEmpty()) {
-            return normalized;
-        }
-        if (dayPart == null || monthPart == null || yearPart == null) {
-            return "";
-        }
-        try {
-            int day = Integer.parseInt(dayPart);
-            int month = Integer.parseInt(monthPart);
-            int year = Integer.parseInt(yearPart);
-            return String.format(Locale.getDefault(), "%04d-%02d-%02d", year, month, day);
-        } catch (NumberFormatException e) {
-            return "";
-        }
+        JSONObject payload = new JSONObject();
+        payload.put("effective_date", exportDate);
+        payload.put("roster_code", draftRosterCode == null ? "" : draftRosterCode.trim());
+        payload.put("alarms", alarms);
+        return payload;
     }
 
     private String parseDateTextToIso(String raw) {
@@ -936,96 +775,6 @@ public class MainActivity extends Activity {
             }
         }
         return "";
-    }
-
-    private String parseScheduleGridRootEffectiveDate(String xml) {
-        if (xml == null || xml.trim().isEmpty()) {
-            return "";
-        }
-        try {
-            Document document = parseXmlDocument(xml);
-            Node rootNode = document == null ? null : document.getDocumentElement();
-            if (!(rootNode instanceof Element)) {
-                return "";
-            }
-            Element root = (Element) rootNode;
-            String value = root.getAttribute("effective_date");
-            if (value == null || value.trim().isEmpty()) {
-                value = root.getAttribute("version");
-            }
-            return parseDateTextToIso(value == null ? "" : value);
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    private long parseAlarmTimeOnDate(String dateIso, String timeText) {
-        try {
-            String[] dateParts = dateIso.split("-");
-            String[] timeParts = timeText.split(":");
-            if (dateParts.length != 3 || timeParts.length != 2) {
-                return 0L;
-            }
-            int year = Integer.parseInt(dateParts[0]);
-            int month = Integer.parseInt(dateParts[1]);
-            int day = Integer.parseInt(dateParts[2]);
-            int hour = Integer.parseInt(timeParts[0]);
-            int minute = Integer.parseInt(timeParts[1]);
-            Calendar cal = Calendar.getInstance();
-            cal.set(Calendar.YEAR, year);
-            cal.set(Calendar.MONTH, month - 1);
-            cal.set(Calendar.DAY_OF_MONTH, day);
-            cal.set(Calendar.HOUR_OF_DAY, hour);
-            cal.set(Calendar.MINUTE, minute);
-            cal.set(Calendar.SECOND, 0);
-            cal.set(Calendar.MILLISECOND, 0);
-            return cal.getTimeInMillis();
-        } catch (Exception e) {
-            return 0L;
-        }
-    }
-
-    private ArrayList<String> extractXmlTexts(String xml) throws Exception {
-        ArrayList<String> texts = new ArrayList<>();
-        Document document = parseXmlDocument(xml);
-        collectXmlTextNodes(document, texts);
-        return texts;
-    }
-
-    private Document parseXmlDocument(String xml) throws Exception {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        return factory.newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-    }
-
-    private void collectXmlTextNodes(Node node, ArrayList<String> texts) {
-        if (node == null) {
-            return;
-        }
-        if (node.getNodeType() == Node.TEXT_NODE) {
-            String value = node.getNodeValue();
-            if (value != null) {
-                String trimmed = value.trim();
-                if (!trimmed.isEmpty()) {
-                    texts.add(trimmed);
-                }
-            }
-        }
-        NodeList children = node.getChildNodes();
-        for (int i = 0; i < children.getLength(); i++) {
-            collectXmlTextNodes(children.item(i), texts);
-        }
-    }
-
-    private static final class ParsedScheduleGridImport {
-        final JSONArray alarms;
-        final String planDate;
-        final String rosterCode;
-
-        ParsedScheduleGridImport(JSONArray alarms, String planDate, String rosterCode) {
-            this.alarms = alarms == null ? new JSONArray() : alarms;
-            this.planDate = planDate == null ? "" : planDate;
-            this.rosterCode = rosterCode == null ? "" : rosterCode;
-        }
     }
 
     private void configureSystemBars() {
@@ -1486,7 +1235,7 @@ public class MainActivity extends Activity {
         if (lastImportAt <= 0L) {
             return "--";
         }
-        return new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(lastImportAt);
+        return Clock30.formatDateTime(lastImportAt);
     }
 
     private String mealPlanTextDisplay() {
@@ -2451,13 +2200,14 @@ public class MainActivity extends Activity {
     }
 
     private String defaultExpandedMeal(JSONObject mealPlan, JSONObject resolved) {
+        // 順住餐次揀 default：未過該餐 +1 鐘就開嗰餐（過咗早餐 +1 鐘 → 午餐，如此類推）。
         String[] meals = new String[]{"早餐", "午餐", "小食", "晚餐"};
         ArrayList<String> visible = new ArrayList<>();
         ArrayList<Integer> times = new ArrayList<>();
         for (String meal : meals) {
             String timeText = cleanMealText(resolved.optString(meal, ""));
             int minutes = firstClockMinutes(timeText);
-            if (minutes < 0) {
+            if (minutes < 0 || !mealHasContent(mealPlan, meal)) {
                 continue;
             }
             visible.add(meal);
@@ -2610,18 +2360,27 @@ public class MainActivity extends Activity {
         LinearLayout row = baseRow(0xFF8ED3EA);
         row.addView(iconCell(0xFF8ED3EA));
         row.addView(cell("時間", 13, Gravity.CENTER, 0.78f, 0xFF000000, 0xFF8ED3EA));
-        row.addView(cell("內容", 13, Gravity.CENTER, 1.48f, 0xFF000000, 0xFF8ED3EA));
-        row.addView(cell("操作", 13, Gravity.CENTER, 1.24f, 0xFF000000, 0xFF8ED3EA));
+        row.addView(cell("內容", 13, Gravity.CENTER, 2.17f, 0xFF000000, 0xFF8ED3EA));
+        row.addView(cell("操作", 13, Gravity.CENTER, 0.55f, 0xFF000000, 0xFF8ED3EA));
         return row;
     }
 
     private LinearLayout alarmRow(int index, JSONObject alarm) {
         LinearLayout row = baseRow(0xFFFFFFFF);
-        boolean dimmed = shouldDimAlarm(alarm);
+        boolean disabled = alarm.optBoolean("disabled", false);
+        boolean dimmed = disabled || shouldDimAlarm(alarm);
         row.setAlpha(dimmed ? 0.45f : 1f);
+        // 插入／刪除搬咗入 long-press menu，唔再佔住成行位置。
+        // 每個 cell 各自有 click listener，會食咗 touch，所以要逐個都掛埋 long-click。
+        android.view.View.OnLongClickListener longPress = v -> {
+            showRowMenu(index);
+            return true;
+        };
+        row.setOnLongClickListener(longPress);
 
         ImageView icon = alarmIconCell();
         icon.setOnClickListener(v -> editTime(index));
+        icon.setOnLongClickListener(longPress);
         row.addView(icon);
 
         TextView time = cell(
@@ -2633,27 +2392,29 @@ public class MainActivity extends Activity {
                 0xFFFFFFFF
         );
         time.setOnClickListener(v -> editTime(index));
+        time.setOnLongClickListener(longPress);
         row.addView(time);
 
         TextView label = cell(
                 alarm.optString("label", "鬧鐘"),
                 13,
                 Gravity.LEFT | Gravity.CENTER_VERTICAL,
-                1.48f,
+                2.17f,
                 0xFF000000,
                 0xFFFFFFFF
         );
         label.setOnClickListener(v -> editLabel(index));
+        label.setOnLongClickListener(longPress);
         row.addView(label);
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setGravity(Gravity.CENTER);
         actions.setBackgroundColor(0xFFFFFFFF);
-        actions.setPadding(dp(2), dp(1), dp(2), dp(1));
-        actions.addView(actionButton("插入", () -> insertAlarm(index)));
-        actions.addView(actionButton("刪除", () -> deleteDraftAlarm(index)));
-        row.addView(actions, weightedParams(1.24f));
+        actions.setPadding(dp(2), dp(3), dp(2), dp(3));
+        actions.setOnLongClickListener(longPress);
+        actions.addView(statePill(!disabled, () -> toggleAlarmDisabled(index), longPress));
+        row.addView(actions, weightedParams(0.55f));
         return row;
     }
 
@@ -2662,8 +2423,8 @@ public class MainActivity extends Activity {
             LinearLayout row = baseRow(0xFFFFFFFF);
             row.addView(iconCell(0xFFFFFFFF));
             row.addView(cell("", 13, Gravity.CENTER, 0.78f, 0xFF000000, 0xFFFFFFFF));
-            row.addView(cell("", 13, Gravity.CENTER, 1.48f, 0xFF000000, 0xFFFFFFFF));
-            row.addView(cell("", 13, Gravity.CENTER, 1.24f, 0xFF000000, 0xFFFFFFFF));
+            row.addView(cell("", 13, Gravity.CENTER, 2.17f, 0xFF000000, 0xFFFFFFFF));
+            row.addView(cell("", 13, Gravity.CENTER, 0.55f, 0xFF000000, 0xFFFFFFFF));
             tableView.addView(row, fullWidthWrapHeight());
         }
     }
@@ -2711,22 +2472,22 @@ public class MainActivity extends Activity {
         return view;
     }
 
-    private Button actionButton(String text, Runnable action) {
-        Button button = new Button(this);
-        button.setText(text);
-        button.setTextSize(9);
-        button.setGravity(Gravity.CENTER);
-        button.setAllCaps(false);
-        button.setMinWidth(0);
-        button.setMinimumWidth(0);
-        button.setMinHeight(dp(24));
-        button.setMinimumHeight(dp(24));
-        button.setPadding(dp(2), 0, dp(2), 0);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(28), 1f);
-        params.setMargins(dp(1), 0, dp(1), 0);
-        button.setLayoutParams(params);
-        button.setOnClickListener(v -> action.run());
-        return button;
+    /** 行位啟用狀態掣：ON＝淺藍、OFF＝淺灰，撳一下 toggle（唔用系統灰方掣，成張表清爽啲）。 */
+    private TextView statePill(
+            boolean enabled,
+            Runnable action,
+            android.view.View.OnLongClickListener longPress
+    ) {
+        TextView pill = new TextView(this);
+        pill.setText(enabled ? "ON" : "OFF");
+        pill.setTextSize(10);
+        pill.setGravity(Gravity.CENTER);
+        pill.setTextColor(enabled ? 0xFF0C447C : 0xFF5F5E5A);
+        pill.setBackground(roundedBg(enabled ? 0xFFE6F1FB : 0xFFF1EFE8, 11, 0, 0));
+        pill.setPadding(dp(10), dp(3), dp(10), dp(3));
+        pill.setOnClickListener(v -> action.run());
+        pill.setOnLongClickListener(longPress);
+        return pill;
     }
 
     private boolean shouldDimAlarm(JSONObject alarm) {
@@ -2909,6 +2670,90 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Long-press 一行出 menu：插入／刪除。 */
+    private void showRowMenu(int index) {
+        JSONObject alarm = draftAlarms.optJSONObject(index);
+        if (alarm == null) {
+            return;
+        }
+        String title = clockOnly(alarm.optLong("trigger_at_epoch_ms")) + "  " + alarm.optString("label", "");
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setItems(new CharSequence[]{"插入一行", "刪除呢行"}, (dialog, which) -> {
+                    if (which == 0) {
+                        insertAlarm(index);
+                    } else {
+                        deleteDraftAlarm(index);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /** 停用／啟用一格行位：唔會響鬧鐘、唔佔時長，但留喺表入面撳得返。 */
+    private void toggleAlarmDisabled(int index) {
+        JSONObject alarm = draftAlarms.optJSONObject(index);
+        if (alarm == null) {
+            return;
+        }
+        try {
+            alarm.put("disabled", !alarm.optBoolean("disabled", false));
+            saveDraftAlarms();
+        } catch (JSONException e) {
+            Toast.makeText(this, "更新停用狀態失敗", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * 重算時長：一格嘅時長 ＝ 去下一個「佔時間」行嘅距離。
+     * `-` 開頭嘅 marker 行同停用行都唔佔時間，前一格跨過佢哋。
+     * 插入／刪除／停用／改時間之後行一次，成張表啲數跟住啱返。
+     */
+    private void recomputeDraftDurations() {
+        java.util.List<JSONObject> live = new java.util.ArrayList<>();
+        for (int i = 0; i < draftAlarms.length(); i++) {
+            JSONObject alarm = draftAlarms.optJSONObject(i);
+            if (alarm == null) {
+                continue;
+            }
+            String content = splitLabelContent(alarm.optString("label", ""));
+            if (alarm.optBoolean("disabled", false) || content.startsWith("-")) {
+                setLabelDuration(alarm, content, -1);
+                continue;
+            }
+            live.add(alarm);
+        }
+        for (int i = 0; i < live.size(); i++) {
+            JSONObject alarm = live.get(i);
+            String content = splitLabelContent(alarm.optString("label", ""));
+            if (i + 1 >= live.size()) {
+                setLabelDuration(alarm, content, -1);
+                continue;
+            }
+            long gap = live.get(i + 1).optLong("trigger_at_epoch_ms", 0L)
+                    - alarm.optLong("trigger_at_epoch_ms", 0L);
+            setLabelDuration(alarm, content, gap > 0 ? (int) (gap / 60000L) : -1);
+        }
+    }
+
+    /** 「M 75」→「M」；冇尾數就原樣。 */
+    private static String splitLabelContent(String label) {
+        String text = label == null ? "" : label.trim();
+        Matcher matcher = Pattern.compile("\\s+\\d{1,3}$").matcher(text);
+        if (!matcher.find()) {
+            return text;
+        }
+        String content = text.substring(0, matcher.start()).trim();
+        return content.isEmpty() ? text : content;
+    }
+
+    private void setLabelDuration(JSONObject alarm, String content, int minutes) {
+        try {
+            alarm.put("label", minutes > 0 ? content + " " + minutes : content);
+        } catch (JSONException ignored) {
+        }
+    }
+
     private void setAlarmLabel(int index, String label) {
         JSONObject alarm = draftAlarms.optJSONObject(index);
         if (alarm == null) {
@@ -3004,6 +2849,7 @@ public class MainActivity extends Activity {
         }
         shiftEmptyMessage = "";
         sortDraftAlarms();
+        recomputeDraftDurations();
         if (draftAlarms.length() == 0) {
             AlarmScheduler.cancelAll(this);
         } else {
@@ -3030,7 +2876,7 @@ public class MainActivity extends Activity {
     }
 
     private String clockOnly(long millis) {
-        return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(millis);
+        return Clock30.format(millis);
     }
 
     private String formatIso(long millis) {
@@ -3042,6 +2888,28 @@ public class MainActivity extends Activity {
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 9001);
+        }
+    }
+
+    /**
+     * 唔喺電池優化白名單，Samsung 會凍結後台 process——本機 server 就收唔到電腦嘅 push
+     * （例如打風改咗行位表要即刻重新匯入）。開 app 嗰陣問一次，已經豁免就唔會再煩。
+     */
+    private void maybeRequestBatteryExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return;
+        }
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+        String pkg = getPackageName();
+        if (pm == null || pm.isIgnoringBatteryOptimizations(pkg)) {
+            return;
+        }
+        try {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + pkg));
+            startActivity(intent);
+        } catch (Exception e) {
+            Log.w(TAG, "Battery optimization request failed", e);
         }
     }
 

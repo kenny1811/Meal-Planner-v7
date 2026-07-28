@@ -1,3 +1,6 @@
+    // 30 小時制：一日由 06:00 開始，「全日同一個更碼」嘅 segment 就係由 06:00 起。
+    const DUTY_DAY_START = "06:00";
+
     let dutyReportPlan = null;
     let dutyReportLoading = false;
     let dutyReportDate = "";
@@ -113,7 +116,7 @@
       const segments = plan && plan.segments ? plan.segments : [];
       if (!segments.length) return "";
       return segments
-        .map((seg) => (seg.from !== "00:00" ? `${seg.code}（由 ${seg.from}）` : seg.code))
+        .map((seg) => (seg.from !== DUTY_DAY_START ? `${seg.code}（由 ${seg.from}）` : seg.code))
         .join(" → ");
     }
 
@@ -289,10 +292,20 @@
       if (el) el.focus();
     }
 
+    // 拖 block 以 10px 為單位落格——排出嚟自然對齊，唔會差一兩個 pixel。
+    // 淨係「移動」落格，改闊度／高度照舊逐 pixel。
+    const DUTY_BLOCK_SNAP_PX = 10;
+
+    function dutyBlockSnap(value) {
+      return Math.round(value / DUTY_BLOCK_SNAP_PX) * DUTY_BLOCK_SNAP_PX;
+    }
+
     function dutyBlockWidthPx(block, key) {
-      const table = block.querySelector("table[data-form-table]");
+      const table = block.querySelector("table[data-form-table], table.sheet");
       if (table) {
         // 有表嘅 block：闊度永遠貼實張表（columns 逐條校），忽略兼清走舊 saved 闊度。
+        // 出咗直向捲軸就再加返捲軸嗰條闊度（見 applyDutyBlockLayoutFor），
+        // 咁張表先唔會俾捲軸迫窄。
         delete formColumnWidths[`duty_block_${key}_w`];
         let total = 0;
         table.querySelectorAll("col[data-form-col-key]").forEach((col) => {
@@ -300,7 +313,27 @@
           const fallback = Number(col.getAttribute("data-form-col-default")) || 120;
           total += formColumnWidthPx(colKey, fallback);
         });
-        return total + 4;
+        // Block 入面可能仲有餐單頁嗰張 sheet（自己有 px 闊度，唔係 data-form-table）——
+        // 取最闊嗰個，唔好淨計欄闊而切走張餐單。
+        const sheet = block.querySelector("table.sheet");
+        const sheetWidth = sheet ? parseFloat(sheet.style.width || "0") : 0;
+        // 張表右邊仲有掣嗰忽（固定闊度）——block 要連埋佢、加埋 gap 同右邊 padding
+        // 先夠位，唔會出橫向捲軸。全部讀返 CSS，唔喺度寫死數字。
+        const side = block.querySelector(".typhoon-meal-actions");
+        let sideWidth = 0;
+        if (side) {
+          const wrap = side.parentElement;
+          const wrapStyle = wrap ? getComputedStyle(wrap) : null;
+          const gap = wrapStyle ? parseFloat(wrapStyle.columnGap || wrapStyle.gap || "0") : 0;
+          const padRight = wrapStyle ? parseFloat(wrapStyle.paddingRight || "0") : 0;
+          const basis = parseFloat(getComputedStyle(side).flexBasis || "0");
+          sideWidth =
+            (Number.isFinite(basis) ? basis : 0)
+            + (Number.isFinite(gap) ? gap : 0)
+            + (Number.isFinite(padRight) ? padRight : 0);
+        }
+        const sheetTotal = (Number.isFinite(sheetWidth) ? sheetWidth : 0) + (Number.isFinite(sideWidth) ? sideWidth : 0);
+        return Math.max(total, sheetTotal) + 4;
       }
       const saved = Number(formColumnWidths[`duty_block_${key}_w`]);
       if (Number.isFinite(saved) && saved >= 120) return saved;
@@ -309,7 +342,7 @@
 
     function applyDutyBlockLayout() {
       // duty_report 同 onoffduty 兩個 panel 共用同一套 block 拖放／位置記憶。
-      ["duty-layout", "onoff-layout"].forEach((id) => applyDutyBlockLayoutFor(id));
+      ["duty-layout", "onoff-layout", "typhoon-layout"].forEach((id) => applyDutyBlockLayoutFor(id));
     }
 
     function applyDutyBlockLayoutFor(containerId) {
@@ -326,13 +359,31 @@
         const savedH = Number(formColumnWidths[`duty_block_${key}_h`]);
         const x = Number.isFinite(savedX) ? savedX : 0;
         const y = Number.isFinite(savedY) ? Math.max(0, savedY) : defaultY;
-        const width = dutyBlockWidthPx(block, key);
+        let width = dutyBlockWidthPx(block, key);
         block.style.left = `${x}px`;
         block.style.top = `${y}px`;
         block.style.width = `${width}px`;
-        const fixedH = Number.isFinite(savedH) && savedH >= 60;
+        // Typhoon 啲 block 一律跟內容高度：訂死高度只會兩頭唔到岸——
+        // 高過內容就一大片白，矮過就出條冇用嘅捲軸。闊度本身已經跟欄闊算好。
+        // 有表嘅 block 高度跟內容（訂死只會留白或者出冇用嘅捲軸）；冇表嗰啲你拖幾高就幾高。
+        const autoHeightOnly =
+          containerId === "typhoon-layout" && !!block.querySelector("table[data-form-table], table.sheet");
+        if (autoHeightOnly && Number.isFinite(savedH)) delete formColumnWidths[`duty_block_${key}_h`];
+        const fixedH = !autoHeightOnly && Number.isFinite(savedH) && savedH >= 60;
         block.style.height = fixedH ? `${savedH}px` : "";
         block.classList.toggle("duty-block-scroll", fixedH);
+        // 縮矮咗出直向捲軸 → 自動加返捲軸嗰條闊度，唔好用佢嚟迫窄張表
+        // （闊度永遠由欄闊控制，捲軸只係額外佔位）。
+        if (fixedH) {
+          const style = getComputedStyle(block);
+          const borders =
+            parseFloat(style.borderLeftWidth || "0") + parseFloat(style.borderRightWidth || "0");
+          const bar = Math.max(0, Math.round(block.offsetWidth - block.clientWidth - borders));
+          if (bar > 0) {
+            width += bar;
+            block.style.width = `${width}px`;
+          }
+        }
         const height = block.getBoundingClientRect().height;
         maxRight = Math.max(maxRight, x + width);
         maxBottom = Math.max(maxBottom, y + height);
@@ -371,8 +422,8 @@
             startWindowDrag({
               bodyClass: "is-dnd-dragging",
               onMove: (mv) => {
-                formColumnWidths[`duty_block_${key}_x`] = start.x + (mv.clientX - startX);
-                formColumnWidths[`duty_block_${key}_y`] = Math.max(0, start.y + (mv.clientY - startY));
+                formColumnWidths[`duty_block_${key}_x`] = dutyBlockSnap(start.x + (mv.clientX - startX));
+                formColumnWidths[`duty_block_${key}_y`] = Math.max(0, dutyBlockSnap(start.y + (mv.clientY - startY)));
                 applyDutyBlockLayout();
               },
               onUp: () => {
@@ -388,8 +439,14 @@
           });
         }
 
-        // resize handles：有表嘅 block 闊度跟表，只俾上下改高度；冇表先有四邊。
-        const edges = block.querySelector("table[data-form-table]") ? ["n", "s"] : ["n", "s", "e", "w"];
+        // resize handles：有表嘅 block 闊度跟表（改闊度靠拖欄邊），只俾上下改高度；冇表先有四邊。
+        // 有表嘅 block（欄闊表或者餐單表）闊度一律跟欄闊算，唔俾手拖——只留上下改高度。
+        // Typhoon 嗰啲連高度都跟內容，所以一粒 resize grip 都唔使（照舊拖 title 移位）。
+        // 有表嘅 block 大細由欄闊算出嚟，唔俾拖；冇表嗰啲（例如 Typhoon 主 block）四邊都拖得。
+        // 有表嘅 block 大細由欄闊算出嚟；冇表嗰啲（例如 Typhoon 主 block）四邊都拖得。
+        const hasTable = block.querySelector("table[data-form-table], table.sheet");
+        const inTyphoon = !!block.closest("#typhoon-layout");
+        const edges = hasTable ? (inTyphoon ? [] : ["n", "s"]) : ["n", "s", "e", "w"];
         edges.forEach((edge) => {
           const grip = document.createElement("span");
           grip.className = `duty-rs duty-rs-${edge}`;
@@ -596,15 +653,16 @@
       if (action === "change-code") {
         const code = window.prompt("改用邊個更碼？（成日重排）");
         if (!code || !code.trim()) return;
-        return dutyApply({ mode: "auto", segments: [{ from: "00:00", code: code.trim() }] });
+        return dutyApply({ mode: "auto", segments: [{ from: DUTY_DAY_START, code: code.trim() }] });
       }
       if (action === "change-code-from") {
         const code = window.prompt("由某時間起轉用邊個更碼？");
         if (!code || !code.trim()) return;
         const from = window.prompt("由幾點起？（09:16 / 0916）", "");
         if (!from || !/^(\d{1,2}:\d{2}|\d{3,4})$/.test(from.trim())) return dutyShowError("時間格式要 HH:MM 或 HHMM");
-        let fromText = from.trim();
-        if (/^\d{3,4}$/.test(fromText)) fromText = `${fromText.slice(0, -2).padStart(2, "0")}:${fromText.slice(-2)}`;
+        // 30 小時制：打 02:00 即係 26:00（凌晨屬前一日），normalTime 幫手轉。
+        const fromText = normalTime(from.trim());
+        if (!fromText) return dutyShowError("時間格式要 HH:MM 或 HHMM");
         const base = (dutyReportPlan && dutyReportPlan.segments ? dutyReportPlan.segments : []).filter(
           (seg) => seg.from < fromText
         );

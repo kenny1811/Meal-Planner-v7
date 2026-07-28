@@ -1,5 +1,7 @@
     // OnOffDuty panel: 每日 On Duty / Off Duty Google Form 打卡預填連結。
-    // 時間來源 = 更時表（睇適用日）+ 加班表，同 Report Normal（報平安更）分開。
+    // 時間來源 = 更時表（睇適用日）+ 加班表 override，同 Report Normal（報平安更）分開。
+    // 兩張卡都有 Hold / Resume / Send now：未定幾點開工（打風）或未走得（遲收工）就 hold，
+    // 真發生嗰陣撳 Send now —— form + WhatsApp 齊發。
     let onoffPlan = null;
     let onoffLoading = false;
     let onoffDate = "";
@@ -67,9 +69,27 @@
         return `<div class="duty-status-bad" title="${onoffEsc(action.detail || "")}">✗ missed — open the form yourself</div>`;
       }
       if (action.status === "hold") {
-        return `<div class="duty-status-due">⏸ holding — 真收工先撳齊發</div>`;
+        const what = action.kind === "start" ? "start" : "finish";
+        return `<div class="duty-status-due">⏸ holding — press Send now when you really ${what}</div>`;
       }
       return `<div class="duty-status-muted">not reported yet</div>`;
+    }
+
+    // 完整經過（append-only）：交過就永遠留低，改時間唔會抹走。
+    const ONOFF_HISTORY_ICON = {
+      sent: "✓", opened: "↗", failed: "✗", missed: "✗",
+      hold: "⏸", resumed: "▶", rearmed: "↻", cleared: "·",
+    };
+
+    function onoffHistoryLines(action) {
+      const rows = Array.isArray(action.history) ? action.history : [];
+      if (rows.length < 2) return "";  // 得一行＝而家個狀態，上面已經講咗
+      // 一行 = 幾時 + 符號 + 當時嗰個時間。狀態字、source、detail 都係符號已經講咗嘅嘢。
+      const items = rows.map((h) => {
+        const icon = ONOFF_HISTORY_ICON[h.status] || "·";
+        return `<li>${onoffEsc(onoffFmtLoggedAt(h.recorded_at))} ${icon} ${onoffEsc(h.time_text || "")}</li>`;
+      });
+      return `<details class="onoff-history"><summary>經過（${rows.length}）</summary><ul>${items.join("")}</ul></details>`;
     }
 
     function onoffActionCard(action) {
@@ -82,20 +102,27 @@
       const copyBtn = hasUrl
         ? `<button type="button" class="duty-btn onoff-copy" data-onoff-copy="${onoffEsc(action.url)}">Copy link</button>`
         : "";
-      // 收工卡（今日）：遲收工 Hold（兩邊一齊 hold）＋ 真收工齊發（form + WhatsApp 同一刻）。
+      // 今日兩張卡都有：Hold（form + 報平安更 slot 一齊 hold）＋ Send now（form + WhatsApp 齊發）。
       let lateBtns = "";
-      if (action.kind === "end" && onoffPlan && (onoffPlan.relation || "today") === "today" && action.status !== "sent") {
+      if (onoffPlan && (onoffPlan.relation || "today") === "today" && action.status !== "sent") {
+        const kind = onoffEsc(action.kind);
         const holding = action.status === "hold";
-        lateBtns = holding
-          ? `<button type="button" class="duty-btn" data-onoff-action="late-release">Cancel hold</button>
-             <button type="button" class="duty-btn duty-btn-primary" data-onoff-action="late-send">真收工 · 齊發</button>`
-          : `<button type="button" class="duty-btn" data-onoff-action="late-hold" title="兩邊一齊 hold：WhatsApp 報收工 slot + Off Duty form 都唔會夠鐘自動發">遲收工 Hold</button>
-             <button type="button" class="duty-btn" data-onoff-action="late-send" title="以而家時間齊發：交 form + 出 WhatsApp；超出更時表窗口（早開工/遲收工）兼 總工時>10.25h 先寫加班表">真收工 · 齊發</button>`;
+        const holdTitle = action.kind === "start"
+          ? "Hold both sides: the WhatsApp 報開工 slot and the On Duty form stop auto-firing"
+          : "Hold both sides: the WhatsApp 報收工 slot and the Off Duty form stop auto-firing";
+        const sendTitle = action.kind === "start"
+          ? "Fire now at the current time: submit the form + send WhatsApp; the real start time is written to 加班表 when it differs from the planned one"
+          : "Fire now at the current time: submit the form + send WhatsApp; 加班表 is written only outside the payroll window and over 10.25 h total";
+        lateBtns = `${holding
+            ? `<button type="button" class="duty-btn" data-onoff-action="duty-release" data-onoff-for="${kind}">Resume</button>`
+            : `<button type="button" class="duty-btn" data-onoff-action="duty-hold" data-onoff-for="${kind}" title="${onoffEsc(holdTitle)}">Hold</button>`}
+           <button type="button" class="duty-btn${holding ? " duty-btn-primary" : ""}" data-onoff-action="duty-send" data-onoff-for="${kind}" title="${onoffEsc(sendTitle)}">Send now</button>`;
       }
       return `<div class="duty-stat-card onoff-card">
         <div class="duty-stat-label">${onoffEsc(action.label)}</div>
         <div class="duty-stat-value" ${overridden ? 'title="加班表 override"' : ""}>${onoffEsc(timeText)}</div>
         ${onoffStatusLine(action)}
+        ${onoffHistoryLines(action)}
         <div class="duty-card-actions">${openBtn}${copyBtn}</div>
         ${lateBtns ? `<div class="duty-card-actions">${lateBtns}</div>` : ""}
       </div>`;
@@ -178,22 +205,27 @@
         if (action === "date-prev") return onoffShiftDate(-1);
         if (action === "date-next") return onoffShiftDate(1);
         if (action === "date-today") { onoffDate = ""; return refreshOnOffDuty(); }
-        if (action === "late-hold" || action === "late-release") {
-          postOnOffDutyLateOff(action === "late-hold" ? "hold" : "release")
+        const forKind = btn.getAttribute("data-onoff-for") || "end";
+        if (action === "duty-hold" || action === "duty-release") {
+          postOnOffDutyHoldSend(action === "duty-hold" ? "hold" : "release", forKind)
             .then((plan) => { onoffPlan = plan; onoffShowError(""); renderOnOffDuty(); })
             .catch((e) => onoffShowError(e.message || String(e)));
           return;
         }
-        if (action === "late-send") {
-          if (!window.confirm("以而家時間齊發？\n· 交 Off Duty form（實際時間）\n· 出 WhatsApp 報收工/報平安更\n· 超出更時表窗口（早開工/遲收工）兼 總工時>10.25h 先寫加班表")) return;
+        if (action === "duty-send") {
+          const isStart = forKind === "start";
+          const lines = isStart
+            ? "· 交 On Duty form（而家時間）\n· 出 WhatsApp 報開工\n· 實際開工同預設唔同就寫入加班表（報平安更／餐單／日曆跟住郁）"
+            : "· 交 Off Duty form（而家時間）\n· 出 WhatsApp 報收工\n· 超出更時表窗口（早開工/遲收工）兼 總工時>10.25h 先寫加班表";
+          if (!window.confirm((isStart ? "以而家時間報開工？\n" : "以而家時間報收工？\n") + lines)) return;
           btn.disabled = true;
-          postOnOffDutyLateOff("send_now")
+          postOnOffDutyHoldSend("send_now", forKind)
             .then((plan) => {
               onoffPlan = plan;
-              const r = plan.lateoff_result || {};
+              const r = plan.sendnow_result || {};
               onoffShowError("");
               renderOnOffDuty();
-              window.alert(`齊發完成 ${r.actual || ""}\nForm: sent\nWhatsApp: ${r.whatsapp || "?"}\n加班表: ${r.overtime_written ? "已寫入" : "未達加班條件，冇寫"}`);
+              window.alert(`齊發完成 ${r.actual || ""}\nForm: sent\nWhatsApp: ${r.whatsapp || "?"}\n加班表: ${r.overtime_written ? "已寫入" : "冇寫"}`);
             })
             .catch((e) => { onoffShowError(e.message || String(e)); btn.disabled = false; });
           return;

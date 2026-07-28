@@ -115,7 +115,6 @@ final class WatchBridge {
         ));
 
         JSONArray rows = new JSONArray();
-        SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
         for (int i = 0; i < ordered.size(); i++) {
             JSONObject alarm = ordered.get(i);
             long triggerAt = alarm.optLong("trigger_at_epoch_ms", 0L);
@@ -126,9 +125,11 @@ final class WatchBridge {
             JSONObject row = new JSONObject();
             try {
                 row.put("id", alarm.optString("id", ""));
-                row.put("time", timeFormat.format(triggerAt));
+                row.put("time", Clock30.format(triggerAt));
                 row.put("content", label);
                 row.put("at", triggerAt);
+                // 停用嘅行位照上錶，錶面淨係 dim 咗佢（錶面唔會有掣改）。
+                row.put("disabled", alarm.optBoolean("disabled", false));
                 rows.put(row);
             } catch (Exception e) {
                 Log.e(TAG, "Build schedule tile row failed", e);
@@ -145,7 +146,7 @@ final class WatchBridge {
             map.putLong(prefix + "_at", 0L);
             return;
         }
-        map.putString(prefix + "_time", new SimpleDateFormat("HH:mm", Locale.getDefault()).format(triggerAt));
+        map.putString(prefix + "_time", Clock30.format(triggerAt));
         map.putString(prefix + "_date", new SimpleDateFormat("dd/MM EEE", Locale.getDefault()).format(triggerAt));
         map.putLong(prefix + "_at", triggerAt);
         String label = alarm.optString("label", "").trim();
@@ -160,7 +161,7 @@ final class WatchBridge {
             json.put(prefix + "_at", 0L);
             return;
         }
-        json.put(prefix + "_time", new SimpleDateFormat("HH:mm", Locale.getDefault()).format(triggerAt));
+        json.put(prefix + "_time", Clock30.format(triggerAt));
         json.put(prefix + "_date", new SimpleDateFormat("dd/MM EEE", Locale.getDefault()).format(triggerAt));
         json.put(prefix + "_at", triggerAt);
         String label = alarm.optString("label", "").trim();
