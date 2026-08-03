@@ -14,7 +14,6 @@ public class NextAlarmComplicationDataSourceService extends ComplicationDataSour
             @NonNull ComplicationRequest request,
             @NonNull ComplicationRequestListener listener
     ) {
-        AlarmStateRefresh.requestIfAllowed(this);
         try {
             listener.onComplicationData(AlarmComplicationData.build(this, true));
         } catch (RemoteException ignored) {

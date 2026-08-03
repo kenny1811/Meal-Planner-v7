@@ -4,6 +4,14 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.3.8 — 03/08/2026 20:15
+- Fix: the watch could lose an alarm without a sound. The phone re-sent the whole
+  schedule grid every time an alarm rang or was dismissed, and that wiped the watch's
+  own pending alarm for that minute. The grid now goes out only when it actually
+  changes — the 05:00 / 05:30 import, or when you edit it.
+- The watch no longer asks the phone for the grid every minute. It runs off the copy
+  it already has, which saves battery on both.
+
 ## 7.3.7 — 28/07/2026 27:10
 - Typhoon panel: simulate a signal-down day (schedule grid, meal plan, safety reports,
   on/off-duty forms, overtime, calendar) and apply it everywhere in one press — the

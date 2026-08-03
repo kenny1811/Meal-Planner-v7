@@ -15,7 +15,7 @@ android {
         minSdk 23
         targetSdk 36
         // 版本只改 versionName 一行；versionCode 自動 = major*100 + minor（7.0 → 700），updater 靠佢比較
-        versionName "7.1"
+        versionName "7.2"
         versionCode versionName.tokenize('.')[0].toInteger() * 100 + versionName.tokenize('.')[1].toInteger()
     }
 }

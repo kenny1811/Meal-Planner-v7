@@ -124,8 +124,8 @@ public class AlarmActivity extends Activity {
             return;
         }
         stopped = true;
+        // 淨係送 dismiss；行位表冇改就唔好推嘢上錶。
         WatchBridge.sendDismiss(this, getIntent().getStringExtra(AlarmScheduler.EXTRA_ALARM_ID));
-        WatchBridge.sendTileState(this);
         AlarmAlertService.stop(this);
         stopAlert();
         finish();

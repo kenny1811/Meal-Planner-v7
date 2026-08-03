@@ -14,7 +14,6 @@ public class PrevAlarmLabelLine1ComplicationDataSourceService extends Complicati
             @NonNull ComplicationRequest request,
             @NonNull ComplicationRequestListener listener
     ) {
-        AlarmStateRefresh.requestIfAllowed(this);
         try {
             listener.onComplicationData(AlarmComplicationData.buildLabelLine(this, false, 0));
         } catch (RemoteException ignored) {

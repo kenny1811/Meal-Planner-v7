@@ -88,7 +88,6 @@ public class PhoneWearListenerService extends WearableListenerService {
                 NextAlarmWidgetProvider.updateAll(this);
             }
             AlarmActivity.markWatchDismiss(this, id);
-            WatchBridge.sendTileState(this);
         }
         Intent intent = new Intent(AlarmActivity.ACTION_WATCH_DISMISS);
         intent.setPackage(getPackageName());
