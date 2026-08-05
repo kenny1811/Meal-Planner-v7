@@ -9,7 +9,7 @@ from typing import Any
 
 
 from meal_planner.settings import AppSettings
-from meal_planner.timeparse import cell_text, parse_time as _to_time
+from meal_planner.timeparse import cell_text, hhmm30, parse_time as _to_time
 
 MEAL_KEYS = ("早餐", "午餐", "小食", "晚餐")
 
@@ -56,7 +56,8 @@ def _ddt(d: date, t: time) -> datetime:
 
 
 def _fmt_clock(t: time) -> str:
-    return t.strftime("%H:%M")
+    """飯時／行位表食位嘅顯示時間——跟 30 小時制（凌晨 00:00–05:59 出 24:00–29:59）。"""
+    return hhmm30(t)
 
 
 def grid_row_matches_roster(cell_code: str | None, roster_code: str) -> bool:

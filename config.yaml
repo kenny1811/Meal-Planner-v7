@@ -31,8 +31,8 @@ rice:
   # 熟重→生重換算：由上至下第一個「名稱包含 name_contains」嘅行命中就用該 ratio；
   # 冇命中冇 fallback——米類備註／購物清單會直接寫明未設定，提醒去 Config 加行。
   cooked_to_raw:
-    - { name_contains: "糙米", ratio: 2.7243 }
-    - { name_contains: "三色藜麥米", ratio: 2.5 }
+    - { name_contains: "糙米", ratio: 2.6363 }
+    - { name_contains: "三色藜麥米", ratio: 2.8239 }
     - { name_contains: "藜麥米", ratio: 2.6282 }
   water_multiplier: 2
   rice_category_exact: "米"

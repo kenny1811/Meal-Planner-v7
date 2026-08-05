@@ -1136,6 +1136,27 @@
       return out;
     }
 
+    // 起身表第三欄＝逐日手寫備註（同起身時間共用一行，兩者可以獨立存在）。
+    function wakeNotesByDate(rows) {
+      const out = new Map();
+      if (!Array.isArray(rows) || !rows.length) return out;
+      const headers = new Map();
+      (Array.isArray(rows[0]) ? rows[0] : []).forEach((cell, idx) => {
+        const key = String(cell || "").trim();
+        if (key) headers.set(key, idx);
+      });
+      const cDate = headers.has("日期") ? headers.get("日期") : 0;
+      const cNote = headers.has("備註") ? headers.get("備註") : 2;
+      (rows || []).slice(1).forEach((row) => {
+        if (!Array.isArray(row)) return;
+        const d = parseYmd(row[cDate]);
+        const note = String(row[cNote] || "").trim();
+        if (!d || !note) return;
+        out.set(dateKey(d.year, d.month, d.day), note);
+      });
+      return out;
+    }
+
     function clockFromMinutes(minutes) {
       if (!Number.isFinite(minutes)) return "";
       const n = ((Math.round(minutes) % 1440) + 1440) % 1440;
@@ -1196,6 +1217,7 @@
     function renderRosterMaintReport(rows) {
       const overtimeByDate = overtimeRowsByDate(rosterReportSources.overtime);
       const wakeByDate = wakeRowsByDate(rosterReportSources.wake_alarms);
+      const manualNoteByDate = wakeNotesByDate(rosterReportSources.wake_alarms);
       const holidaysByDate = holidayRowsByDate(rosterReportSources.public_holidays);
       const medicalByDate = medicalRowsByDate(rosterReportSources.medical_appointments);
       const todayKey = todayIsoHK();
@@ -1228,30 +1250,33 @@
           if (duration != null) totalDuration += duration;
           if (overtime != null) totalOvertime += overtime;
           if (overtimePay != null) totalPay += overtimePay;
-          const notes = [];
           const holiday = holidaysByDate.get(key);
-          if (holiday) notes.push(holiday);
-          notes.push(...medical);
-          if (ot.note) notes.push(ot.note);
+          // 假期名同日期／星期一樣要紅色；醫療行程同加班備註照舊黑色。
+          const autoNoteParts = [];
+          if (holiday) autoNoteParts.push(`<span class="report-red">${esc(holiday)}</span>`);
+          medical.forEach((text) => autoNoteParts.push(esc(text)));
+          if (ot.note) autoNoteParts.push(esc(ot.note));
           const weekday = weekdayLabel(parsed.year, parsed.month, item.day);
           const isToday = key === todayKey;
           const isSunday = weekday === "Sun";
           const dateClasses = ["report-date-cell", isToday ? "report-today-cell" : "", (isSunday || holiday) ? "report-red" : ""].filter(Boolean).join(" ");
           const weekdayClasses = ["report-weekday-cell", isToday ? "report-today-cell" : "", (isSunday || holiday) ? "report-red" : ""].filter(Boolean).join(" ");
           const noteClasses = ["report-note-cell", isToday && holiday ? "report-today-cell" : ""].filter(Boolean).join(" ");
+          const autoNote = autoNoteParts.join(" / ");
+          const manualNote = manualNoteByDate.get(key) || "";
           const wakeIsOverride = !!wake && wake !== defaultWake;
           const wakeCellClasses = ["roster-wake-cell", wakeIsOverride ? "roster-wake-override" : ""].filter(Boolean).join(" ");
           reportRows.push(`<tr class="${isToday ? "report-today-row" : ""}">
             <td class="${dateClasses}">${esc(dateDmy(parsed.year, parsed.month, item.day))}</td>
             <td class="${weekdayClasses}">${esc(weekday)}</td>
-            <td class="${wakeCellClasses}" data-roster-wake-cell="1" tabindex="0"><input class="roster-wake-input" type="text" inputmode="numeric" tabindex="-1" data-roster-wake-date="${esc(key)}" data-roster-wake-default="${esc(defaultWake)}" value="${esc(wake)}" /></td>
+            <td class="${wakeCellClasses}" data-roster-field-cell="1" data-roster-field="wake" tabindex="0"><input class="roster-wake-input" type="text" inputmode="numeric" tabindex="-1" data-roster-field="wake" data-roster-field-date="${esc(key)}" data-roster-field-default="${esc(defaultWake)}" value="${esc(wake)}" /></td>
             <td>${esc(item.code)}</td>
             <td>${esc(start)}</td>
             <td>${esc(end)}</td>
             <td>${esc(minutesLabel(duration))}</td>
             <td>${esc(overtime ? minutesLabel(overtime) : "")}</td>
             <td>${esc(overtimePay ? overtimePay.toFixed(0) : "")}</td>
-            <td class="${noteClasses}">${esc(notes.join(" / "))}</td>
+            <td class="${noteClasses}" data-roster-field-cell="1" data-roster-field="note" tabindex="0"><div class="roster-note-wrap"><span class="roster-note-auto">${autoNote}</span><span class="roster-note-sep"${autoNote && manualNote ? "" : " hidden"}>/</span><input class="roster-note-input" type="text" tabindex="-1" data-roster-note-empty="${manualNote ? "0" : "1"}" data-roster-field="note" data-roster-field-date="${esc(key)}" value="${esc(manualNote)}" /></div></td>
           </tr>`);
         });
       });
@@ -1526,285 +1551,388 @@
       report.innerHTML = renderRosterMaintReport(collectMaintRows());
       applyFormColumnWidths(report);
       attachFormColumnResizers(report);
-      attachRosterWakeInputs(report);
+      attachRosterFieldInputs(report);
       applyRosterReportOffset();
       attachRosterReportDrag();
     }
 
-    function attachRosterWakeInputs(root = document) {
+    // 更表 report 可以 inline 打字嘅欄：起身時間同備註。兩欄共用同一套 cell 導航／編輯機制，
+    // 分別淨係「點 format」同「寫返起身表邊個欄」——兩者都存喺起身表（日期／起身時間／備註）。
+    const ROSTER_FIELD_DEFS = {
+      wake: {
+        format: (raw) => normalTime(String(raw || "").trim()) || "",
+        strict: true,
+        invalidMessage: (key, raw) => `起身時間格式錯誤：${key} ${raw}`,
+        afterChange: (input) => updateRosterWakeOverrideClass(input),
+        patch: (input, value) => ({ wake: rosterWakeValueForStorage(input, value) }),
+      },
+      note: {
+        format: (raw) => String(raw || "").replace(/\s+/g, " ").trim(),
+        strict: false,
+        afterChange: (input) => updateRosterNoteLayout(input),
+        patch: (input, value) => ({ note: value }),
+      },
+    };
+    const ROSTER_FIELD_KEYS = Object.keys(ROSTER_FIELD_DEFS);
+
+    function rosterFieldMeta(input) {
+      const key = input && input.getAttribute ? String(input.getAttribute("data-roster-field") || "") : "";
+      return ROSTER_FIELD_DEFS[key] ? { key, def: ROSTER_FIELD_DEFS[key] } : null;
+    }
+
+    function attachRosterFieldInputs(root = document) {
       const report = root.matches && root.matches("#maint-roster-report") ? root : root.querySelector("#maint-roster-report");
       if (!report) return;
       report.tabIndex = -1;
-      const wakeCells = Array.from(report.querySelectorAll("td[data-roster-wake-cell]"))
-        .filter((cell) => cell.tabIndex >= 0 && cell.querySelector("input[data-roster-wake-date]"));
-      const wakeInputs = wakeCells.map((cell) => cell.querySelector("input[data-roster-wake-date]"));
-      report.__rosterWakeCells = wakeCells;
-      report.__rosterWakeInputs = wakeInputs;
-      wakeInputs.forEach((input, wakeIndex) => {
-        input.dataset.rosterWakeIndex = String(wakeIndex);
-        input.dataset.rosterWakeEditable = "1";
-        input.dataset.rosterWakeLastSynced = normalTime(input.value) || "";
-        input.dataset.rosterWakeEdited = "0";
-        input.readOnly = true;
+      report.__rosterFieldCells = {};
+      report.__rosterFieldInputs = {};
+      report.__rosterFieldActiveIndex = {};
+      ROSTER_FIELD_KEYS.forEach((key) => {
+        const cells = Array.from(report.querySelectorAll(`td[data-roster-field-cell][data-roster-field="${key}"]`))
+          .filter((cell) => cell.tabIndex >= 0 && cell.querySelector("input[data-roster-field-date]"));
+        const inputs = cells.map((cell) => cell.querySelector("input[data-roster-field-date]"));
+        report.__rosterFieldCells[key] = cells;
+        report.__rosterFieldInputs[key] = inputs;
+        report.__rosterFieldActiveIndex[key] = 0;
+        inputs.forEach((input, idx) => {
+          input.dataset.rosterFieldIndex = String(idx);
+          input.dataset.rosterFieldEditable = "1";
+          input.dataset.rosterFieldLastSynced = ROSTER_FIELD_DEFS[key].format(input.value);
+          input.dataset.rosterFieldEdited = "0";
+          input.dataset.maintSavedValue = input.value;
+          input.readOnly = true;
+        });
       });
-      if (report.dataset.rosterWakeDelegateBound === "1") return;
-      report.dataset.rosterWakeDelegateBound = "1";
-      report.addEventListener("keydown", handleRosterWakeKeydown);
-      report.addEventListener("input", handleRosterWakeInput);
-      report.addEventListener("focusin", handleRosterWakeFocusIn);
-      report.addEventListener("focusout", handleRosterWakeFocusOut);
-      report.addEventListener("mousedown", handleRosterWakeMouseDown);
+      if (!ROSTER_FIELD_DEFS[report.__rosterFieldActiveKey]) report.__rosterFieldActiveKey = ROSTER_FIELD_KEYS[0];
+      if (report.dataset.rosterFieldDelegateBound === "1") return;
+      report.dataset.rosterFieldDelegateBound = "1";
+      report.addEventListener("keydown", handleRosterFieldKeydown);
+      report.addEventListener("input", handleRosterFieldInput);
+      report.addEventListener("focusin", handleRosterFieldFocusIn);
+      report.addEventListener("focusout", handleRosterFieldFocusOut);
+      report.addEventListener("mousedown", handleRosterFieldMouseDown);
     }
 
-    function rosterWakeInputFromEvent(ev) {
-      const input = ev && ev.target && ev.target.closest ? ev.target.closest("input[data-roster-wake-date]") : null;
-      if (!input || input.disabled || input.dataset.rosterWakeEditable !== "1") return null;
+    function rosterFieldInputFromEvent(ev) {
+      const input = ev && ev.target && ev.target.closest ? ev.target.closest("input[data-roster-field-date]") : null;
+      if (!input || input.disabled || input.dataset.rosterFieldEditable !== "1") return null;
       return input.closest("#maint-roster-report") ? input : null;
     }
 
-    function handleRosterWakeKeydown(ev) {
-      const report = rosterWakeReportFromEvent(ev);
+    function rosterFieldReportFromEvent(ev) {
+      if (!ev || !ev.target || !ev.target.closest) return null;
+      return ev.target.closest("#maint-roster-report");
+    }
+
+    function activeRosterFieldInput(report) {
+      if (!report) return null;
+      const key = ROSTER_FIELD_DEFS[report.__rosterFieldActiveKey] ? report.__rosterFieldActiveKey : ROSTER_FIELD_KEYS[0];
+      const inputs = (report.__rosterFieldInputs || {})[key] || [];
+      if (!inputs.length) return null;
+      const idx = Number((report.__rosterFieldActiveIndex || {})[key]) || 0;
+      return inputs[Math.max(0, Math.min(idx, inputs.length - 1))] || null;
+    }
+
+    function setRosterFieldActive(report, key, index, options = {}) {
+      if (!report || !ROSTER_FIELD_DEFS[key]) return false;
+      const inputs = (report.__rosterFieldInputs || {})[key] || [];
+      const cells = (report.__rosterFieldCells || {})[key] || [];
+      if (!inputs.length) return false;
+      const idx = Math.max(0, Math.min(index, inputs.length - 1));
+      ROSTER_FIELD_KEYS.forEach((other) => {
+        ((report.__rosterFieldInputs || {})[other] || []).forEach((item) => delete item.dataset.rosterFieldActive);
+        ((report.__rosterFieldCells || {})[other] || []).forEach((item) => delete item.dataset.rosterFieldActive);
+      });
+      const input = inputs[idx];
+      const cell = cells[idx] || input.closest("td[data-roster-field-cell]");
+      input.dataset.rosterFieldActive = "1";
+      if (cell) cell.dataset.rosterFieldActive = "1";
+      report.__rosterFieldActiveKey = key;
+      if (!report.__rosterFieldActiveIndex) report.__rosterFieldActiveIndex = {};
+      report.__rosterFieldActiveIndex[key] = idx;
+      if (options.focus) focusRosterFieldInputElement(input);
+      return true;
+    }
+
+    function markRosterFieldActive(report, input, options = {}) {
+      const meta = rosterFieldMeta(input);
+      if (!report || !meta) return false;
+      const idx = Number(input.dataset.rosterFieldIndex);
+      return setRosterFieldActive(report, meta.key, Number.isInteger(idx) ? idx : 0, options);
+    }
+
+    function handleRosterFieldKeydown(ev) {
+      const report = rosterFieldReportFromEvent(ev);
       if (!report) return;
-      const focusedInput = rosterWakeInputFromEvent(ev);
-      const input = focusedInput || activeRosterWakeInput(report);
+      const focusedInput = rosterFieldInputFromEvent(ev);
+      const cell = ev.target && ev.target.closest ? ev.target.closest("td[data-roster-field-cell]") : null;
+      const input = focusedInput
+        || (cell ? cell.querySelector("input[data-roster-field-date]") : null)
+        || activeRosterFieldInput(report);
       if (!input) return;
-      const isEditing = focusedInput && input.dataset.rosterWakeEditing === "1";
+      const meta = rosterFieldMeta(input);
+      if (!meta) return;
+      const isEditing = focusedInput && input.dataset.rosterFieldEditing === "1";
       if (isEditing && ev.key === "Escape") {
         ev.preventDefault();
-        cancelRosterWakeEdit(input);
+        cancelRosterFieldEdit(input);
         return;
       }
       if (!isEditing && ev.key === "F2") {
         ev.preventDefault();
-        beginRosterWakeEdit(input, { select: true });
+        beginRosterFieldEdit(input, { select: true });
         return;
       }
       if (!isEditing && ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
         ev.preventDefault();
-        beginRosterWakeEdit(input, { replaceValue: ev.key });
+        beginRosterFieldEdit(input, { replaceValue: ev.key });
         input.dispatchEvent(new Event("input", { bubbles: true }));
         return;
       }
       if (!isEditing && (ev.key === "Delete" || ev.key === "Backspace")) {
         ev.preventDefault();
         input.value = "";
-        input.dataset.rosterWakeEdited = "1";
+        input.dataset.rosterFieldEdited = "1";
+        meta.def.afterChange(input);
         setUnsavedChanges("餐單參數");
         return;
       }
-      const isBack = ev.key === "ArrowUp" || (ev.key === "Tab" && ev.shiftKey);
-      const isForward = ev.key === "ArrowDown" || ev.key === "Enter" || (ev.key === "Tab" && !ev.shiftKey);
-      if (!isBack && !isForward) return;
+      // Tab／Shift-Tab 左右行（行到尾／頭就跳落一行／上一行），↑↓ 同 Enter 先係上下行。
+      const isTab = ev.key === "Tab";
+      const isVertBack = ev.key === "ArrowUp";
+      const isVertForward = ev.key === "ArrowDown" || ev.key === "Enter";
+      if (!isTab && !isVertBack && !isVertForward) return;
       ev.preventDefault();
-      const inputs = (report && report.__rosterWakeInputs) || [];
-      const idx = Number(input.dataset.rosterWakeIndex);
+      const idx = Number(input.dataset.rosterFieldIndex);
       if (!Number.isInteger(idx)) return;
-      if (isEditing && input.dataset.rosterWakeEdited === "1") commitRosterWakeInput(input);
-      if (isEditing) endRosterWakeEdit(input);
-      const nextIdx = idx + (isBack ? -1 : 1);
-      if (nextIdx < 0) {
+      // 改咗就要 commit，唔理仲喺唔喺編輯 mode（Del 清空係唔會入編輯 mode 嘅）。
+      if (input.dataset.rosterFieldEdited === "1") commitRosterFieldInput(input);
+      if (isEditing) endRosterFieldEdit(input);
+      const target = isTab
+        ? rosterFieldNeighbour(report, meta.key, idx, ev.shiftKey ? -1 : 1)
+        : ((report.__rosterFieldInputs || {})[meta.key] || [])[idx + (isVertForward ? 1 : -1)] || null;
+      if (target) {
+        focusRosterFieldInputElement(target);
+      } else if (isVertBack || (isTab && ev.shiftKey)) {
         focusActiveRosterCell();
-      } else if (nextIdx >= inputs.length) {
-        focusRosterWakeInputElement(input);
       } else {
-        focusRosterWakeInputElement(inputs[nextIdx]);
+        focusRosterFieldInputElement(input);
       }
+    }
+
+    // 由左至右數第 n 個可編輯格（ROSTER_FIELD_KEYS 順序＝表格欄次序）。
+    function rosterFieldNeighbour(report, key, index, step) {
+      const pos = ROSTER_FIELD_KEYS.indexOf(key);
+      if (pos < 0) return null;
+      const flat = pos + index * ROSTER_FIELD_KEYS.length + step;
+      if (flat < 0) return null;
+      const nextKey = ROSTER_FIELD_KEYS[flat % ROSTER_FIELD_KEYS.length];
+      const inputs = (report.__rosterFieldInputs || {})[nextKey] || [];
+      return inputs[Math.floor(flat / ROSTER_FIELD_KEYS.length)] || null;
     }
 
     function updateRosterWakeOverrideClass(input) {
-      if (!input) return;
-      const cell = input.closest ? input.closest("td[data-roster-wake-cell]") : null;
+      const cell = input && input.closest ? input.closest("td[data-roster-field-cell]") : null;
       if (!cell) return;
       const current = normalTime(input.value) || "";
-      const def = normalTime(input.getAttribute("data-roster-wake-default") || "") || "";
+      const def = normalTime(input.getAttribute("data-roster-field-default") || "") || "";
       cell.classList.toggle("roster-wake-override", !!current && current !== def);
     }
 
-    function handleRosterWakeInput(ev) {
-      const input = rosterWakeInputFromEvent(ev);
+    // 備註格：左邊係公眾假期／醫療行程／加班表拼出嚟嘅唯讀文字，右邊先係手寫備註；
+    // 兩邊都有嘢先顯示中間個「/」。冇手寫備註就唔佔位（否則 auto 文字後面會多咗一行空白），
+    // 開始打字（input 攞到 focus）先至撐開。
+    function updateRosterNoteLayout(input) {
+      const cell = input && input.closest ? input.closest("td[data-roster-field-cell]") : null;
+      if (!cell) return;
+      const text = String(input.value || "").trim();
+      input.dataset.rosterNoteEmpty = text ? "0" : "1";
+      const auto = cell.querySelector(".roster-note-auto");
+      const sep = cell.querySelector(".roster-note-sep");
+      if (!sep) return;
+      const hasAuto = !!(auto && String(auto.textContent || "").trim());
+      sep.hidden = !(hasAuto && text);
+    }
+
+    function handleRosterFieldInput(ev) {
+      const input = rosterFieldInputFromEvent(ev);
       if (!input) return;
-      const wasEdited = input.dataset.rosterWakeEdited === "1";
-      input.dataset.rosterWakeEdited = "1";
-      updateRosterWakeOverrideClass(input);
+      const meta = rosterFieldMeta(input);
+      if (!meta) return;
+      const wasEdited = input.dataset.rosterFieldEdited === "1";
+      input.dataset.rosterFieldEdited = "1";
+      meta.def.afterChange(input);
       if (!wasEdited) setUnsavedChanges("餐單參數");
     }
 
-    function handleRosterWakeFocusIn(ev) {
-      const cell = ev.target && ev.target.closest ? ev.target.closest("td[data-roster-wake-cell]") : null;
+    function handleRosterFieldFocusIn(ev) {
+      const cell = ev.target && ev.target.closest ? ev.target.closest("td[data-roster-field-cell]") : null;
       if (cell && ev.target === cell) {
-        const input = cell.querySelector("input[data-roster-wake-date]");
-        if (input) setRosterWakeActive(cell.closest("#maint-roster-report"), Number(input.dataset.rosterWakeIndex), { focus: false });
+        const input = cell.querySelector("input[data-roster-field-date]");
+        if (input) markRosterFieldActive(cell.closest("#maint-roster-report"), input, { focus: false });
         return;
       }
-      const input = rosterWakeInputFromEvent(ev);
+      const input = rosterFieldInputFromEvent(ev);
       if (!input) return;
       const report = input.closest("#maint-roster-report");
-      setRosterWakeActive(report, Number(input.dataset.rosterWakeIndex), { focus: false });
-      if (report && report.__rosterWakeProgramViewFocus === input) {
-        report.__rosterWakeProgramViewFocus = null;
+      markRosterFieldActive(report, input, { focus: false });
+      if (report && report.__rosterFieldProgramViewFocus === input) {
+        report.__rosterFieldProgramViewFocus = null;
         return;
       }
-      if (report && report.__rosterWakeProgramInputFocus === input) {
-        report.__rosterWakeProgramInputFocus = null;
+      if (report && report.__rosterFieldProgramInputFocus === input) {
+        report.__rosterFieldProgramInputFocus = null;
         return;
       }
-      beginRosterWakeEdit(input, { select: true });
+      beginRosterFieldEdit(input, { select: true });
     }
 
-    function handleRosterWakeFocusOut(ev) {
-      const input = rosterWakeInputFromEvent(ev);
+    function handleRosterFieldFocusOut(ev) {
+      const input = rosterFieldInputFromEvent(ev);
       if (!input) return;
-      if (input.dataset.rosterWakeEdited === "1") commitRosterWakeInput(input);
-      endRosterWakeEdit(input);
+      if (input.dataset.rosterFieldEdited === "1") commitRosterFieldInput(input);
+      endRosterFieldEdit(input);
     }
 
-    function handleRosterWakeMouseDown(ev) {
-      const cell = ev.target && ev.target.closest ? ev.target.closest("td[data-roster-wake-cell]") : null;
+    function handleRosterFieldMouseDown(ev) {
+      const cell = ev.target && ev.target.closest ? ev.target.closest("td[data-roster-field-cell]") : null;
       if (!cell) return;
-      const input = cell.querySelector("input[data-roster-wake-date]");
+      const input = cell.querySelector("input[data-roster-field-date]");
       if (!input) return;
       ev.preventDefault();
-      setRosterWakeActive(cell.closest("#maint-roster-report"), Number(input.dataset.rosterWakeIndex), { focus: false });
-      beginRosterWakeEdit(input, { select: true });
+      markRosterFieldActive(cell.closest("#maint-roster-report"), input, { focus: false });
+      beginRosterFieldEdit(input, { select: true });
     }
 
-    function rosterWakeReportFromEvent(ev) {
-      if (!ev || !ev.target || !ev.target.closest) return null;
-      return ev.target.closest("#maint-roster-report");
-    }
-
-    function activeRosterWakeInput(report) {
-      const inputs = (report && report.__rosterWakeInputs) || [];
-      if (!inputs.length) return null;
-      const idx = Number.isInteger(report.__rosterWakeActiveIndex) ? report.__rosterWakeActiveIndex : 0;
-      return inputs[Math.max(0, Math.min(idx, inputs.length - 1))] || null;
-    }
-
-    function setRosterWakeActive(report, index, options = {}) {
-      if (!report) return false;
-      const inputs = report.__rosterWakeInputs || [];
-      const cells = report.__rosterWakeCells || [];
-      if (!inputs.length) return false;
-      const idx = Math.max(0, Math.min(index, inputs.length - 1));
-      inputs.forEach((item) => delete item.dataset.rosterWakeActive);
-      cells.forEach((item) => delete item.dataset.rosterWakeActive);
-      const input = inputs[idx];
-      const cell = cells[idx] || input.closest("td[data-roster-wake-cell]");
-      input.dataset.rosterWakeActive = "1";
-      if (cell) cell.dataset.rosterWakeActive = "1";
-      report.__rosterWakeActiveIndex = idx;
-      if (options.focus) focusRosterWakeInputElement(input);
-      return true;
-    }
-
-    function focusRosterWakeInputElement(input) {
+    function focusRosterFieldInputElement(input) {
       if (!input) return false;
       const report = input.closest("#maint-roster-report");
-      const idx = Number(input.dataset.rosterWakeIndex);
-      setRosterWakeActive(report, Number.isInteger(idx) ? idx : 0, { focus: false });
-      endRosterWakeEdit(input);
+      markRosterFieldActive(report, input, { focus: false });
+      endRosterFieldEdit(input);
       input.readOnly = true;
-      const cell = input.closest("td[data-roster-wake-cell]");
+      const cell = input.closest("td[data-roster-field-cell]");
       if (cell) cell.focus({ preventScroll: true });
       return true;
     }
 
-    function beginRosterWakeEdit(input, options = {}) {
+    function beginRosterFieldEdit(input, options = {}) {
       if (!input) return false;
-      if (input.dataset.rosterWakeEditing !== "1") {
-        input.dataset.rosterWakeOriginalValue = input.value || "";
+      if (input.dataset.rosterFieldEditing !== "1") {
+        input.dataset.rosterFieldOriginalValue = input.value || "";
       }
-      input.dataset.rosterWakeEditing = "1";
+      input.dataset.rosterFieldEditing = "1";
       input.readOnly = false;
+      // 一入編輯 mode 就即刻撐開個位（唔靠 CSS :focus——window 冇 focus 嗰陣佢會唔中）。
+      if (input.dataset.rosterNoteEmpty === "1") input.dataset.rosterNoteEmpty = "0";
       if (Object.prototype.hasOwnProperty.call(options, "replaceValue")) {
         input.value = options.replaceValue == null ? "" : String(options.replaceValue);
-        input.dataset.rosterWakeEdited = "1";
+        input.dataset.rosterFieldEdited = "1";
         setUnsavedChanges("餐單參數");
       }
-      focusRosterWakeInputForEdit(input);
+      focusRosterFieldInputForEdit(input);
       if (options.select) input.select();
-      else setRosterWakeCaretToEnd(input);
+      else setRosterFieldCaretToEnd(input);
       return true;
     }
 
-    function endRosterWakeEdit(input) {
+    function endRosterFieldEdit(input) {
       if (!input) return;
-      delete input.dataset.rosterWakeEditing;
-      delete input.dataset.rosterWakeOriginalValue;
+      delete input.dataset.rosterFieldEditing;
+      delete input.dataset.rosterFieldOriginalValue;
       input.readOnly = true;
+      const meta = rosterFieldMeta(input);
+      if (meta) meta.def.afterChange(input);
     }
 
-    function cancelRosterWakeEdit(input) {
+    function cancelRosterFieldEdit(input) {
       if (!input) return false;
-      if (input.dataset.rosterWakeEditing === "1") {
-        input.value = input.dataset.rosterWakeOriginalValue || "";
-        input.dataset.rosterWakeEdited = "0";
-        endRosterWakeEdit(input);
+      if (input.dataset.rosterFieldEditing === "1") {
+        input.value = input.dataset.rosterFieldOriginalValue || "";
+        input.dataset.rosterFieldEdited = "0";
+        const meta = rosterFieldMeta(input);
+        if (meta) meta.def.afterChange(input);
+        endRosterFieldEdit(input);
       }
       const report = input.closest("#maint-roster-report");
-      const idx = Number(input.dataset.rosterWakeIndex);
-      setRosterWakeActive(report, Number.isInteger(idx) ? idx : 0, { focus: true });
+      markRosterFieldActive(report, input, { focus: true });
       return true;
     }
 
-    function focusRosterWakeInputForEdit(input) {
+    function focusRosterFieldInputForEdit(input) {
       const report = input.closest("#maint-roster-report");
-      if (report) report.__rosterWakeProgramInputFocus = input;
+      if (report) report.__rosterFieldProgramInputFocus = input;
       input.focus({ preventScroll: true });
     }
 
-    function setRosterWakeCaretToEnd(input) {
+    function setRosterFieldCaretToEnd(input) {
       if (!input || typeof input.setSelectionRange !== "function") return;
       const pos = String(input.value || "").length;
       input.setSelectionRange(pos, pos);
     }
 
-    function commitRosterWakeInput(input, options = {}) {
-      if (!input) return false;
-      const raw = String(input.value || "").trim();
-      const normal = normalTime(raw);
-      if (normal) input.value = normal;
-      updateRosterWakeOverrideClass(input);
-      const current = normalTime(input.value) || "";
-      const last = input.dataset.rosterWakeLastSynced || "";
-      if (input.dataset.rosterWakeEdited !== "1" && current === last) return true;
-      const synced = syncRosterWakeInputToSources(input, options);
-      if (synced) {
-        input.dataset.rosterWakeLastSynced = current;
-        input.dataset.rosterWakeEdited = "0";
-      }
-      return synced;
+    function rosterWakeValueForStorage(input, value) {
+      const def = normalTime(input.getAttribute("data-roster-field-default") || "") || "";
+      return value && (!def || value !== def) ? value : "";
     }
 
-    function syncRosterWakeInputToSources(input, options = {}) {
+    function commitRosterFieldInput(input, options = {}) {
       if (!input) return false;
-      const key = String(input.getAttribute("data-roster-wake-date") || "").trim();
-      if (!key) return false;
+      const meta = rosterFieldMeta(input);
+      if (!meta) return false;
       const raw = String(input.value || "").trim();
-      const wake = normalTime(raw);
-      if (raw && !wake && options.allowInvalid) return false;
-      if (raw && !wake) throw new Error(`起身時間格式錯誤：${key} ${raw}`);
-      const defaultWake = normalTime(input.getAttribute("data-roster-wake-default") || "");
-      const existing = Array.isArray(rosterReportSources.wake_alarms) ? rosterReportSources.wake_alarms : [["日期", "起身時間", "備註"]];
-      const rows = existing.map((row) => Array.isArray(row) ? [...row] : []);
-      if (!rows.length) rows.push(["日期", "起身時間", "備註"]);
-      const next = [rows[0]];
-      let oldNote = "";
-      for (const row of rows.slice(1)) {
+      const value = meta.def.format(raw);
+      if (raw && !value && meta.def.strict) {
+        if (options.allowInvalid) return false;
+        throw new Error(meta.def.invalidMessage(String(input.getAttribute("data-roster-field-date") || ""), raw));
+      }
+      if (value) input.value = value;
+      meta.def.afterChange(input);
+      const last = input.dataset.rosterFieldLastSynced || "";
+      if (input.dataset.rosterFieldEdited !== "1" && value === last) return true;
+      const key = String(input.getAttribute("data-roster-field-date") || "").trim();
+      if (!key) return false;
+      writeRosterWakeAlarmRow(key, meta.def.patch(input, value));
+      input.dataset.rosterFieldLastSynced = value;
+      input.dataset.rosterFieldEdited = "0";
+      return true;
+    }
+
+    function syncRosterFieldInputsToSources() {
+      document.querySelectorAll("#maint-roster-report input[data-roster-field-date]").forEach((input) => {
+        commitRosterFieldInput(input);
+      });
+    }
+
+    // 起身表 = 逐日 overlay（起身時間／備註）：兩個欄位各自寫、唔會互相洗走；
+    // 兩個都空嘅日子就唔留行。
+    function writeRosterWakeAlarmRow(key, patch) {
+      const existing = Array.isArray(rosterReportSources.wake_alarms) && rosterReportSources.wake_alarms.length
+        ? rosterReportSources.wake_alarms
+        : [["日期", "起身時間", "備註"]];
+      const defaultHeader = ["日期", "起身時間", "備註"];
+      const header = Array.isArray(existing[0]) ? [...existing[0]] : [...defaultHeader];
+      while (header.length < defaultHeader.length) header.push(defaultHeader[header.length]);
+      const entries = [];
+      let found = false;
+      existing.slice(1).forEach((row) => {
+        if (!Array.isArray(row)) return;
         const d = parseYmd(row[0]);
         const rowKey = d ? dateKey(d.year, d.month, d.day) : "";
+        if (!rowKey) return;
+        const entry = { key: rowKey, wake: normalTime(row[1]) || "", note: String(row[2] || "").trim() };
         if (rowKey === key) {
-          oldNote = String(row[2] || "").trim();
-          continue;
+          found = true;
+          if (Object.prototype.hasOwnProperty.call(patch, "wake")) entry.wake = patch.wake || "";
+          if (Object.prototype.hasOwnProperty.call(patch, "note")) entry.note = patch.note || "";
         }
-        if (rowKey && normalTime(row[1])) next.push(row);
+        if (entry.wake || entry.note) entries.push(entry);
+      });
+      if (!found) {
+        const entry = { key, wake: patch.wake || "", note: patch.note || "" };
+        if (entry.wake || entry.note) entries.push(entry);
       }
-      if (wake && (!defaultWake || wake !== defaultWake)) {
-        next.push([key, wake, oldNote]);
-      }
-      const header = next[0];
-      const body = next.slice(1).sort((a, b) => String(a[0] || "").localeCompare(String(b[0] || "")));
-      rosterReportSources.wake_alarms = [header, ...body];
+      entries.sort((a, b) => String(a.key).localeCompare(String(b.key)));
+      rosterReportSources.wake_alarms = [header, ...entries.map((e) => [e.key, e.wake, e.note])];
       return true;
     }
 

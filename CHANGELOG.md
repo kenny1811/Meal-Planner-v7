@@ -4,6 +4,9 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.4.8 — 05/08/2026 15:15
+- Typhoon handling.
+
 ## 7.3.8 — 03/08/2026 20:15
 - Fix: the watch could lose an alarm without a sound. The phone re-sent the whole
   schedule grid every time an alarm rang or was dismissed, and that wiped the watch's

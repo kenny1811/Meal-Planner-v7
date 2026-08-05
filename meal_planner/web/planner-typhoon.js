@@ -218,8 +218,9 @@
         .catch(() => {});
     }
 
+    // ◀ ▶ 郁嘅係「落波日期」（同落波時間一 pair），唔係模擬邊日。
     async function typhoonShiftDate(deltaDays) {
-      const base = typhoonPlan ? typhoonPlan.date_iso : "";
+      const base = typhoonPlan ? (typhoonPlan.signal_date_iso || typhoonPlan.date_iso) : "";
       if (!base || typhoonLoading) return;
       const [y, m, d] = base.split("-").map(Number);
       const dt = new Date(Date.UTC(y, m - 1, d + deltaDays, 12, 0, 0));
@@ -239,11 +240,65 @@
       return hour < 6 ? `${hour + 24}:${m[2]}` : text;
     }
 
-    function typhoonArrow(before, after) {
-      const a = typhoonEsc(typhoon30(before) || "—");
-      const b = typhoonEsc(typhoon30(after) || "—");
+    // 同一張表入面會撈埋唔同日嘅時間（開工過咗 30:00 就冚落第二日朝早），
+    // 所以每個時間都要連日期出——淨睇 HH:MM 分唔到邊日。
+    function typhoonDateFor(minutes) {
+      const base = (typhoonPlan && typhoonPlan.date_iso) || "";
+      const [y, mo, d] = base.split("-").map(Number);
+      if (!y) return { iso: "", dm: "" };
+      // 一日由 06:00 起計：06:00–29:59 都算當日，夠 30:00 先過下一日。
+      const offset = Math.floor(((minutes || 0) - 360) / 1440);
+      const dt = new Date(Date.UTC(y, mo - 1, d + offset, 12, 0, 0));
+      const dd = String(dt.getUTCDate()).padStart(2, "0");
+      const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+      return { iso: `${dt.getUTCFullYear()}-${mm}-${dd}`, dm: `${dd}/${mm}` };
+    }
+
+    // minutes 有就用（最準）；冇就由 HH:MM 反推 30 小時制分鐘。
+    // 報開工同 plan.start 個 string 一樣，所以撞正就借返佢個分鐘數。
+    // bareOn：呢個 block 本身已經寫住嗰日（例如加班表有「日期」一行）——
+    // 同嗰日一樣就唔使再喺時間前面插多次日期，唔同日先插。
+    function typhoonWhen(text, minutes, bareOn) {
+      const raw = String(text == null ? "" : text).trim();
+      const m = /^(\d{1,2}):(\d{2})$/.exec(raw);
+      if (!m) return text;
+      let mins = minutes;
+      if (mins == null) {
+        const plan = typhoonPlan || {};
+        if (plan.start && raw === plan.start && plan.start_minutes != null) mins = plan.start_minutes;
+        else {
+          const hour = parseInt(m[1], 10);
+          mins = (hour < 6 ? hour + 24 : hour) * 60 + parseInt(m[2], 10);
+        }
+      }
+      const when = typhoonDateFor(mins);
+      const clock = typhoon30(_hhmmFrom(mins));
+      return bareOn && when.iso === bareOn ? clock : `${when.dm} ${clock}`;
+    }
+
+    function _hhmmFrom(minutes) {
+      const within = ((minutes % 1440) + 1440) % 1440;
+      const hour = minutes >= 1440 && minutes < 1800 ? Math.floor(minutes / 60) : Math.floor(within / 60);
+      return `${String(hour).padStart(2, "0")}:${String(within % 60).padStart(2, "0")}`;
+    }
+
+    function typhoonArrow(before, after, bareOn) {
+      const a = typhoonEsc(typhoonWhen(before, null, bareOn) || "—");
+      const b = typhoonEsc(typhoonWhen(after, null, bareOn) || "—");
       if (!before || before === after) return `<span class="typhoon-same">${b}</span>`;
       return `<span class="typhoon-was">${a}</span> → <span class="typhoon-now">${b}</span>`;
+    }
+
+    // 模擬邊一日：落波之後最近嗰個返到工嘅工作日，唔一定係落波嗰日。
+    function typhoonTargetLabel(plan) {
+      if (!plan.date_iso) return "";
+      const [y, m, d] = plan.date_iso.split("-").map(Number);
+      const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+        new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay()
+      ];
+      const days = plan.days_after_signal || 0;
+      const same = days === 0 ? "" : ` · ${days}d after the signal`;
+      return `<span class="duty-chip typhoon-target" title="落波之後最近嗰個返到工嘅工作日">Work day ${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")} ${dow}${same}</span>`;
     }
 
     function typhoonSummary(plan, applyBtn = "") {
@@ -264,8 +319,8 @@
             <div class="duty-stat-sub">${plan.confirmed ? "confirmed" : "estimated"}</div>
           </div>
           <div class="duty-stat-card typhoon-dayoff">
-            <div class="duty-stat-label">Finish</div>
-            <div class="duty-stat-value">${typhoonEsc(typhoon30(plan.end) || "—")}</div>
+            <div class="duty-stat-label">Off duty</div>
+            <div class="duty-stat-value">${typhoonEsc(typhoonWhen(plan.end, plan.end_minutes) || "—")}</div>
             <div class="duty-stat-sub">less than 4h away</div>
           </div>
           <div class="duty-stat-card typhoon-dayoff">
@@ -285,11 +340,11 @@
         : "on time";
       const offsetText = plan.offset_minutes ? `+${plan.offset_minutes} min` : "start at once";
       const cards = [
-        { label: "Signal down", value: plan.signal_time, sub: plan.confirmed ? "confirmed" : "estimated" },
-        { label: `${plan.brand} rule`, value: offsetText, sub: `earliest ${typhoon30(plan.earliest_start)}` },
-        { label: "Planned start", value: typhoon30(plan.planned_start), sub: plan.overtime_start ? "Overtime override" : "Schedule Grid" },
-        { label: "Typhoon start", value: typhoon30(plan.start), sub: delay },
-        { label: "Finish", value: typhoon30(plan.end) || "—", sub: "unchanged by typhoon" },
+        { label: "Signal down", value: typhoonWhen(plan.signal_time, plan.signal_minutes), sub: plan.confirmed ? "confirmed" : "estimated" },
+        { label: `${plan.brand} rule`, value: offsetText, sub: `earliest ${typhoonWhen(plan.earliest_start, plan.earliest_minutes)}` },
+        { label: "Planned on duty", value: typhoonWhen(plan.planned_start, plan.planned_minutes), sub: plan.overtime_start ? "Overtime override" : "Schedule Grid" },
+        { label: "On duty", value: typhoonWhen(plan.start, plan.start_minutes), sub: delay },
+        { label: "Off duty", value: typhoonWhen(plan.end, plan.end_minutes) || "—", sub: "unchanged by typhoon" },
       ];
       return `<div class="duty-stats typhoon-stats">${cards
         .map(
@@ -327,10 +382,10 @@
         .map((row) => {
           const cls = row.inserted ? "typhoon-row-new" : row.unreachable ? "duty-row-muted" : "";
           const timeCell = row.inserted
-            ? `<span class="typhoon-now">${typhoonEsc(typhoon30(row.time))}</span>`
-            : typhoonEsc(typhoon30(row.time));
+            ? `<span class="typhoon-now">${typhoonEsc(typhoonWhen(row.time, row.minutes))}</span>`
+            : typhoonEsc(typhoonWhen(row.time, row.minutes));
           const state = row.inserted
-            ? (row.is_start ? "typhoon start" : "typhoon report")
+            ? (row.is_start ? "on duty (typhoon)" : "typhoon report")
             : row.unreachable
               ? "missed (before start)"
               : "";
@@ -343,7 +398,7 @@
         })
         .join("");
       return typhoonSectionNote(section.note) + typhoonTable("grid", [
-        { key: "time", label: "Time", width: 78 },
+        { key: "time", label: "Time", width: 116 },
         { key: "item", label: "Item", width: 320 },
         { key: "length", label: "Length", width: 70 },
         { key: "status", label: "Status", width: 210 },
@@ -358,21 +413,26 @@
         .map(
           // Item 出返真正會 send 出去嗰句（唔係行位表個標籤）——所見即所發。
           (row) => `<tr class="${row.skipped ? "duty-row-muted" : ""}" title="${typhoonEsc(row.content)}">
-            <td class="duty-td-time">${typhoonEsc(typhoon30(row.time))}</td>
+            <td class="duty-td-time">${typhoonEsc(typhoonWhen(row.time, row.minutes))}</td>
             <td>${typhoonEsc(row.message)}</td>
             <td>${typhoonEsc(row.group || "—")}</td>
             <td class="typhoon-state">${row.skipped ? "skipped" : ""}</td>
           </tr>`
         )
         .join("");
-      const planned = (section.planned_times || []).map(typhoon30).join(" · ");
+      // 「打風前」嗰串鐘點：同下面張表一樣就唔使出（純重複），唔同先列出嚟對照。
+      const plannedTimes = section.planned_times || [];
+      const rowTimes = section.rows.map((r) => r.time);
+      const samePlan =
+        plannedTimes.length === rowTimes.length && plannedTimes.every((t, i) => t === rowTimes[i]);
+      const planned = samePlan ? "" : plannedTimes.map((t) => typhoonWhen(t)).join(" · ");
       const h = section.interval_hours;
       const cadence =
         section.mode === "typhoon"
-          ? `<div class="duty-status-muted typhoon-note">Every ${h}h from the typhoon start; the last one uses the finish time when it lands under ${h}h.${planned ? ` · Planned: ${typhoonEsc(planned)}` : ""}</div>`
+          ? `<div class="duty-status-muted typhoon-note">Every ${h}h from the on-duty time; the last one uses the finish time when it lands under ${h}h.${planned ? ` · Before the typhoon: ${typhoonEsc(planned)}` : ""}</div>`
           : "";
       return typhoonSectionNote(section.note) + cadence + typhoonTable("report", [
-        { key: "time", label: "Time", width: 78 },
+        { key: "time", label: "Time", width: 116 },
         { key: "message", label: "Message", width: 230 },
         { key: "group", label: "Group", width: 230 },
         { key: "status", label: "Status", width: 120 },
@@ -390,9 +450,18 @@
     // 模擬一有結果就自己計埋餐單，唔使撳掣（LP 大概三幾秒）。
     // 慢半拍先開始：打字期間 plan 會連環更新，唔想每次都開一個 LP。
     let typhoonAutoMealTimer = null;
+    // 計失敗嗰組輸入（日期＋開工＋day off）；換咗任何一樣先再自動計。
+    let typhoonMealFailedKey = "";
+    let typhoonMealError = "";
+
+    function typhoonMealKey(plan) {
+      return `${plan.date_iso}|${plan.start}|${plan.day_off ? 1 : 0}`;
+    }
 
     function typhoonAutoRecalcMeals(plan) {
       if (!plan || !plan.ok || typhoonMealBusy || !typhoonMealStale(plan)) return;
+      // 同一組輸入計失敗過就唔好再自動試——唔係嘅話會一路重試一路重畫（成個 block 閃）。
+      if (typhoonMealFailedKey === typhoonMealKey(plan)) return;
       if (typhoonAutoMealTimer) clearTimeout(typhoonAutoMealTimer);
       typhoonAutoMealTimer = setTimeout(() => typhoonRecalcMeals(), 300);
     }
@@ -411,7 +480,9 @@
           busy
             ? "running the solver…"
             : stale
-              ? "working out the day's meals…"
+              ? (typhoonMealFailedKey === typhoonMealKey(plan)
+                  ? `Could not work out the meals: ${typhoonMealError}`
+                  : "working out the day's meals…")
               : typhoonMeal.snack_note || "Generate = another draw · Recalculate = same draw"
         )}</div>
       </div>`;
@@ -423,11 +494,16 @@
     }
 
     function typhoonOvertimeTable(section) {
+      // 冇行 ＝ 開工冇郁，唔使寫加班表；出返句解釋就得，唔好出張空表。
+      if (!section.rows.length) return typhoonSectionNote(section.note || "No change.");
+      // 加班表本身第一行就係「日期」——同嗰日嘅時間唔使再帶日期。
+      const dateRow = section.rows.find((r) => r.field === "日期") || {};
+      const bareOn = String(dateRow.after || dateRow.before || "");
       const body = section.rows
         .map(
           (row) => `<tr>
             <td>${typhoonEsc(row.field)}</td>
-            <td class="duty-td-time">${typhoonArrow(row.before, row.after)}</td>
+            <td class="duty-td-time">${typhoonArrow(row.before, row.after, bareOn)}</td>
           </tr>`
         )
         .join("");
@@ -449,7 +525,7 @@
         )
         .join("");
       const sub = section.wake_offset_hours
-        ? `<div class="duty-status-muted typhoon-note">起身 = ${section.wake_offset_hours}h before the start · calendar times come from 更時表, not the Schedule Grid</div>`
+        ? `<div class="duty-status-muted typhoon-note">起身 = ${section.wake_offset_hours}h before on duty · calendar times come from 更時表, not the Schedule Grid</div>`
         : "";
       return typhoonSectionNote(section.note) + sub + typhoonTable("gc", [
         { key: "calendar", label: "Calendar", width: 80 },
@@ -514,7 +590,7 @@
       const signalValue = plan.signal_time || typhoonSignal;
       const toolbar = `<div class="duty-toolbar typhoon-toolbar">
         <button type="button" class="duty-btn" data-typhoon-action="date-prev">◀</button>
-        <input type="date" id="typhoon-date" class="typhoon-date-input" value="${typhoonEsc(plan.date_iso)}" />
+        <input type="date" id="typhoon-date" class="typhoon-date-input" value="${typhoonEsc(plan.signal_date_iso || plan.date_iso)}" title="落波日期（同落波時間一 pair）" />
         <button type="button" class="duty-btn" data-typhoon-action="date-next">▶</button>
         <span class="duty-date">${relationLabel}</span>
         ${plan.relation !== "today" ? '<button type="button" class="duty-btn" data-typhoon-action="date-today">Today</button>' : ""}
@@ -534,6 +610,7 @@
           <select id="typhoon-code">${options}</select>
         </label>
         <button type="button" class="duty-btn" data-typhoon-action="refresh">Simulate</button>
+        ${typhoonTargetLabel(plan)}
       </div>`;
 
       if (!plan.ok) {
@@ -548,7 +625,7 @@
 
       // 提示唔再霸一行——併埋做 Apply 個 tooltip；已套用嗰粒 chip 一齊跟埋。
       const applyHint = [plan.day_off_note, plan.apply_blocked].filter(Boolean).join("　")
-        || "Writes the start into Overtime and reshapes ReportNormal — the Schedule Grid is never touched";
+        || "Writes the on-duty time into Overtime and reshapes ReportNormal — the Schedule Grid is never touched";
       const applyBtn = `<button type="button" class="duty-btn duty-btn-primary typhoon-apply-btn"
         data-typhoon-action="apply" ${plan.can_apply ? "" : "disabled"}
         title="${typhoonEsc(applyHint)}">Apply</button>${appliedChip}`;
@@ -636,7 +713,7 @@
       if (picker) {
         picker.addEventListener("change", () => {
           if (!picker.value) return;
-          typhoonDate = picker.value === typhoonPlan.today_iso ? "" : picker.value;
+          typhoonDate = picker.value === typhoonPlan.today_iso ? "" : picker.value;  // 落波日期
           typhoonCode = "";  // 換日 = 換更碼，手動揀嗰個唔再作準
           refreshTyphoon();
         });
@@ -687,6 +764,8 @@
       const plan = typhoonPlan;
       if (!plan || !plan.ok || typhoonMealBusy) return;
       if (newDraw) typhoonMealNonce += 1;
+      typhoonMealFailedKey = "";
+      typhoonMealError = "";
       typhoonMealBusy = true;
       renderTyphoon();
       try {
@@ -704,7 +783,9 @@
         typhoonShowError("");
       } catch (e) {
         typhoonMeal = null;
-        typhoonShowError(e && e.message ? e.message : String(e));
+        typhoonMealError = e && e.message ? e.message : String(e);
+        typhoonMealFailedKey = typhoonMealKey(plan);
+        typhoonShowError(typhoonMealError);
       } finally {
         typhoonMealBusy = false;
         renderTyphoon();
@@ -759,14 +840,14 @@ ${gc.detail || ""}
       const lines = plan.day_off ? [
         `${plan.date_iso} · ${plan.roster_code} → ${plan.day_off_code}（颱風假）`,
         plan.day_off_note,
-        "Any typhoon start already written to Overtime, and the day's ReportNormal overlay, get cleared",
+        "Any typhoon on-duty time already written to Overtime, and the day's ReportNormal overlay, get cleared",
         "ReportNormal / Meal Plan / Google Calendar / phone all follow the non-work code",
       ] : [
         `${plan.date_iso} · ${plan.roster_code}`,
-        `Overtime start set to ${typhoon30(plan.start)} (planned ${typhoon30(plan.planned_start)}), note 颱風${typhoonName.trim()}`,
+        `Overtime start set to ${typhoonWhen(plan.start, plan.start_minutes)} (planned ${typhoonWhen(plan.planned_start, plan.planned_minutes)}), note 颱風${typhoonName.trim()}`,
         `ReportNormal: ${(plan.report_normal.extra_times || []).length} report(s) added, ${(plan.report_normal.skip_slot_ids || []).length} skipped — Schedule Grid is not touched`,
         "Meal Plan and Google Calendar follow this start",
-        "OnOffDuty keeps auto-submitting — the start is settled and the finish is unchanged",
+        "OnOffDuty keeps auto-submitting — the on-duty time is settled and the off-duty time is unchanged",
       ].join("\n· ");
       if (!window.confirm(`Apply for real?\n· ${lines}`)) return;
       try {

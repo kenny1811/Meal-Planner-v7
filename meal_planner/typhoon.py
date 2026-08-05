@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -80,7 +80,14 @@ def current_typhoon_names(*, force: bool = False) -> dict[str, Any]:
 
 
 def _hhmm(minutes: int) -> str:
-    """30 小時制分鐘 → HH:MM，24:00–29:59 照寫 24+（同全 project 一致）。"""
+    """30 小時制分鐘 → HH:MM。
+
+    24:00–29:59 照寫 24+（同全 project 一致）。夠鐘過咗 30:00 就已經係第二個
+    business day 嘅朝早——冚返落去（30:00 → 06:00、31:20 → 07:20），
+    唔會出個 30:00 咁嘅無效時間。
+    """
+    while minutes >= 1800:
+        minutes -= 1440
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
@@ -354,7 +361,10 @@ def _report_normal_section(
                 content = "報收工, 報平安更"
             else:
                 content = "報平安更"
-            rows.append({"time": _hhmm(m), "content": content, "group": group, "message": message, "skipped": False})
+            rows.append({
+                "time": _hhmm(m), "minutes": m, "content": content,
+                "group": group, "message": message, "skipped": False,
+            })
 
         # 套用嗰陣要做乜：行位表原本嗰啲 slot 邊個要 skip、邊幾個鐘點要加開。
         # 報開工／報收工兩個 slot 唔使郁——加班表寫咗開工，compute_slots 自己會搬。
@@ -377,6 +387,7 @@ def _report_normal_section(
         rows = [
             {
                 "time": slot["time"],
+                "minutes": minutes_30h(slot["time"]),
                 "content": slot["content"],
                 "group": slot["group"],
                 "message": slot["message"],
@@ -414,6 +425,7 @@ def _overtime_section(
     actual_start: str,
     name: str,
     day_off: bool = False,
+    shifted: bool = True,
 ) -> dict[str, Any]:
     """加班表：套用之後嗰行會變成點（加班表就係全系統嘅權威開工／收工來源）。"""
     note_now = ""
@@ -443,6 +455,12 @@ def _overtime_section(
             ],
             "note": "全日唔使返 → Apply 清走加班表呢一行，改為將更碼設做颱風假。",
         }
+    if not shifted:
+        # 開工冇郁（例如個波喺開工之前已經落）＝ 冇加班，加班表一個字都唔使寫。
+        return {
+            "rows": [],
+            "note": "報開工同報收工都冇變 — Apply 唔會寫加班表。",
+        }
     return {
         "rows": [
             {"field": "日期", "before": biz_date.isoformat(), "after": biz_date.isoformat()},
@@ -469,7 +487,6 @@ def _gc_section(
     日曆用嘅係**更時表**（計糧官方時間）+ 加班表 override，唔係行位表——
     所以呢度特登用返 resolve_shift_time，唔好攞 panel 頂嗰個開工當佢一樣。
     """
-    from datetime import timedelta as _timedelta
 
     from meal_planner.google_calendar_sync import config_from_env
     from meal_planner.schedule_grid import load_wake_alarm_overrides_from_rows
@@ -497,7 +514,7 @@ def _gc_section(
             return _fmt(wake_override)
         if start is None:
             return ""
-        return _fmt((datetime.combine(biz_date, start) - _timedelta(hours=offset)).time())
+        return _fmt((datetime.combine(biz_date, start) - timedelta(hours=offset)).time())
 
     def span(pair: tuple[time | None, time | None]) -> str:
         start, end = pair
@@ -505,7 +522,7 @@ def _gc_section(
 
     notes = []
     if wake_override is not None:
-        notes.append("起身表 overrides the wake alarm — it does not move with the start.")
+        notes.append("起身表 overrides the wake alarm — it does not move with the on-duty time.")
 
     if day_off:
         # 非返工日：日曆寫一個全日 event 落「非返工日」個 calendar（summary ＝ 更碼），
@@ -588,6 +605,63 @@ def _onoffduty_section(
     }
 
 
+MAX_LOOKAHEAD_DAYS = 14
+
+
+def _shift_bounds(
+    settings: AppSettings,
+    grid_rows: list[ScheduleRow],
+    overtime_all: dict[date, tuple[time | None, time | None]],
+    day: date,
+    code: str,
+) -> tuple[int | None, int | None]:
+    """嗰日嗰個更嘅開工／收工（30 小時制分鐘）；加班表 override 行先。"""
+    rows = rows_for_roster(grid_rows, code, day)
+    grid_start, grid_end = report_start_end(rows, day)
+    ot_start, ot_end = overtime_all.get(day, (None, None))
+    start = ot_start or grid_start
+    end = ot_end or grid_end
+    start_m = minutes_30h(_fmt(start)) if start is not None else None
+    end_m = minutes_30h(_fmt(end)) if end is not None else None
+    if start_m is not None and end_m is not None and end_m < start_m:
+        end_m += 1440  # 通宵更：收工 06:00 咁，30 小時制當咗第二日
+    return start_m, end_m
+
+
+def _affected_work_day(
+    settings: AppSettings,
+    signal_date: date,
+    signal_m: int,
+    grid_rows: list[ScheduleRow],
+    overtime_all: dict[date, tuple[time | None, time | None]],
+    manual_code: str = "",
+) -> tuple[date, str, int] | None:
+    """落波之後最近嗰個返到工嘅工作日 → (日期, 更碼, 落波時間相對嗰日嘅分鐘)。
+
+    落波嗰日嘅更已經收咗工（例如 21:45 收工、29:00 先落波）＝ 嗰更根本返唔到，
+    要睇嘅係下一個工作日。落波嗰日唔係工作日（SB 咁）都一樣行落去。
+    自己揀咗更碼就當每日都返嗰個更（純模擬），唔再問更表。
+    """
+    from meal_planner.duty_form import roster_code_for
+
+    defs = roster_code_defs(settings)
+    if manual_code and not is_work_day(defs, manual_code):
+        return signal_date, manual_code, signal_m  # 俾上層出「唔係返工日」
+    for offset_days in range(MAX_LOOKAHEAD_DAYS + 1):
+        day = signal_date + timedelta(days=offset_days)
+        code = manual_code or roster_code_for(settings, day)
+        if not code or not is_work_day(defs, code):
+            continue
+        signal_rel = signal_m - offset_days * 1440
+        start_m, end_m = _shift_bounds(settings, grid_rows, overtime_all, day, code)
+        if start_m is None:
+            # 工作日但行位表冇報開工行——照返俾上層報錯，唔好靜靜哋跳去下一日
+            return day, code, signal_rel
+        if end_m is None or end_m > signal_rel:
+            return day, code, signal_rel
+    return None
+
+
 def build_typhoon_plan(
     settings: AppSettings | None = None,
     *,
@@ -603,33 +677,25 @@ def build_typhoon_plan(
     settings = settings or get_settings()
     now = now or datetime.now(ZoneInfo(settings.dates.timezone))
     today = business_date(now)
-    biz_date = biz_date or today
-
-    from meal_planner.duty_form import roster_code_for
-
-    auto_code = roster_code_for(settings, biz_date)
+    # 日期 + 落波時間係一 pair ＝ 個波幾時落。之後模擬邊日，係由呢個時刻推出嚟嘅
+    # 「落波之後最近嗰個返到工嘅工作日」，唔一定係你揀嗰日。
+    signal_date = biz_date or today
     manual_code = str(roster_code or "").strip()
-    code = manual_code or auto_code
 
     plan: dict[str, Any] = {
         "ok": False,
-        "date_iso": biz_date.isoformat(),
+        "signal_date_iso": signal_date.isoformat(),
+        "date_iso": signal_date.isoformat(),
         "today_iso": today.isoformat(),
-        "relation": "today" if biz_date == today else ("past" if biz_date < today else "future"),
-        "roster_code": code,
-        "auto_roster_code": auto_code,
-        "code_source": "manual" if manual_code and manual_code != auto_code else "roster",
+        "relation": "today" if signal_date == today else ("past" if signal_date < today else "future"),
+        "roster_code": manual_code,
+        "auto_roster_code": "",
+        "code_source": "manual" if manual_code else "roster",
         "known_codes": sorted(roster_post_for_code(settings)),
         "signal_time": "",
         "confirmed": bool(confirmed),
         "note": "",
     }
-    if not code:
-        plan["note"] = "No roster code for this day — pick a code."
-        return plan
-    if not is_work_day(roster_code_defs(settings), code):
-        plan["note"] = f"{code} is not a work day — nothing to simulate."
-        return plan
 
     signal_text = normalize_hhmm(signal_time)
     if not signal_text:
@@ -645,9 +711,34 @@ def build_typhoon_plan(
     plan["signal_time"] = signal_text
 
     grid_rows = load_schedule_rows_from_rows(load_sheet_rows("schedule_grid", settings).get("rows") or [])
+    overtime_all = load_overtime_overrides_from_rows(load_sheet_rows("overtime", settings).get("rows") or [])
+
+    affected = _affected_work_day(
+        settings, signal_date, signal_m, grid_rows, overtime_all, manual_code
+    )
+    if affected is None:
+        plan["note"] = (
+            f"No roster code / work day within {MAX_LOOKAHEAD_DAYS} days after "
+            f"{signal_date.isoformat()} — nothing to simulate."
+        )
+        return plan
+    biz_date, target_code, signal_m = affected
+    from meal_planner.duty_form import roster_code_for
+
+    auto_code = roster_code_for(settings, biz_date)  # 更表本身嗰日嘅更碼（用嚟講返你改咗）
+    code = manual_code or target_code
+    plan["date_iso"] = biz_date.isoformat()
+    plan["roster_code"] = code
+    plan["auto_roster_code"] = auto_code
+    plan["code_source"] = "manual" if manual_code and manual_code != auto_code else "roster"
+    plan["relation"] = "today" if biz_date == today else ("past" if biz_date < today else "future")
+    plan["days_after_signal"] = (biz_date - signal_date).days
+    if not is_work_day(roster_code_defs(settings), code):
+        plan["note"] = f"{code} is not a work day — nothing to simulate."
+        return plan
+
     my_rows = rows_for_roster(grid_rows, code, biz_date)
     grid_start, grid_end = report_start_end(my_rows, biz_date)
-    overtime_all = load_overtime_overrides_from_rows(load_sheet_rows("overtime", settings).get("rows") or [])
     ot_start, ot_end = overtime_all.get(biz_date, (None, None))
     planned_start = ot_start or grid_start
     end = ot_end or grid_end
@@ -692,8 +783,13 @@ def build_typhoon_plan(
             "brand": BRAND_LABEL[form_key_for_code(code)],
             "offset_minutes": offset,
             "earliest_start": _hhmm(earliest_m),
+            "earliest_minutes": earliest_m,
             "planned_start": planned_text,
+            "planned_minutes": planned_m,
             "start": actual_start,
+            "start_minutes": start_m,
+            "signal_minutes": signal_m,
+            "end_minutes": end_m,
             "end": end_text,
             "delay_minutes": 0 if day_off else max(0, start_m - planned_m),
             "start_shifted": shifted,
@@ -752,6 +848,7 @@ def build_typhoon_plan(
                 actual_start=actual_start,
                 name=name,
                 day_off=day_off,
+                shifted=shifted,
             ),
             "gc": _gc_section(
                 settings,
@@ -1100,7 +1197,7 @@ def apply_typhoon(
         save_overlay(settings, target_date, {})
         set_roster_code(settings, target_date, plan["day_off_code"])
         result = build_typhoon_plan(
-            settings, biz_date=target_date, signal_time=signal_time,
+            settings, biz_date=biz_date, signal_time=signal_time,
             roster_code=roster_code, confirmed=True, day_off_announced=True, name=name,
         )
         result["apply_result"] = {
@@ -1112,7 +1209,10 @@ def apply_typhoon(
         }
         return result
 
-    set_time_override(settings, target_date, start=plan["start"], note=typhoon_overtime_note(name))
+    # 開工冇郁（個波喺開工之前已經落）＝ 冇嘢好加，唔好無端端寫多行加班表。
+    wrote_overtime = bool(plan["start_shifted"])
+    if wrote_overtime:
+        set_time_override(settings, target_date, start=plan["start"], note=typhoon_overtime_note(name))
 
     report = plan["report_normal"]
     # hidden（唔係 skip）：舊報更時間當日根本唔存在，ReportNormal 都唔應該見到佢哋。
@@ -1130,12 +1230,12 @@ def apply_typhoon(
         )
 
     result = build_typhoon_plan(
-        settings, biz_date=target_date, signal_time=signal_time, roster_code=roster_code,
+        settings, biz_date=biz_date, signal_time=signal_time, roster_code=roster_code,
         confirmed=True, day_off_announced=day_off_announced, name=name,
     )
     result["apply_result"] = {
-        "overtime_start": plan["start"],
-        "overtime_note": typhoon_overtime_note(name),
+        "overtime_start": plan["start"] if wrote_overtime else "",
+        "overtime_note": typhoon_overtime_note(name) if wrote_overtime else "報開工同報收工都冇變，冇寫加班表",
         "reports_added": extra_times,
         "reports_skipped": len(report.get("skip_slot_ids") or []),
         "google_calendar": _sync_google_calendar(settings),

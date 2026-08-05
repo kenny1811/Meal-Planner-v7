@@ -35,6 +35,11 @@
           input.dataset.maintOriginalValue = input.value;
         }
       });
+      // report 嘅起身／備註格同 textarea 一樣要記低 baseline：text input 係失焦先 fire change，
+      // 冇 baseline 嘅話儲存完離開個格會又一次標「未儲存」。
+      root.querySelectorAll("#maint-roster-report input[data-roster-field-date]").forEach((input) => {
+        input.dataset.maintSavedValue = input.value;
+      });
     }
 
     function rosterCodeIssuesText(issues) {
@@ -164,8 +169,8 @@
     }
 
     function rosterWakeInputs() {
-      return Array.from(document.querySelectorAll("#maint-roster-report input[data-roster-wake-date]"))
-        .filter((input) => input.dataset.rosterWakeEditable === "1" && !input.disabled);
+      return Array.from(document.querySelectorAll("#maint-roster-report input[data-roster-field=\"wake\"]"))
+        .filter((input) => input.dataset.rosterFieldEditable === "1" && !input.disabled);
     }
 
     function focusRosterWakeInput(index) {
@@ -173,7 +178,7 @@
       if (!inputs.length) return false;
       const idx = Math.max(0, Math.min(index, inputs.length - 1));
       const input = inputs[idx];
-      if (typeof focusRosterWakeInputElement === "function") return focusRosterWakeInputElement(input);
+      if (typeof focusRosterFieldInputElement === "function") return focusRosterFieldInputElement(input);
       input.focus({ preventScroll: true });
       input.select();
       return true;
@@ -412,7 +417,7 @@
       });
       bindMaintContextMenu(editor);
       attachRosterGcSyncToggle(editor);
-      attachRosterWakeInputs(editor);
+      attachRosterFieldInputs(editor);
       applyFormColumnWidths(editor);
       attachFormColumnResizers(editor);
       bindAutoRowHeight(editor);
@@ -1057,17 +1062,17 @@
     }
 
     function collectWakeAlarmRowsForRosterSave() {
-      document.querySelectorAll("#maint-roster-report input[data-roster-wake-date]").forEach((input) => {
-        syncRosterWakeInputToSources(input);
-      });
+      syncRosterFieldInputsToSources();
       const existing = Array.isArray(rosterReportSources.wake_alarms) ? rosterReportSources.wake_alarms : [];
       const rows = [["日期", "起身時間", "備註"]];
       (existing || []).slice(1).forEach((row) => {
         if (!Array.isArray(row)) return;
         const d = parseYmd(row[0]);
         const key = d ? dateKey(d.year, d.month, d.day) : "";
-        const wake = normalTime(row[1]);
-        if (key && wake) rows.push([key, wake, String(row[2] || "").trim()]);
+        const wake = normalTime(row[1]) || "";
+        const note = String(row[2] || "").trim();
+        // 淨係有備註、冇改起身時間嘅日子一樣要留低。
+        if (key && (wake || note)) rows.push([key, wake, note]);
       });
       rows.splice(1, rows.length - 1, ...rows.slice(1).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
       return rows;

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, timedelta
 
 from meal_planner.maintenance_db import load_sheet_rows, save_roster_code_definitions, save_sheet_rows
 from meal_planner.settings import clear_settings_cache, get_settings
@@ -119,6 +119,19 @@ class StartTimeTests(TyphoonTestBase):
     def test_compact_and_30h_signal_input(self) -> None:
         self.assertEqual(self.plan(signal_time="1140")["signal_time"], "11:40")
         self.assertEqual(self.plan(signal_time="2416")["signal_time"], "24:16")
+
+    def test_signal_after_the_shift_moves_to_the_next_work_day(self) -> None:
+        # 日期 + 落波時間係一 pair ＝ 個波幾時落。29:00 落波嗰陣當日嗰更（收工 21:30）
+        # 已經收咗工 → 要睇嘅係下一個返工日，而個波喺嗰日開工之前就落咗 → 照原定開工。
+        plan = self.plan(signal_time="29:00")
+
+        self.assertTrue(plan["ok"])
+        self.assertEqual(plan["days_after_signal"], 1)
+        self.assertEqual(plan["date_iso"], (BIZ_DATE + timedelta(days=1)).isoformat())
+        self.assertEqual(plan["signal_date_iso"], BIZ_DATE.isoformat())
+        self.assertEqual(plan["start"], plan["planned_start"])
+        self.assertEqual(plan["delay_minutes"], 0)
+        self.assertFalse(plan["start_shifted"])
 
     def test_after_midnight_signal_is_always_read_as_30h(self) -> None:
         # 落波唔收 00:00–05:59：打 02:56 即係 26:56，唔會有第二個讀法。
@@ -416,7 +429,7 @@ class ApplyTests(TyphoonTestBase):
         self.assertEqual([r for r in overtime[1:] if str(r[0]).startswith(FUTURE_DATE.isoformat())], [])
         # TP 唔使返工 → 之後再模擬會直接話你知冇嘢要模擬。
         self.assertFalse(result["ok"])
-        self.assertIn("not a work day", result["note"])
+        self.assertIn("nothing to simulate", result["note"])
 
     def test_apply_rejects_an_unusable_scenario(self) -> None:
         with self.assertRaises(ValueError):
