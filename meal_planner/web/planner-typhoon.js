@@ -199,8 +199,8 @@
       fillTyphoonNameFromObservatory();
     }
 
-    // 個名由天文台正追蹤緊嘅熱帶氣旋帶出嚟（10 分鐘 cache）。攞唔到就留空 + 講明點解，
-    // 唔會靜靜哋填個舊名落加班表備註。直接改個格嘅 value，唔重畫，唔會搶走 cursor。
+    // 個名由天文台正追蹤緊嘅熱帶氣旋帶出嚟（10 分鐘 cache），每次開面板都覆蓋返最新嗰個。
+    // 攞唔到就唔郁（留返上次嗰個 + 講明點解）。直接改個格嘅 value，唔重畫，唔會搶走 cursor。
     function fillTyphoonNameFromObservatory() {
       loadTyphoonCurrentName()
         .then((data) => {
@@ -208,7 +208,8 @@
           const box = document.getElementById("typhoon-name");
           if (!box) return;
           box.title = typhoonNameNote || `天文台：${(data.names || []).map((n) => n.zh || n.en).join("、")}`;
-          if (typhoonName || !data.name) return;
+          // 每次入嚟都跟返而家真係吹緊嗰個——上次存低嘅舊名唔應該賴死唔走。
+          if (!data.name || data.name === typhoonName) return;
           typhoonName = data.name;
           box.value = data.name;
           // 加班表個備註由後端砌（同 Apply 寫落去嗰個係同一段 code），所以要重算一次。
@@ -392,7 +393,7 @@
           return `<tr class="${cls}">
             <td class="duty-td-time">${timeCell}</td>
             <td>${typhoonEsc(row.content)}</td>
-            <td>${row.duration_min == null ? "" : typhoonEsc(row.duration_min) + "m"}</td>
+            <td class="typhoon-td-len">${row.duration_min == null ? "" : typhoonEsc(row.duration_min)}</td>
             <td class="typhoon-state">${typhoonEsc(state)}</td>
           </tr>`;
         })

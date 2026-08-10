@@ -2302,6 +2302,9 @@
     table.typhoon-table th,
     table.typhoon-table td.duty-td-time { white-space: nowrap; }
     table.typhoon-table thead th { background: #f3f5f9; font-weight: 700; }
+    /* 時長跟返行位表：靠右對齊，右邊留返 cell padding 做 indent。 */
+    table.typhoon-table td.typhoon-td-len,
+    table.typhoon-table th[data-form-col-key$="_length"] { text-align: right; padding-right: 14px; }
     /* 有表嘅 block：body 唔要 padding，張表貼實左邊；文字提示自己補返少少。 */
     /* 每個 block 入面統一：張表貼實邊（margin 0），文字就對齊表格第一個字
        （＝ cell padding 6px），上下望落去一條直線。 */

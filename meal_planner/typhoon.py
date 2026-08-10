@@ -88,6 +88,10 @@ def _hhmm(minutes: int) -> str:
     """
     while minutes >= 1800:
         minutes -= 1440
+    # 負數 ＝ 前一日（個波尋日落、今日先返工）。冚返落 0–1439，
+    # 唔冚就會出「-14:40」咁嘅廢時間；係邊一日由 `*_minutes` 嗰邊表達。
+    while minutes < 0:
+        minutes += 1440
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
@@ -115,6 +119,7 @@ def _grid_section(
     planned_start: str,
     actual_start: str,
     report_minutes: list[int],
+    earliest_m: int | None = None,
 ) -> dict[str, Any]:
     """行位表：當日該更碼嘅時間軸，實際開工之前嗰啲位（連原本嗰行報開工）全部返唔到。
 
@@ -126,6 +131,11 @@ def _grid_section(
     """
     from meal_planner.duty_report import SAFE_KEYWORD
 
+    # 返唔返到，睇嘅係「最早幾點到得」（落波 + 個 offset），唔係「幾點開工」。
+    # 開工照原定（冇遲到）唔代表報開工之前嗰啲位都趕得切——09:40 落波、10:40 先到得，
+    # 10:35 簽簿就真係做唔到，雖然 10:45 報開工準時。
+    if earliest_m is None:
+        earliest_m = start_m
     shifted = actual_start != planned_start
     report_set = set(report_minutes) if shifted else set()
     out: list[dict[str, Any]] = []
@@ -144,7 +154,7 @@ def _grid_section(
                 "is_start": "報開工" in text,
                 "is_end": "報收工" in text,
                 "inserted": False,
-                "unreachable": minutes < start_m,
+                "unreachable": minutes < earliest_m,
                 # 開工之後原定嗰啲報平安更：唔喺 4 小時表入面就係俾新表取代咗。
                 "superseded": (
                     shifted and SAFE_KEYWORD in text and minutes >= start_m and minutes not in report_set
@@ -819,7 +829,8 @@ def build_typhoon_plan(
             "overtime_start": _fmt(ot_start),
             "overtime_end": _fmt(ot_end),
             "grid": _grid_section(
-                my_rows, biz_date, start_m, planned_text, actual_start, report_minutes
+                my_rows, biz_date, start_m, planned_text, actual_start, report_minutes,
+                earliest_m=earliest_m,
             ),
             "meals": _meal_section(
                 settings,
@@ -1028,6 +1039,10 @@ def build_typhoon_meal_plan(
     )
     if not plan["ok"]:
         raise ValueError(plan["note"] or "Nothing to compute.")
+
+    # 個波今日落、但要返嘅係聽日嗰更：餐單要跟返 plan 揀咗嘅返工日，
+    # 唔係你喺格仔入面打嗰日（否則行位表出聽日、餐單出今日，兩邊唔對數）。
+    biz_date = date.fromisoformat(plan["date_iso"])
 
     day_off = bool(plan.get("day_off"))
     code = (plan.get("day_off_code") or plan["roster_code"]) if day_off else plan["roster_code"]

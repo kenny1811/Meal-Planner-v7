@@ -24,6 +24,8 @@ SCHEDULE_GRID = [
     ["VOC", "17:15", "- 報平安更", None, "2026-01-01", ""],
     ["VOC", "18:00", "小食", 30, "2026-01-01", ""],
     ["VOC", "21:30", "報收工, 報平安更", None, "2026-01-01", ""],
+    # EleA 跟真表：著衫排喺報開工之前（EleC1 嘅簽簿、PenBM 嘅著衫埋位都係咁）。
+    ["EleA", "08:50", "著衫埋位 10", 10, "2026-01-01", ""],
     ["EleA", "09:15", "報開工, 報平安更", 240, "2026-01-01", ""],
     ["EleA", "13:15", "飯", 60, "2026-01-01", ""],
     ["EleA", "21:30", "報收工, 報平安更", None, "2026-01-01", ""],
@@ -133,6 +135,15 @@ class StartTimeTests(TyphoonTestBase):
         self.assertEqual(plan["delay_minutes"], 0)
         self.assertFalse(plan["start_shifted"])
 
+    def test_signal_the_day_before_still_shows_a_real_clock(self) -> None:
+        # 個波 7/19 落、7/20 先返工：最早開工係前一日嘅 12:40。
+        # 分鐘數會係負（相對返工日），但出俾人睇嗰個時間要係 12:40，唔係 -11:20。
+        plan = self.plan(biz_date=BIZ_DATE - timedelta(days=1), signal_time="11:40")
+        self.assertEqual(plan["date_iso"], BIZ_DATE.isoformat())
+        self.assertEqual(plan["signal_time"], "11:40")
+        self.assertEqual(plan["earliest_start"], "12:40")
+        self.assertLess(plan["earliest_minutes"], 0)
+
     def test_after_midnight_signal_is_always_read_as_30h(self) -> None:
         # 落波唔收 00:00–05:59：打 02:56 即係 26:56，唔會有第二個讀法。
         plan = self.plan(signal_time="02:56")
@@ -216,6 +227,31 @@ class SectionTests(TyphoonTestBase):
         self.assertTrue(rows[0]["unreachable"])
         self.assertFalse(rows[0]["inserted"])
         self.assertFalse(rows[2]["unreachable"])
+
+    def test_grid_keeps_the_pre_start_rows_when_you_can_get_there_in_time(self) -> None:
+        # 06:00 落波 → 07:00 就到得，早過 08:50 著衫 → 照做，唔應該標「返唔到」。
+        plan = self.plan(roster_code="EleA", signal_time="06:00")
+        self.assertFalse(plan["start_shifted"])
+        rows = {row["time"]: row for row in plan["grid"]["rows"]}
+        self.assertIn("08:50", rows)
+        self.assertFalse(rows["08:50"]["unreachable"])
+
+    def test_grid_dims_the_pre_start_rows_you_cannot_reach_even_when_on_time(self) -> None:
+        # 08:00 落波 → 09:00 先到得：09:15 報開工照準時（唔算遲開工），
+        # 但 08:50 著衫已經過咗鐘，趕唔切就係趕唔切。
+        plan = self.plan(roster_code="EleA", signal_time="08:00")
+        self.assertEqual(plan["earliest_start"], "09:00")
+        self.assertFalse(plan["start_shifted"])
+        rows = {row["time"]: row for row in plan["grid"]["rows"]}
+        self.assertTrue(rows["08:50"]["unreachable"])
+        self.assertFalse(rows["09:15"]["unreachable"])
+
+    def test_grid_dims_the_pre_start_rows_once_the_start_moves(self) -> None:
+        # 真係遲到 12:40 開工，08:50 著衫同 09:15 報開工就真係返唔到。
+        plan = self.plan(roster_code="EleA")
+        rows = {row["time"]: row for row in plan["grid"]["rows"]}
+        self.assertTrue(rows["08:50"]["unreachable"])
+        self.assertTrue(rows["09:15"]["unreachable"])
 
     def test_grid_swaps_the_old_safe_reports_for_the_4h_ones(self) -> None:
         rows = {row["time"]: row for row in self.plan()["grid"]["rows"]}

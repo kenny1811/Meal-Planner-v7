@@ -4,6 +4,16 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.4.9 — 10/08/2026 26:40
+- Fix: Typhoon marked a schedule-grid row missed just for sitting before the 報開工 row
+  (e.g. 簽簿 / 著衫). A row is missed only when you cannot get there in time — signal down
+  plus the travel rule.
+- Fix: Typhoon's meal plan follows the work day the panel picked, not the date typed in
+  the box (signal today, shift tomorrow showed the wrong day's meals).
+- Fix: "earliest" showed a broken clock (-14:40) when the signal came down the day before.
+- Typhoon's Length column matches the schedule grid: plain number, right-aligned.
+- Typhoon's storm name refreshes from the Observatory each time the panel opens.
+
 ## 7.4.8 — 05/08/2026 15:15
 - Typhoon handling.
 
