@@ -4,6 +4,12 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.4.11 — 11/08/2026 14:55
+- Fix: with auto-send on, the On Duty / Off Duty chip now shows your latest action
+  (opened / sent / hold) without that changing what gets sent — opening a form after a
+  slot was sent no longer re-sends it, and opening one after a missed slot no longer
+  flips the record back.
+
 ## 7.4.10 — 11/08/2026 13:25
 - Fix: with auto-send on, On Duty / Off Duty no longer skips a slot just because the form
   was opened at some point — it sends on time, and still flags a slot it could not send.

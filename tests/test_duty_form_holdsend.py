@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime
 
-from meal_planner.duty_form import _round_to_5min, pick_report_slot
+from meal_planner.duty_form import _logged, _round_to_5min, pick_report_slot
 
 
 def _slot(hhmm: str, content: str) -> dict[str, str]:
@@ -57,3 +57,26 @@ class PickReportSlotTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LoggedTests(unittest.TestCase):
+    """auto 之下「做咗未」問 history，唔問最新個 status。"""
+
+    HISTORY = [
+        {"status": "sent", "time_text": "10:45", "source": "scheduler"},
+        {"status": "opened", "time_text": "10:45", "source": "web"},
+    ]
+
+    def test_sent_survives_a_later_open(self) -> None:
+        # 交完之後再開張 form：個 status 變咗 opened，但交過就係交過，唔會再交多次。
+        self.assertTrue(_logged(self.HISTORY, "sent", "10:45"))
+
+    def test_other_status_is_not_invented(self) -> None:
+        self.assertFalse(_logged(self.HISTORY, "missed", "10:45"))
+
+    def test_a_new_time_starts_clean(self) -> None:
+        # 改咗開工時間（rearm）＝另一件事，舊時間交過唔算數。
+        self.assertFalse(_logged(self.HISTORY, "sent", "11:15"))
+
+    def test_empty_history(self) -> None:
+        self.assertFalse(_logged([], "sent", "10:45"))

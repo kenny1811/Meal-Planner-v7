@@ -723,6 +723,19 @@ def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[s
     return result_plan
 
 
+def _logged(history_rows: list[dict[str, Any]], status: str, time_text: str) -> bool:
+    """history 入面有冇「呢個時間」嘅呢個狀態（append-only，唔會俾之後嘅改動洗走）。
+
+    睇 history 唔睇最新個 status，因為你幾時開 form 都會覆蓋個 status
+    （auto 之下要見到最後一次動作），但發送／missed 呢啲事實唔應該就咁冇咗。
+    對埋時間：改咗開工時間（rearm）＝另一件事，舊時間發過唔算數。
+    """
+    return any(
+        str(row.get("status") or "") == status and str(row.get("time_text") or "") == time_text
+        for row in history_rows
+    )
+
+
 def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
     """scheduler tick：auto_send 開先自動交；過咗 grace 未交標 missed（只限今日）。
 
@@ -743,6 +756,7 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
         return None
     config = load_onoff_config(settings)
     log = load_onoff_log(settings, biz_date)
+    history = load_onoff_history(settings, biz_date)
     form_key = plan.get("form")
     post = str(plan.get("post") or "")
     form = FORMS.get(str(form_key)) if form_key else None
@@ -758,9 +772,16 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
         entry = log.get(kind) or {}
         status = str(entry.get("status") or "")
         # auto 開住＝夠鐘就自動發，你幾時開過 form 唔關事（開 form 係 semi 嗰套：
-        # 你自己撳提交）。所以淨係 semi 先當「開過 form ＝ 你搞緊」，唔標 missed。
-        done = {"sent", "missed", "hold"} if auto_ready else {"sent", "opened", "missed", "hold"}
-        if status in done:
+        # 你自己撳提交）。開 form 會覆蓋個 status（要見到最後一次動作），
+        # 所以 auto 之下「做咗未」要問 history，唔可以問最新個 status。
+        # semi 冇人幫你發，「開過 form」照舊當你搞緊，唔標 missed。
+        rows = history.get(kind) or []
+        done = (
+            status == "hold" or _logged(rows, "sent", time_text) or _logged(rows, "missed", time_text)
+            if auto_ready
+            else status in {"sent", "opened", "missed", "hold"}
+        )
+        if done:
             continue  # 已交／已標 missed／hold 緊等真收工（semi 仲包埋已自己開 form）
         slot_dt = _slot_datetime(biz_date, time_text, tz)
         if now < slot_dt:
