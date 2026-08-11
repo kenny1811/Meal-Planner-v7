@@ -247,7 +247,7 @@ final class AppUpdater {
             HttpURLConnection conn = null;
             try {
                 conn = (HttpURLConnection) new URL(base + path).openConnection();
-                conn.setConnectTimeout(ApiClient.CONNECT_TIMEOUT_MS);
+                conn.setConnectTimeout(ApiClient.connectTimeoutFor(base + path));
                 conn.setReadTimeout(DOWNLOAD_READ_TIMEOUT_MS);
                 if (offset > 0) {
                     conn.setRequestProperty("Range", "bytes=" + offset + "-");

@@ -19,7 +19,15 @@ import java.nio.charset.StandardCharsets;
  * 出街 meshnet 行先）；成功嗰個 server 記住做首選，全 app 共用。
  */
 final class ApiClient {
+    /** LAN candidate：唔喺屋企個網就一定唔通，唔好等，快啲 fail 去試 meshnet。 */
     static final int CONNECT_TIMEOUT_MS = 2500;
+
+    /**
+     * Meshnet candidate：出街用流動數據，部機啱啱由 Doze／radio idle 醒返嗰陣，
+     * NordVPN 條 tunnel 要幾秒先重建好——等 2.5 秒一定 fail（"after 2500ms"），
+     * 撳多次先得。所以 meshnet 嗰個 candidate 俾多啲時間，一 tap 就成事。
+     */
+    static final int MESHNET_CONNECT_TIMEOUT_MS = 9000;
 
     /**
      * 電話每次打上電腦都報上名——電腦記低嗰個來源 IP，就可以反過來 push 落電話
@@ -81,12 +89,19 @@ final class ApiClient {
         return server;
     }
 
+    /** Meshnet 個 host 俾長 timeout，其餘（LAN）維持短 timeout。 */
+    static int connectTimeoutFor(String endpoint) {
+        return endpoint != null && endpoint.startsWith(AlarmStore.MESHNET_AUTO_SYNC_SERVER)
+                ? MESHNET_CONNECT_TIMEOUT_MS
+                : CONNECT_TIMEOUT_MS;
+    }
+
     static String httpGet(String endpoint, int readTimeoutMs) throws Exception {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(endpoint).openConnection();
             conn.setRequestMethod("GET");
-            conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            conn.setConnectTimeout(connectTimeoutFor(endpoint));
             conn.setReadTimeout(readTimeoutMs);
             conn.setRequestProperty(CLIENT_HEADER, CLIENT_HEADER_VALUE);
             return readResponse(conn, endpoint);
@@ -102,7 +117,7 @@ final class ApiClient {
         try {
             conn = (HttpURLConnection) new URL(endpoint).openConnection();
             conn.setRequestMethod("POST");
-            conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            conn.setConnectTimeout(connectTimeoutFor(endpoint));
             conn.setReadTimeout(readTimeoutMs);
             conn.setRequestProperty(CLIENT_HEADER, CLIENT_HEADER_VALUE);
             if (body != null) {

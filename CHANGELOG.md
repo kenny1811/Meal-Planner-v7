@@ -4,6 +4,11 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.5.12 — 11/08/2026 25:45
+- Fix: on mobile data the phone app no longer fails the first tap with "after 2500ms" —
+  the meshnet server now gets up to 9 s to answer while the tunnel wakes up, so one tap
+  is enough.
+
 ## 7.5.11 — 11/08/2026 25:05
 - On Duty / Off Duty now always submits at the shift time — the Semi / Auto switch is gone
   (web and phone). Opening a form is only a shortcut: it is kept in the history and never
