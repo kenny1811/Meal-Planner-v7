@@ -334,36 +334,6 @@ class OnOffDutyView {
         }, "onoffduty-override").start();
     }
 
-    /** Semi ⇄ Auto：寫入電腦 config，成功後用 API 回傳嘅 plan 重新 render。 */
-    private void postConfig(boolean autoSend) {
-        if (loading) {
-            return;
-        }
-        loading = true;
-        JSONObject payload = new JSONObject();
-        try {
-            payload.put("auto_send", autoSend);
-        } catch (Exception ignored) {
-        }
-        new Thread(() -> {
-            try {
-                String body = ApiClient.request(activity, "POST", "/api/onoffduty/config", payload.toString(), HTTP_READ_TIMEOUT_MS);
-                JSONObject parsed = new JSONObject(body);
-                activity.runOnUiThread(() -> {
-                    plan = parsed;
-                    loading = false;
-                    render();
-                });
-            } catch (Exception e) {
-                activity.runOnUiThread(() -> {
-                    loading = false;
-                    lastError = "Config failed: " + e.getMessage();
-                    render();
-                });
-            }
-        }, "onoffduty-config").start();
-    }
-
     // ---------------------------------------------------------------- render
 
     private void renderLoading() {
@@ -411,39 +381,10 @@ class OnOffDutyView {
         dateRow.addView(refreshButton, new LinearLayout.LayoutParams(dp(44), dp(30)));
         container.addView(dateRow);
 
-        // 第二行：30h chip + Semi ⇄ Auto segmented 掣（左=半自動出連結，右=夠鐘自動交）
-        boolean autoSend = plan.optBoolean("auto_send", false);
+        // 第二行：30h chip（冇 Semi/Auto 揀——夠鐘一定自動交）
         LinearLayout modeRow = row();
         modeRow.setPadding(dp(8), dp(4), dp(8), dp(2));
         modeRow.addView(ui.chip("30h day", 0xFF444441, 0xFFF1EFE8));
-        LinearLayout modeSpacer = new LinearLayout(activity);
-        modeRow.addView(modeSpacer, weighted(1f));
-        LinearLayout segmented = row();
-        segmented.setBackground(ui.roundedBg(0xFFFFFFFF, 99, 0xFFD8DEE6, 1));
-        TextView semiText = textView("Semi", 11, autoSend ? 0xFF94A3B8 : 0xFF0C447C, !autoSend);
-        semiText.setBackground(autoSend ? null : ui.roundedBg(0xFFE6F1FB, 99, 0, 0));
-        semiText.setPadding(dp(12), dp(4), dp(12), dp(4));
-        semiText.setOnClickListener(v -> {
-            if (autoSend) {
-                postConfig(false);
-            }
-        });
-        segmented.addView(semiText);
-        TextView autoText = textView("Auto", 11, autoSend ? 0xFF0C447C : 0xFF94A3B8, autoSend);
-        autoText.setBackground(autoSend ? ui.roundedBg(0xFFE6F1FB, 99, 0, 0) : null);
-        autoText.setPadding(dp(12), dp(4), dp(12), dp(4));
-        autoText.setOnClickListener(v -> {
-            if (!autoSend) {
-                new AlertDialog.Builder(activity)
-                        .setTitle("Turn full-auto on?")
-                        .setMessage("On/Off Duty forms will be submitted automatically at the shift times.")
-                        .setPositiveButton("OK", (d, w) -> postConfig(true))
-                        .setNegativeButton("Cancel", null)
-                        .show();
-            }
-        });
-        segmented.addView(autoText);
-        modeRow.addView(segmented);
         container.addView(modeRow);
 
         // 第三行：更碼摘要卡（Spinner pickup list，揀即轉更——寫入更表）
@@ -468,8 +409,7 @@ class OnOffDutyView {
         codeSubView.setPadding(0, 0, 0, 0);
         codeColumn.addView(codeSubView);
         codeCard.addView(codeColumn, weighted(1f));
-        codeCard.addView(ui.chip(autoSend ? "auto at time" : "semi",
-                autoSend ? 0xFF0C447C : 0xFF5F5E5A, autoSend ? 0xFFE6F1FB : 0xFFF1EFE8));
+        codeCard.addView(ui.chip("auto at time", 0xFF0C447C, 0xFFE6F1FB));
         container.addView(codeCard, ui.cardParams());
         container.addView(ui.noteStrip(
                 "⚠ 揀code轉更會寫入更表——報更／餐單／日曆全部跟住變"),
@@ -505,7 +445,7 @@ class OnOffDutyView {
             for (int i = 0; i < actions.length(); i++) {
                 JSONObject action = actions.optJSONObject(i);
                 String status = action != null ? action.optString("status", "") : "";
-                if (!"sent".equals(status) && !"opened".equals(status)) {
+                if (!"sent".equals(status)) {
                     highlightIndex = i;
                     break;
                 }
@@ -537,7 +477,7 @@ class OnOffDutyView {
                 highlight ? 0xFF0C447C : 0xFF334155, true);
         labelView.setPadding(0, 0, 0, 0);
         headRow.addView(labelView, weighted(1f));
-        if ("sent".equals(status) || "opened".equals(status)) {
+        if ("sent".equals(status)) {
             headRow.addView(ui.chip("✓ " + status + " " + formatLoggedAt(loggedAt) + " · " + source,
                     0xFF085041, 0xFFE1F5EE));
         } else if ("failed".equals(status)) {
@@ -611,11 +551,11 @@ class OnOffDutyView {
 
     /**
      * 完整經過（append-only）：交過就永遠留低，改時間唔會抹走。
-     * 得一行（＝而家個狀態）就唔畫，因為上面個 chip 已經講咗。
+     * 開過 form 唔會入狀態，所以一行都要畫（否則見唔到自己開過）。
      */
     private void addHistoryLines(LinearLayout card, JSONObject action) {
         JSONArray history = action.optJSONArray("history");
-        if (history == null || history.length() < 2) {
+        if (history == null || history.length() < 1) {
             return;
         }
         LinearLayout box = new LinearLayout(activity);

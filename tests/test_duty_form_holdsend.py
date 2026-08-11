@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 
-from meal_planner.duty_form import _logged, _round_to_5min, pick_report_slot
+from meal_planner.duty_form import (
+    _logged,
+    _round_to_5min,
+    load_onoff_history,
+    load_onoff_log,
+    pick_report_slot,
+    record_onoff_log,
+    record_onoff_open,
+)
+from meal_planner.settings import clear_settings_cache, get_settings
 
 
 def _slot(hhmm: str, content: str) -> dict[str, str]:
@@ -60,7 +71,7 @@ if __name__ == "__main__":
 
 
 class LoggedTests(unittest.TestCase):
-    """auto 之下「做咗未」問 history，唔問最新個 status。"""
+    """「做咗未」問 history，唔問最新個 status。"""
 
     HISTORY = [
         {"status": "sent", "time_text": "10:45", "source": "scheduler"},
@@ -80,3 +91,39 @@ class LoggedTests(unittest.TestCase):
 
     def test_empty_history(self) -> None:
         self.assertFalse(_logged([], "sent", "10:45"))
+
+
+class RecordOpenTests(unittest.TestCase):
+    """開過預填連結：淨係留 history 記錄，唔會覆蓋狀態（＝唔會阻到夠鐘自動交）。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old_root = os.environ.get("MENU_PROJECT_ROOT")
+        os.environ["MENU_PROJECT_ROOT"] = self.tmp.name
+        clear_settings_cache()
+        self.day = date(2026, 8, 11)
+
+    def tearDown(self) -> None:
+        if self.old_root is None:
+            os.environ.pop("MENU_PROJECT_ROOT", None)
+        else:
+            os.environ["MENU_PROJECT_ROOT"] = self.old_root
+        clear_settings_cache()
+        self.tmp.cleanup()
+
+    def test_open_leaves_the_status_empty(self) -> None:
+        settings = get_settings()
+        record_onoff_open(settings, self.day, "start", time_text="10:45")
+
+        self.assertEqual(load_onoff_log(settings, self.day), {})
+        rows = load_onoff_history(settings, self.day)["start"]
+        self.assertEqual([r["status"] for r in rows], ["opened"])
+
+    def test_open_after_sent_keeps_sent(self) -> None:
+        settings = get_settings()
+        record_onoff_log(settings, self.day, "start", "sent", time_text="10:45", source="scheduler")
+        record_onoff_open(settings, self.day, "start", time_text="10:45")
+
+        self.assertEqual(load_onoff_log(settings, self.day)["start"]["status"], "sent")
+        rows = load_onoff_history(settings, self.day)["start"]
+        self.assertEqual([r["status"] for r in rows], ["sent", "opened"])

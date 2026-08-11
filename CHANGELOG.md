@@ -4,6 +4,11 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.5.11 — 11/08/2026 25:05
+- On Duty / Off Duty now always submits at the shift time — the Semi / Auto switch is gone
+  (web and phone). Opening a form is only a shortcut: it is kept in the history and never
+  stops the automatic submission.
+
 ## 7.4.11 — 11/08/2026 14:55
 - Fix: with auto-send on, the On Duty / Off Duty chip now shows your latest action
   (opened / sent / hold) without that changing what gets sent — opening a form after a

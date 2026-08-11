@@ -370,10 +370,6 @@ class OnOffDutyLogRequest(BaseModel):
     date_iso: str | None = None
 
 
-class OnOffDutyConfigRequest(BaseModel):
-    auto_send: bool | None = None
-
-
 class OnOffDutyOverrideRequest(BaseModel):
     date_iso: str | None = None
     start: str | None = None
@@ -1492,7 +1488,7 @@ def api_onoffduty_plan(date_iso: str | None = None) -> dict[str, Any]:
 
 @app.post("/api/onoffduty/log")
 def api_onoffduty_log(body: OnOffDutyLogRequest) -> dict[str, Any]:
-    from meal_planner.duty_form import build_day_plan, record_onoff_log
+    from meal_planner.duty_form import build_day_plan, record_onoff_log, record_onoff_open
 
     if body.kind not in {"start", "end"}:
         raise HTTPException(status_code=400, detail=f"Invalid kind: {body.kind}")
@@ -1508,14 +1504,19 @@ def api_onoffduty_log(body: OnOffDutyLogRequest) -> dict[str, Any]:
             biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
         plan = build_day_plan(settings, biz_date=biz_date)
         action = next((a for a in plan.get("actions", []) if a.get("kind") == body.kind), None)
-        record_onoff_log(
-            settings,
-            biz_date,
-            body.kind,
-            body.status,
-            time_text=str(action.get("time") if action else ""),
-            source=body.source,
-        )
+        time_text = str(action.get("time") if action else "")
+        if body.status == "opened":
+            # 開過預填連結：淨係留 history 記錄，唔改狀態、唔阻夠鐘自動交。
+            record_onoff_open(settings, biz_date, body.kind, time_text=time_text, source=body.source)
+        else:
+            record_onoff_log(
+                settings,
+                biz_date,
+                body.kind,
+                body.status,
+                time_text=time_text,
+                source=body.source,
+            )
         return build_day_plan(settings, biz_date=biz_date)
     except HTTPException:
         raise
@@ -1587,18 +1588,6 @@ def api_onoffduty_holdsend(body: OnOffDutyHoldSendRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OnOffDuty hold/send failed: {e}") from e
-
-
-@app.post("/api/onoffduty/config")
-def api_onoffduty_config(body: OnOffDutyConfigRequest) -> dict[str, Any]:
-    from meal_planner.duty_form import build_day_plan, save_onoff_config
-
-    try:
-        settings = get_settings()
-        save_onoff_config(settings, {"auto_send": body.auto_send})
-        return build_day_plan(settings)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OnOffDuty config failed: {e}") from e
 
 
 @app.get("/api/typhoon/plan")

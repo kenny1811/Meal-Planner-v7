@@ -11,7 +11,8 @@
   hold / send now 先會再改變（send now 用「而家」做實際開工／收工）。
 - 一日兩個 action：開工（填開工時間、收工留空）、收工（開工留空、填收工時間），各自獨立提交。
   兩個 action 都有 hold / send now：打風唔知幾點開工，就 hold 住開工，真開工先撳 send now。
-- 交法：預設出預填連結（手機一 tap → 自己撳提交）；可選全自動 POST（auto_send）。
+- 交法：夠鐘就自動 POST 去 Google Form，冇半自動模式——開唔開過預填連結都唔影響。
+  預填連結照出（想自己開嚟睇／改都得），開過只會喺 history 留一行記錄。
 """
 
 from __future__ import annotations
@@ -27,7 +28,6 @@ from meal_planner.duty_common import (
     GRACE_DETAIL,
     GRACE_MINUTES,
     RETRY_SECONDS,
-    load_kv_config,
     retry_backoff_active,
 )
 from meal_planner.duty_report import apply_override, build_plan as build_report_normal_plan, send_slot
@@ -103,12 +103,6 @@ def _connect(settings: AppSettings) -> sqlite3.Connection:
         " recorded_at TEXT NOT NULL,"
         " PRIMARY KEY (date_iso, kind))"
     )
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS onoffduty_config ("
-        " config_key TEXT PRIMARY KEY,"
-        " value_json TEXT NOT NULL,"
-        " updated_at TEXT NOT NULL)"
-    )
     # onoffduty_log 一日一個 action 得一行（＝而家個狀態），改時間會蓋走上一個。
     # history 係 append-only：交過、hold 過、重新武裝過，全部留底，永遠唔 delete。
     # 「今朝到底交咗未」呢類問題就係靠佢答。
@@ -134,36 +128,6 @@ def _connect(settings: AppSettings) -> sqlite3.Connection:
     return conn
 
 
-def load_onoff_config(settings: AppSettings) -> dict[str, Any]:
-    stored = load_kv_config(_DB_LOCK, lambda: _connect(settings), "onoffduty_config")
-    auto_send = stored.get("auto_send")
-    return {"auto_send": bool(auto_send) if auto_send is not None else False}
-
-
-def save_onoff_config(settings: AppSettings, patch: dict[str, Any]) -> dict[str, Any]:
-    import json
-    from zoneinfo import ZoneInfo
-
-    current = load_onoff_config(settings)
-    if "auto_send" in patch and patch["auto_send"] is not None:
-        current["auto_send"] = bool(patch["auto_send"])
-    now_iso = datetime.now(ZoneInfo(settings.dates.timezone)).isoformat()
-    with _DB_LOCK:
-        conn = _connect(settings)
-        try:
-            conn.execute(
-                "INSERT INTO onoffduty_config (config_key, value_json, updated_at) VALUES (?, ?, ?)"
-                " ON CONFLICT(config_key) DO UPDATE SET value_json = excluded.value_json,"
-                " updated_at = excluded.updated_at",
-                ("auto_send", json.dumps(current["auto_send"]), now_iso),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-    notify_change()
-    return current
-
-
 def record_onoff_log(
     settings: AppSettings,
     biz_date: date,
@@ -174,7 +138,7 @@ def record_onoff_log(
     source: str = "web",
     detail: str = "",
 ) -> None:
-    """記低邊日邊個 action（start/end）做咗咩（opened/sent/failed/missed）。
+    """記低邊日邊個 action（start/end）做咗咩（sent/failed/missed/hold…）。
 
     onoffduty_log 同一 (日, action) 最新覆蓋（＝而家個狀態）；同時 append 一行落
     onoffduty_history，永遠唔會俾之後嘅改動洗走。
@@ -216,6 +180,30 @@ def _append_history(
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
         (biz_date.isoformat(), kind, status, time_text, source, detail, now_iso),
     )
+
+
+def record_onoff_open(
+    settings: AppSettings,
+    biz_date: date,
+    kind: str,
+    *,
+    time_text: str = "",
+    source: str = "web",
+) -> None:
+    """開過預填連結：淨係 append 一行 history 做記錄。
+
+    **唔會**掂 onoffduty_log 個狀態——夠鐘照自動交，個卡亦唔會扮咗「已交」。
+    """
+    from zoneinfo import ZoneInfo
+
+    now_iso = datetime.now(ZoneInfo(settings.dates.timezone)).isoformat()
+    with _DB_LOCK:
+        conn = _connect(settings)
+        try:
+            _append_history(conn, biz_date, kind, "opened", time_text, source, "", now_iso)
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def load_onoff_history(settings: AppSettings, biz_date: date) -> dict[str, list[dict[str, Any]]]:
@@ -726,8 +714,7 @@ def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[s
 def _logged(history_rows: list[dict[str, Any]], status: str, time_text: str) -> bool:
     """history 入面有冇「呢個時間」嘅呢個狀態（append-only，唔會俾之後嘅改動洗走）。
 
-    睇 history 唔睇最新個 status，因為你幾時開 form 都會覆蓋個 status
-    （auto 之下要見到最後一次動作），但發送／missed 呢啲事實唔應該就咁冇咗。
+    睇 history 唔睇最新個 status：發送／missed 呢啲事實唔應該俾之後嘅改動蓋走。
     對埋時間：改咗開工時間（rearm）＝另一件事，舊時間發過唔算數。
     """
     return any(
@@ -737,14 +724,12 @@ def _logged(history_rows: list[dict[str, Any]], status: str, time_text: str) -> 
 
 
 def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
-    """scheduler tick：auto_send 開先自動交；過咗 grace 未交標 missed（只限今日）。
+    """scheduler tick：夠鐘就自動交；過咗 grace 未交標 missed（只限今日）。
 
-    auto 同 semi 係兩回事：auto 夠鐘就自動發，你幾時開過 form 都唔影響；
-    semi 先至靠你自己開 form 撳提交，所以 semi 之下「opened」＝你搞緊，唔會標 missed。
+    冇半自動模式——開唔開過預填連結都唔影響，照交。
     回傳下一個會自動交嘅時刻（scheduler 瞓到啱啱嗰刻醒，準時交）；冇就 None。
     """
     from zoneinfo import ZoneInfo
-
 
     settings = settings or get_settings()
     tz = ZoneInfo(settings.dates.timezone)
@@ -754,13 +739,12 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
     actions = plan.get("actions") or []
     if not actions:
         return None
-    config = load_onoff_config(settings)
     log = load_onoff_log(settings, biz_date)
     history = load_onoff_history(settings, biz_date)
     form_key = plan.get("form")
     post = str(plan.get("post") or "")
     form = FORMS.get(str(form_key)) if form_key else None
-    auto_ready = bool(config["auto_send"]) and form is not None and bool(post)
+    auto_ready = form is not None and bool(post)
 
     next_due: datetime | None = None
     due_seen = False
@@ -771,18 +755,16 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
             continue
         entry = log.get(kind) or {}
         status = str(entry.get("status") or "")
-        # auto 開住＝夠鐘就自動發，你幾時開過 form 唔關事（開 form 係 semi 嗰套：
-        # 你自己撳提交）。開 form 會覆蓋個 status（要見到最後一次動作），
-        # 所以 auto 之下「做咗未」要問 history，唔可以問最新個 status。
-        # semi 冇人幫你發，「開過 form」照舊當你搞緊，唔標 missed。
+        # 「做咗未」問 history（append-only），唔問最新個 status——rearm／clear 之類
+        # 嘅改動唔應該令交過嘅嘢再交多次。開過預填連結唔會入 log，所以完全唔影響。
         rows = history.get(kind) or []
         done = (
-            status == "hold" or _logged(rows, "sent", time_text) or _logged(rows, "missed", time_text)
-            if auto_ready
-            else status in {"sent", "opened", "missed", "hold"}
+            status == "hold"
+            or _logged(rows, "sent", time_text)
+            or _logged(rows, "missed", time_text)
         )
         if done:
-            continue  # 已交／已標 missed／hold 緊等真收工（semi 仲包埋已自己開 form）
+            continue  # 已交／已標 missed／hold 緊等真開工收工
         slot_dt = _slot_datetime(biz_date, time_text, tz)
         if now < slot_dt:
             if auto_ready and (next_due is None or slot_dt < next_due):
@@ -909,5 +891,4 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
         action["detail"] = str(entry.get("detail") or "")
         # 完整經過（append-only）：交過幾多次、hold 過、重新武裝過，全部見得到。
         action["history"] = history.get(action["kind"], [])
-    result["auto_send"] = load_onoff_config(settings)["auto_send"]
     return result

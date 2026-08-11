@@ -593,8 +593,6 @@ def _onoffduty_section(
     end_text: str,
 ) -> dict[str, Any]:
     """報開工／報收工：邊條 form、邊個 Post、打風後幾點交。"""
-    from meal_planner.duty_form import load_onoff_config
-
     post = roster_post_for_code(settings).get(roster_code, "")
     form_key = form_key_for_code(roster_code)
     rows = [
@@ -604,8 +602,6 @@ def _onoffduty_section(
     notes = []
     if not post:
         notes.append(f"No Post mapped for {roster_code}.")
-    if not load_onoff_config(settings)["auto_send"]:
-        notes.append("Semi mode — you will open the link and submit yourself.")
     return {
         "form": form_key,
         "form_label": "VCA form" if form_key == "vca" else "Other form",

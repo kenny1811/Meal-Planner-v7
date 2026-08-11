@@ -2,6 +2,7 @@
     // 時間來源 = 更時表（睇適用日）+ 加班表 override，同 Report Normal（報平安更）分開。
     // 兩張卡都有 Hold / Resume / Send now：未定幾點開工（打風）或未走得（遲收工）就 hold，
     // 真發生嗰陣撳 Send now —— form + WhatsApp 齊發。
+    // 冇半自動模式：夠鐘一定自動交，Open form 淨係方便自己開嚟睇（只留 history 記錄）。
     let onoffPlan = null;
     let onoffLoading = false;
     let onoffDate = "";
@@ -59,9 +60,6 @@
       if (action.status === "sent") {
         return `<div class="duty-status-sent">✓ sent ${onoffFmtLoggedAt(action.logged_at)} · ${onoffEsc(action.log_source)}</div>`;
       }
-      if (action.status === "opened") {
-        return `<div class="duty-status-sent">✓ opened ${onoffFmtLoggedAt(action.logged_at)} · ${onoffEsc(action.log_source)}</div>`;
-      }
       if (action.status === "failed") {
         return `<div class="duty-status-bad" title="${onoffEsc(action.detail || "")}">✗ failed ${onoffFmtLoggedAt(action.logged_at)} · retrying</div>`;
       }
@@ -83,7 +81,7 @@
 
     function onoffHistoryLines(action) {
       const rows = Array.isArray(action.history) ? action.history : [];
-      if (rows.length < 2) return "";  // 得一行＝而家個狀態，上面已經講咗
+      if (!rows.length) return "";  // 開過 form（唔入狀態）都要見到，所以一行都show
       // 一行 = 幾時 + 符號 + 當時嗰個時間。狀態字、source、detail 都係符號已經講咗嘅嘢。
       const items = rows.map((h) => {
         const icon = ONOFF_HISTORY_ICON[h.status] || "·";
@@ -141,7 +139,6 @@
         ? `<div class="duty-stats onoff-stats">${cards}</div>`
         : `<div class="duty-status-muted onoff-note">${onoffEsc(plan.note || "當日冇嘢報")}</div>`;
 
-      const autoOn = !!plan.auto_send;
       const metaParts = [
         `Code ${onoffEsc(plan.roster_code) || "—"}`,
         onoffEsc(formLabel),
@@ -158,12 +155,6 @@
               <span class="duty-date">${onoffEsc(plan.date_iso)}（${relationLabel}）· 30小時制</span>
               <button type="button" class="duty-btn" data-onoff-action="date-next">▶</button>
               ${relation !== "today" ? '<button type="button" class="duty-btn" data-onoff-action="date-today">返今日</button>' : ""}
-              <span class="onoff-mode ${autoOn ? "" : "onoff-mode-active"}">Semi</span>
-              <button type="button" class="onoff-switch ${autoOn ? "onoff-switch-on" : ""}" data-onoff-action="toggle-auto"
-                role="switch" aria-checked="${autoOn}" title="Semi: open link, submit yourself · Auto: submits at the shift time">
-                <span class="onoff-knob"></span>
-              </button>
-              <span class="onoff-mode ${autoOn ? "onoff-mode-active" : ""}">Auto</span>
               <button type="button" class="duty-btn" data-onoff-action="refresh">Refresh</button>
             </div>
             <div class="onoff-meta">${metaParts.join(" · ")}</div>
@@ -228,13 +219,6 @@
               window.alert(`齊發完成 ${r.actual || ""}\nForm: sent\nWhatsApp: ${r.whatsapp || "?"}\n加班表: ${r.overtime_written ? "已寫入" : "冇寫"}`);
             })
             .catch((e) => { onoffShowError(e.message || String(e)); btn.disabled = false; });
-          return;
-        }
-        if (action === "toggle-auto") {
-          const next = !(onoffPlan && onoffPlan.auto_send);
-          postOnOffDutyConfig({ auto_send: next })
-            .then((plan) => { onoffPlan = plan; onoffShowError(""); renderOnOffDuty(); })
-            .catch((e) => onoffShowError(e.message || String(e)));
           return;
         }
       });

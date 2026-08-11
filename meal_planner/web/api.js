@@ -443,19 +443,6 @@
       return data || {};
     }
 
-    async function postOnOffDutyConfig(payload) {
-      const r = await fetch("/api/onoffduty/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload || {}),
-      });
-      const data = await parseJsonSafe(r);
-      if (!r.ok) {
-        throw new Error(apiErrorMessage(data, "OnOffDuty config failed.", r.status));
-      }
-      return data || {};
-    }
-
     async function loadTyphoonPlan(params) {
       const q = new URLSearchParams();
       if (params && params.dateIso) q.set("date_iso", params.dateIso);
