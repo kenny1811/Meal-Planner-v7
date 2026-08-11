@@ -726,7 +726,8 @@ def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[s
 def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
     """scheduler tick：auto_send 開先自動交；過咗 grace 未交標 missed（只限今日）。
 
-    有「opened」記錄嗰個 action 唔會自動交——當你已經自己開 form 交咗，防止交兩次。
+    auto 同 semi 係兩回事：auto 夠鐘就自動發，你幾時開過 form 都唔影響；
+    semi 先至靠你自己開 form 撳提交，所以 semi 之下「opened」＝你搞緊，唔會標 missed。
     回傳下一個會自動交嘅時刻（scheduler 瞓到啱啱嗰刻醒，準時交）；冇就 None。
     """
     from zoneinfo import ZoneInfo
@@ -756,8 +757,11 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
             continue
         entry = log.get(kind) or {}
         status = str(entry.get("status") or "")
-        if status in {"sent", "opened", "missed", "hold"}:
-            continue  # 已交／已自己開 form／已標 missed／hold 緊等真收工
+        # auto 開住＝夠鐘就自動發，你幾時開過 form 唔關事（開 form 係 semi 嗰套：
+        # 你自己撳提交）。所以淨係 semi 先當「開過 form ＝ 你搞緊」，唔標 missed。
+        done = {"sent", "missed", "hold"} if auto_ready else {"sent", "opened", "missed", "hold"}
+        if status in done:
+            continue  # 已交／已標 missed／hold 緊等真收工（semi 仲包埋已自己開 form）
         slot_dt = _slot_datetime(biz_date, time_text, tz)
         if now < slot_dt:
             if auto_ready and (next_due is None or slot_dt < next_due):

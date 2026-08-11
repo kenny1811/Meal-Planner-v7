@@ -4,6 +4,12 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.4.10 — 11/08/2026 13:25
+- Fix: with auto-send on, On Duty / Off Duty no longer skips a slot just because the form
+  was opened at some point — it sends on time, and still flags a slot it could not send.
+  Semi (auto-send off) is unchanged: opening the form records the time and keeps the slot
+  off the missed list.
+
 ## 7.4.9 — 10/08/2026 26:40
 - Fix: Typhoon marked a schedule-grid row missed just for sitting before the 報開工 row
   (e.g. 簽簿 / 著衫). A row is missed only when you cannot get there in time — signal down
