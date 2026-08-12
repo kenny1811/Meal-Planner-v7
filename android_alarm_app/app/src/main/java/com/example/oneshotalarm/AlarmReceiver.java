@@ -13,6 +13,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         if (label == null || label.trim().isEmpty()) {
             label = "鬧鐘";
         }
+        DiagLog.log(context, "alarm fired id=" + id + " label=" + label);
         AlarmStore.markAlarmFired(context, id);
         AlarmScheduler.cancelAlarm(context, id, label);
         NextAlarmWidgetProvider.updateAll(context);

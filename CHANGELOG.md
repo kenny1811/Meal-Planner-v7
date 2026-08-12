@@ -4,6 +4,13 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.5.13 — 12/08/2026 24:01
+- Watch: lowering your wrist during an alarm no longer silences it — the vibration
+  restarts within half a second and keeps going until dismissed.
+- Phone: an alarm ringing in a dark pocket no longer lights the screen, so a pocket
+  touch can't dismiss it (and kill the watch alarm) anymore. Take the phone out into
+  light and the alarm screen appears instantly — one tap to dismiss, as before.
+
 ## 7.5.12 — 11/08/2026 25:45
 - Fix: on mobile data the phone app no longer fails the first tap with "after 2500ms" —
   the meshnet server now gets up to 9 s to answer while the tunnel wakes up, so one tap

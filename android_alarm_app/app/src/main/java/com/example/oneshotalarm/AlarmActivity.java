@@ -42,10 +42,26 @@ public class AlarmActivity extends Activity {
                     && shouldDismissFor(
                             intent.getStringExtra(EXTRA_DISMISS_ALARM_ID),
                             intent.getLongExtra(EXTRA_DISMISS_TS, 0L))) {
-                dismissAlarm();
+                dismissAlarm("watch-dismiss-broadcast id="
+                        + intent.getStringExtra(EXTRA_DISMISS_ALARM_ID));
             }
         }
     };
+
+    /**
+     * 診斷用：記低每一下真實觸控（accessibility 合成 click 唔會經過呢度——
+     * 有 dismiss 而冇 touch 記錄，就證明唔係掂螢幕）。唔影響事件處理。
+     */
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
+        int action = ev.getActionMasked();
+        if (action == android.view.MotionEvent.ACTION_DOWN
+                || action == android.view.MotionEvent.ACTION_UP) {
+            DiagLog.log(this, "touch " + (action == android.view.MotionEvent.ACTION_DOWN ? "down" : "up")
+                    + " x=" + (int) ev.getX() + " y=" + (int) ev.getY());
+        }
+        return super.dispatchTouchEvent(ev);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,8 +70,9 @@ public class AlarmActivity extends Activity {
         acquireWakeLock();
         buildUi();
         registerWatchDismissReceiver();
+        DiagLog.log(this, "AlarmActivity onCreate id=" + myAlarmId());
         if (hasRecentWatchDismiss()) {
-            dismissAlarm();
+            dismissAlarm("recent-watch-dismiss-at-create");
         }
     }
 
@@ -97,7 +114,7 @@ public class AlarmActivity extends Activity {
         root.setPadding(dp(22), dp(22), dp(22), dp(22));
         root.setBackgroundColor(0xFF000000);
         root.setClickable(true);
-        root.setOnClickListener(v -> dismissAlarm());
+        root.setOnClickListener(v -> dismissAlarm("screen-click"));
 
         TextView timeView = new TextView(this);
         timeView.setText(formatAlarmTime(triggerAtMillis));
@@ -119,11 +136,12 @@ public class AlarmActivity extends Activity {
         setContentView(root);
     }
 
-    private void dismissAlarm() {
+    private void dismissAlarm(String reason) {
         if (stopped) {
             return;
         }
         stopped = true;
+        DiagLog.log(this, "dismissAlarm reason=" + reason + " id=" + myAlarmId());
         // 淨係送 dismiss；行位表冇改就唔好推嘢上錶。
         WatchBridge.sendDismiss(this, getIntent().getStringExtra(AlarmScheduler.EXTRA_ALARM_ID));
         AlarmAlertService.stop(this);

@@ -5,14 +5,18 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.media.AudioAttributes;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
@@ -49,6 +53,8 @@ public class WatchAlarmService extends Service {
     private Vibrator vibrator;
     private PowerManager.WakeLock alarmWakeLock;
     private View overlayView;
+    private final Handler screenOffHandler = new Handler(Looper.getMainLooper());
+    private BroadcastReceiver screenOffReceiver;
 
     static void start(Context context, String alarmKey) {
         Intent intent = new Intent(context, WatchAlarmService.class);
@@ -97,6 +103,7 @@ public class WatchAlarmService extends Service {
         showAlarmOverlay(alarmKey);
         markActive(alarmKey);
         startVibration();
+        registerScreenOffReceiver();
         return START_NOT_STICKY;
     }
 
@@ -145,6 +152,46 @@ public class WatchAlarmService extends Service {
         }
         vibrator.vibrate(pattern, 0);
         Log.d(TAG, "Watch vibration started legacy");
+    }
+
+    /**
+     * 垂手黑屏嗰下，系統會 cancel 咗響緊嘅震動（熄屏前開始嘅震動先會中招；
+     * 熄屏之後先開始嘅唔會）——所以聽到 SCREEN_OFF 就等半秒重新開震。
+     */
+    private void registerScreenOffReceiver() {
+        if (screenOffReceiver != null) {
+            return;
+        }
+        screenOffReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                Log.d(TAG, "Screen off during alarm, re-vibrating in 500ms");
+                screenOffHandler.postDelayed(() -> {
+                    if (screenOffReceiver != null) {
+                        startVibration();
+                        Log.d(TAG, "Watch vibration restarted after screen off");
+                    }
+                }, 500);
+            }
+        };
+        IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenOffReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(screenOffReceiver, filter);
+        }
+    }
+
+    private void unregisterScreenOffReceiver() {
+        screenOffHandler.removeCallbacksAndMessages(null);
+        if (screenOffReceiver == null) {
+            return;
+        }
+        try {
+            unregisterReceiver(screenOffReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
+        screenOffReceiver = null;
     }
 
     private void showAlarmOverlay(String alarmKey) {
@@ -398,6 +445,7 @@ public class WatchAlarmService extends Service {
     }
 
     private void stopAlarmHardware() {
+        unregisterScreenOffReceiver();
         removeAlarmOverlay();
         if (vibrator != null) {
             vibrator.cancel();

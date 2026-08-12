@@ -77,6 +77,7 @@ public class PhoneWearListenerService extends WearableListenerService {
         String id = alarmId == null ? "" : alarmId.trim();
         long now = System.currentTimeMillis();
         boolean fresh = sentAtMillis > 0L && Math.abs(now - sentAtMillis) < DISMISS_FRESH_MS;
+        DiagLog.log(this, "watch dismiss received id=" + id + " fresh=" + fresh);
         if (!fresh && id.isEmpty()) {
             Log.d(TAG, "Ignored stale watch dismiss without alarm id");
             return;
