@@ -4,6 +4,11 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.5.14 — 13/08/2026 23:25
+- Fix: "Send now" fired twice — the On/Off Duty form and the WhatsApp report were each
+  sent once by Send now and once by the scheduler it woke up. Send now now carries out
+  the scheduled run itself instead of handing it back.
+
 ## 7.5.13 — 12/08/2026 24:01
 - Watch: lowering your wrist during an alarm no longer silences it — the vibration
   restarts within half a second and keeps going until dismissed.

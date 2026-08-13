@@ -324,12 +324,14 @@ def set_time_override(
     start: str | None = None,
     end: str | None = None,
     note: str | None = None,
+    rearm: bool = True,
 ) -> None:
     """現場改開工/收工：直接 upsert 入加班表（權威來源）——報更、計糧、日曆、餐單全部跟住變。
 
     start/end：None=唔郁；""=清走該格（兩格都空成行刪走，還原跟更時表）；"21:30"/"2130"=設定。
     改完會重新武裝（見 _rearm_missed_actions）：新時間仲未到就當件事未發生，
     舊 log（missed／sent／hold…）清走，scheduler 照新時間再交。
+    rearm=False：件事已經即場做咗（send now），唔使叫 scheduler 補做。
     """
     payload = load_sheet_rows("overtime", settings)
     rows = [list(r) if isinstance(r, list) else [] for r in (payload.get("rows") or [])]
@@ -381,7 +383,8 @@ def set_time_override(
     if not str(target[c_start] or "").strip() and not str(target[c_end] or "").strip():
         rows = [rows[0]] + [r for r in rows[1:] if r is not target]
     save_sheet_rows("overtime", rows, settings)
-    _rearm_missed_actions(settings, biz_date)
+    if rearm:
+        _rearm_missed_actions(settings, biz_date)
 
 
 def _rearm_missed_actions(settings: AppSettings, biz_date: date) -> None:
@@ -624,15 +627,14 @@ def duty_hold(settings: AppSettings, kind: str, hold: bool) -> dict[str, Any]:
     return build_day_plan(settings, biz_date=biz_date)
 
 
-def _write_overtime_for_send_now(
+def _needs_overtime_row(
     settings: AppSettings,
     biz_date: date,
     plan: dict[str, Any],
     kind: str,
     actual_text: str,
-    note: str,
 ) -> bool:
-    """Send now 之後寫唔寫加班表（權威實際時間）。回傳有冇寫。
+    """Send now 之後寫唔寫加班表（權威實際時間）。淨係判斷，唔郁資料。
 
     - 開工：實際開工同預設（加班表 override＞更時表）唔同就寫——打風遲開工咁樣，
       報平安更 slots／餐單／日曆要跟住郁。
@@ -640,10 +642,7 @@ def _write_overtime_for_send_now(
       實際收工遲過標準收工）；② 總工時 > 10.25 小時。唔算 OT 就唔好污染加班表。
     """
     if kind == "start":
-        if actual_text == str(plan.get("start") or ""):
-            return False
-        set_time_override(settings, biz_date, start=actual_text, note=note or "現場真開工")
-        return True
+        return actual_text != str(plan.get("start") or "")
 
     std_start, std_end = _standard_shift_time(settings, str(plan.get("roster_code") or ""), biz_date)
     start_text = str(plan.get("start") or "")
@@ -652,17 +651,21 @@ def _write_overtime_for_send_now(
     early_start = _minutes_30h(start_text) < _minutes_30h(std_start.strftime("%H:%M"))
     late_end = _minutes_30h(actual_text) > _minutes_30h(std_end.strftime("%H:%M"))
     total_minutes = _minutes_30h(actual_text) - _minutes_30h(start_text)
-    if (early_start or late_end) and total_minutes > OVERTIME_MIN_TOTAL_MINUTES:
-        set_time_override(settings, biz_date, end=actual_text, note=note or "現場真收工")
-        return True
-    return False
+    return (early_start or late_end) and total_minutes > OVERTIME_MIN_TOTAL_MINUTES
 
 
 def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[str, Any]:
-    """真開工／真收工齊發：用「而家」做實際時間——
-    1) 按 kind 決定寫唔寫加班表（見 _write_overtime_for_send_now）；
-    2) 對應 form 即交（實際時間）；
-    3) ReportNormal 對應 slot 即發 WhatsApp。"""
+    """真開工／真收工齊發：用「而家」做實際時間。
+
+    **呢個動作直接取代排程嗰次**，唔會叫醒 scheduler 幫手做——以前係寫加班表 →
+    重新武裝（清走 hold）→ notify，結果 scheduler 即刻醒，同 send now 各自交一次，
+    form 同 WhatsApp 都出咗雙份。而家次序係：
+
+    1) 先交 form + 記 sent —— 由呢一刻起 scheduler 問 history 就知交咗，唔會再交；
+    2) 之後先寫加班表（唔重新武裝：件事已經做完，唔使 scheduler 補做）；
+    3) ReportNormal 對應 slot 由我哋自己發（hold 期間 slot 仲係 skip，scheduler 唔會插隊），
+       發完先放返 skip。
+    """
     from zoneinfo import ZoneInfo
 
     now = datetime.now(ZoneInfo(settings.dates.timezone))
@@ -675,7 +678,7 @@ def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[s
     # 實際時間：5 分鐘為單位四捨五入（:32→:30、:33→:35）。
     actual_time = _round_to_5min(now)
     actual_text = hhmm30(actual_time)
-    overtime_written = _write_overtime_for_send_now(settings, biz_date, plan, kind, actual_text, note)
+    overtime_written = _needs_overtime_row(settings, biz_date, plan, kind, actual_text)
 
     form = FORMS[str(plan["form"])]
     submit_form(
@@ -688,6 +691,14 @@ def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[s
         time_text=actual_text, source="holdsend",
         detail=f"real {'on' if kind == 'start' else 'off'}-duty" + (" +OT" if overtime_written else ""),
     )
+    if overtime_written:
+        set_time_override(
+            settings, biz_date,
+            start=actual_text if kind == "start" else None,
+            end=actual_text if kind == "end" else None,
+            note=note or ("現場真開工" if kind == "start" else "現場真收工"),
+            rearm=False,
+        )
 
     whatsapp = "no slot"
     slot = _find_report_slot(settings, kind)
@@ -700,6 +711,14 @@ def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[s
                 whatsapp = "sent"
             except Exception as e:  # noqa: BLE001 - form 交咗就唔好冧，WhatsApp 可以去 ReportNormal 度 retry
                 whatsapp = f"failed: {e}"
+        if slot.get("skipped"):
+            # hold 期間 skip 咗；發完先放返（呢刻已經 sent，scheduler 唔會再發一次）。
+            apply_override(
+                settings,
+                slot_patch={"id": slot["id"], "skip": False},
+                source="onoffduty-holdsend",
+                biz_date=biz_date,
+            )
 
     result_plan = build_day_plan(settings, biz_date=biz_date)
     result_plan["sendnow_result"] = {
@@ -720,6 +739,21 @@ def _logged(history_rows: list[dict[str, Any]], status: str, time_text: str) -> 
     return any(
         str(row.get("status") or "") == status and str(row.get("time_text") or "") == time_text
         for row in history_rows
+    )
+
+
+def _action_done(status: str, history_rows: list[dict[str, Any]], time_text: str) -> bool:
+    """呢個 action 仲使唔使 scheduler 出手？
+
+    - status sent／hold＝而家已經交咗／等緊真開工收工（send now 用「而家」個時間交，
+      同排程時間唔同都當交咗——rearm 先會清走呢個狀態，嗰陣就真係要再交）；
+    - 其餘問 history（append-only）：交過／標過 missed 就唔好因為之後嘅改動再做一次。
+    開過預填連結唔會入 log，所以完全唔影響。
+    """
+    return (
+        status in {"hold", "sent"}
+        or _logged(history_rows, "sent", time_text)
+        or _logged(history_rows, "missed", time_text)
     )
 
 
@@ -755,15 +789,7 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
             continue
         entry = log.get(kind) or {}
         status = str(entry.get("status") or "")
-        # 「做咗未」問 history（append-only），唔問最新個 status——rearm／clear 之類
-        # 嘅改動唔應該令交過嘅嘢再交多次。開過預填連結唔會入 log，所以完全唔影響。
-        rows = history.get(kind) or []
-        done = (
-            status == "hold"
-            or _logged(rows, "sent", time_text)
-            or _logged(rows, "missed", time_text)
-        )
-        if done:
+        if _action_done(status, history.get(kind) or [], time_text):
             continue  # 已交／已標 missed／hold 緊等真開工收工
         slot_dt = _slot_datetime(biz_date, time_text, tz)
         if now < slot_dt:

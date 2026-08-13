@@ -8,6 +8,7 @@ import unittest
 from datetime import date, datetime
 
 from meal_planner.duty_form import (
+    _action_done,
     _logged,
     _round_to_5min,
     load_onoff_history,
@@ -127,3 +128,28 @@ class RecordOpenTests(unittest.TestCase):
         self.assertEqual(load_onoff_log(settings, self.day)["start"]["status"], "sent")
         rows = load_onoff_history(settings, self.day)["start"]
         self.assertEqual([r["status"] for r in rows], ["sent", "opened"])
+
+
+class ActionDoneTests(unittest.TestCase):
+    """Send now 做咗嘅嘢，scheduler 唔可以再做一次（form 出雙份就係咁嚟）。"""
+
+    def test_send_now_at_another_time_still_counts(self) -> None:
+        # 21:30 個更，21:50 撳 send now：log 記住 sent 21:50，
+        # scheduler 睇緊 21:30 都要當交咗，唔好再交一次。
+        rows = [{"status": "sent", "time_text": "21:50", "source": "holdsend"}]
+        self.assertTrue(_action_done("sent", rows, "21:30"))
+
+    def test_hold_waits_for_send_now(self) -> None:
+        self.assertTrue(_action_done("hold", [], "21:30"))
+
+    def test_rearmed_clears_the_status_so_it_fires_again(self) -> None:
+        # 改咗時間＝另一件事：log 清咗（status 空），history 舊時間交過都唔算數。
+        rows = [{"status": "sent", "time_text": "21:30", "source": "scheduler"}]
+        self.assertFalse(_action_done("", rows, "21:50"))
+
+    def test_nothing_yet(self) -> None:
+        self.assertFalse(_action_done("", [], "21:30"))
+
+    def test_missed_is_not_retried(self) -> None:
+        rows = [{"status": "missed", "time_text": "21:30", "source": "scheduler"}]
+        self.assertTrue(_action_done("missed", rows, "21:30"))
