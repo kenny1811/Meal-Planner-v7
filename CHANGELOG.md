@@ -4,6 +4,10 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.5.15 — 14/08/2026 15:27
+- Watch: the alarm screen (overlay and app) now centres the time and label as one
+  block in the middle of the round face, instead of the time hugging the top.
+
 ## 7.5.14 — 13/08/2026 23:25
 - Fix: "Send now" fired twice — the On/Off Duty form and the WhatsApp report were each
   sent once by Send now and once by the scheduler it woke up. Send now now carries out

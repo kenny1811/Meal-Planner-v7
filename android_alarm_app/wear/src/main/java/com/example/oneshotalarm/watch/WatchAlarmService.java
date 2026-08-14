@@ -211,13 +211,15 @@ public class WatchAlarmService extends Service {
         root.setClickable(true);
         root.setOnClickListener(v -> dismissFromOverlay(parts.id));
 
+        // 唔好用 weight 斬開上下兩格（會變成「時間貼頂、標籤吊中下」）——
+        // 兩行字 wrap content 做一嚿，由 root 嘅 gravity 揸住成嚿喺圓芒正中央。
         TextView timeView = new TextView(this);
         timeView.setText(parts.time);
         timeView.setTextColor(0xFFFFFFFF);
         timeView.setTextSize(42);
         timeView.setGravity(Gravity.CENTER);
         timeView.setIncludeFontPadding(false);
-        root.addView(timeView, weightedHeight(1f));
+        root.addView(timeView, wrapHeight());
 
         TextView labelView = new TextView(this);
         labelView.setText(parts.label);
@@ -226,7 +228,7 @@ public class WatchAlarmService extends Service {
         labelView.setGravity(Gravity.CENTER);
         labelView.setSingleLine(false);
         labelView.setPadding(dp(8), dp(6), dp(8), dp(6));
-        root.addView(labelView, weightedHeight(2f));
+        root.addView(labelView, wrapHeight());
 
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -489,11 +491,10 @@ public class WatchAlarmService extends Service {
         return flags;
     }
 
-    private LinearLayout.LayoutParams weightedHeight(float weight) {
+    private LinearLayout.LayoutParams wrapHeight() {
         return new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                weight
+                LinearLayout.LayoutParams.WRAP_CONTENT
         );
     }
 

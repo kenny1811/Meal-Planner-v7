@@ -147,13 +147,14 @@ public class WatchAlarmActivity extends Activity {
         root.setClickable(true);
         root.setOnClickListener(v -> dismissByTouch());
 
+        // 同 WatchAlarmService 個 overlay 一致：wrap content 做一嚿，成嚿置中。
         TextView timeView = new TextView(this);
         timeView.setText(time);
         timeView.setTextColor(0xFFFFFFFF);
         timeView.setTextSize(42);
         timeView.setGravity(Gravity.CENTER);
         timeView.setIncludeFontPadding(false);
-        root.addView(timeView, weightedHeight(1f));
+        root.addView(timeView, wrapHeight());
 
         TextView labelView = new TextView(this);
         labelView.setText(label);
@@ -162,7 +163,7 @@ public class WatchAlarmActivity extends Activity {
         labelView.setGravity(Gravity.CENTER);
         labelView.setSingleLine(false);
         labelView.setPadding(dp(8), dp(6), dp(8), dp(6));
-        root.addView(labelView, weightedHeight(2f));
+        root.addView(labelView, wrapHeight());
 
         setContentView(root);
     }
@@ -250,11 +251,10 @@ public class WatchAlarmActivity extends Activity {
         handler.postDelayed(() -> Process.killProcess(Process.myPid()), 2600);
     }
 
-    private LinearLayout.LayoutParams weightedHeight(float weight) {
+    private LinearLayout.LayoutParams wrapHeight() {
         return new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                weight
+                LinearLayout.LayoutParams.WRAP_CONTENT
         );
     }
 
