@@ -4,6 +4,10 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.5.16 — 14/08/2026 15:31
+- On Duty / Off Duty: after a Send now, the chip and the prefilled form link show the
+  actual sent time instead of the originally scheduled one.
+
 ## 7.5.15 — 14/08/2026 15:27
 - Watch: the alarm screen (overlay and app) now centres the time and label as one
   block in the middle of the round face, instead of the time hugging the top.

@@ -838,6 +838,14 @@ def roster_code_for(settings: AppSettings, biz_date: date) -> str:
     return str(code_for_date(month_map, biz_date) or "") if month_map else ""
 
 
+def _time_from_hhmm30(text: str) -> time | None:
+    """30 小時制 "25:30" → time(1, 30)；"21:50" → time(21, 50)。睇唔明回 None。"""
+    parts = str(text or "").split(":")
+    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        return None
+    return time(int(parts[0]) % 24, int(parts[1]))
+
+
 def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None = None) -> dict[str, Any]:
     """指定日（預設今日 30 小時制）嘅報開工／報收工計劃 + 兩條預填連結。"""
 
@@ -915,6 +923,17 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
         action["logged_at"] = str(entry.get("recorded_at") or "")
         action["log_source"] = str(entry.get("source") or "")
         action["detail"] = str(entry.get("detail") or "")
+        # Send now 用「而家」交咗＝呢個 action 就係喺嗰刻做咗，實際時間直接取代排程時間
+        # （唔關加班表事——加班表淨係話俾其他嘢知當日個時間軸點變）。
+        sent_text = str(entry.get("time_text") or "") if action["status"] == "sent" else ""
+        sent_time = _time_from_hhmm30(sent_text) if sent_text else None
+        if sent_time is not None:
+            action["time"] = sent_text
+            action["url"] = build_prefill_url(
+                form, post, biz_date,
+                start=sent_time if action["kind"] == "start" else None,
+                end=sent_time if action["kind"] == "end" else None,
+            )
         # 完整經過（append-only）：交過幾多次、hold 過、重新武裝過，全部見得到。
         action["history"] = history.get(action["kind"], [])
     return result
