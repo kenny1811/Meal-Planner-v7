@@ -4,6 +4,11 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.5.18 — 16/08/2026 29:10
+- Fix: turning a schedule-grid row OFF on the phone did not stop the watch — the phone
+  pushed the OFF flag straight away but the watch still set the alarm. The watch now
+  skips OFF rows (still shown dimmed in its list) and re-arms the rest.
+
 ## 7.5.17 — 15/08/2026 21:45
 - Fix: a safety report failed with "Group not found" when the WhatsApp group title has
   a leading/trailing space (e.g. 時代廣場). The mapping trimmed the name on save but the

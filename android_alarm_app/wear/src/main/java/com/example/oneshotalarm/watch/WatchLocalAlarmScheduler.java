@@ -45,6 +45,9 @@ final class WatchLocalAlarmScheduler {
             if (at <= now) {
                 continue;
             }
+            if (row.optBoolean("disabled", false)) {
+                continue;  // 電話 OFF 咗嘅行位：錶面照顯示（dim），但唔排鬧鐘——同電話一致
+            }
             String label = row.optString("content", "鬧鐘").trim();
             if (label.isEmpty()) {
                 label = "鬧鐘";
