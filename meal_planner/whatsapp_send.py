@@ -78,7 +78,10 @@ def _send(group_name: str, message: str) -> None:
         search.fill(group_name)
         page.wait_for_timeout(1500)
 
-        result = page.locator(f'span[title="{group_name}"]').first
+        # 群組名前後空格容錯：WhatsApp 個 chat title 有時尾多個 space（管理員改名手滑），
+        # 精確 [title="…"] 就對唔上；用 starts-with 再自己 trim 比對，防止漏發。
+        wanted = group_name.strip()
+        result = page.locator(f'span[title^="{wanted}"]').first
         try:
             result.wait_for(timeout=8000)
         except Exception as e:
@@ -93,7 +96,7 @@ def _send(group_name: str, message: str) -> None:
         except Exception as e:
             raise WhatsAppSendError(f"Message composer not found: {e}") from e
         label = composer.get_attribute("aria-label") or ""
-        if group_name not in label:
+        if wanted not in label:
             raise WhatsAppSendError(f"Wrong chat open (composer label: {label!r}), aborted send")
         composer.click()
         page.keyboard.insert_text(message)
