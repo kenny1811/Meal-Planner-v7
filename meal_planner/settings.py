@@ -119,6 +119,13 @@ class OptimizerConfig:
     # 0 = 停用。只套用喺 LP 優化嘅屋企餐（餐廳午餐屬 fixed，本身已足）。
     meal_protein_floor_g: float = 0.0
     meal_protein_floor_weight: float = 0.0
+    # 每餐蛋白平均分配之軟性成本（每克餐間差異）。floor 只托底唔削峰，呢個
+    # 先至會把高蛋白嘅餐拉低、低嘅拉高。0 = 停用。只套用喺 LP 優化嘅屋企餐。
+    protein_balance_weight: float = 0.0
+    # 「貼近 Hi」次目標之中，卡路里嗰條嘅權重（每 kcal 距離 Hi 之成本）。
+    # 其他營養素一律用 0.05；卡路里可以獨立加大，抗衡蛋白平均化把全日
+    # 熱量壓落下限。0.05 = 同其他營養素睇齊（原本行為）。
+    kcal_hi_pull_weight: float = 0.05
 
 
 @dataclass(frozen=True)
@@ -251,6 +258,8 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
         rice_balance_weight=float(oc.get("rice_balance_weight", 0.0)),
         meal_protein_floor_g=float(oc.get("meal_protein_floor_g", 0.0)),
         meal_protein_floor_weight=float(oc.get("meal_protein_floor_weight", 0.0)),
+        protein_balance_weight=float(oc.get("protein_balance_weight", 0.0)),
+        kcal_hi_pull_weight=float(oc.get("kcal_hi_pull_weight", 0.05)),
     )
 
     return AppSettings(

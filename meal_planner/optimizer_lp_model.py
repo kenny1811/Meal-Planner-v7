@@ -269,7 +269,14 @@ def solve_day_meal_plan(
             slack_vars.append((key, "high", s_high))
             h_gap = pulp.LpVariable(f"hgap_{key}", lowBound=0, cat="Continuous")
             model += h_gap >= float(p.hi) - t
-            hi_pull_terms.append(soft_weight * w * h_gap)
+            # 卡路里可獨立加重：蛋白平均化（每克差異罰分）會蓋過呢個好弱嘅
+            # 次目標，令全日熱量長期貼住下限；加重返先keep到原本嘅份量。
+            pull_w = (
+                max(0.0, float(settings.optimizer.kcal_hi_pull_weight))
+                if key == "kcal"
+                else soft_weight
+            )
+            hi_pull_terms.append(pull_w * w * h_gap)
         elif p.kind == IndicatorKind.UPPER_ONLY and p.hi is not None:
             # UPPER_ONLY 係健康上限（如糖／鈉／膽固醇），淨係唔可超標，
             # 唔應該好似 RANGE 咁再谷向 hi，否則會逼食材（如菜）谷到頂用量。
@@ -312,6 +319,22 @@ def solve_day_meal_plan(
             model += pulp.lpSum(terms) + s_prot >= meal_protein_floor
             meal_protein_floor_terms.append(meal_protein_floor_weight * s_prot)
 
+    # 每餐蛋白平均分配：對每對 LP 餐次之蛋白差異加軟成本。floor 只托底唔削峰，
+    # 呢個先至會把高蛋白嘅餐拉低、低嘅拉高（例如早餐 52g／晚餐 14g 拉近）。
+    # 同米平均唔同：蛋白搬餐要換食材，會扯動卡路里／脂肪／鈣，所以 weight 要細；
+    # 硬約束（weight 1000）照樣壓過呢個軟成本。
+    protein_balance_weight = max(0.0, float(settings.optimizer.protein_balance_weight))
+    protein_balance_terms = []
+    if protein_balance_weight > 0.0:
+        prot_meals = sorted(m for m, terms in protein_meal_terms.items() if terms)
+        prot_meal_sums = {m: pulp.lpSum(protein_meal_terms[m]) for m in prot_meals}
+        for a in range(len(prot_meals)):
+            for b in range(a + 1, len(prot_meals)):
+                d = pulp.LpVariable(f"prot_bal_{a}_{b}", lowBound=0, cat="Continuous")
+                model += d >= prot_meal_sums[prot_meals[a]] - prot_meal_sums[prot_meals[b]]
+                model += d >= prot_meal_sums[prot_meals[b]] - prot_meal_sums[prot_meals[a]]
+                protein_balance_terms.append(protein_balance_weight * d)
+
     # 同分時輕微偏好：跟日期偏移與餐次偏移排序，保留「每日有變化」感
     tie_break_terms = []
     reroll_bonus_terms = []
@@ -328,7 +351,8 @@ def solve_day_meal_plan(
 
     model += pulp.lpSum(
         penalties + hi_pull_terms + midpoint_terms + rice_balance_terms
-        + meal_protein_floor_terms + duplicate_terms + tie_break_terms + reroll_bonus_terms
+        + meal_protein_floor_terms + protein_balance_terms
+        + duplicate_terms + tie_break_terms + reroll_bonus_terms
     )
 
     status = "not_solved"

@@ -4,6 +4,10 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.6.18 — 17/08/2026 18:10
+- Protein is now spread evenly across the day's meals instead of piling into breakfast
+  (e.g. 51 / 36 / 15g becomes 34 / 34 / 34g). Daily totals and calories stay the same.
+
 ## 7.5.18 — 16/08/2026 29:10
 - Fix: turning a schedule-grid row OFF on the phone did not stop the watch — the phone
   pushed the OFF flag straight away but the watch still set the alarm. The watch now
