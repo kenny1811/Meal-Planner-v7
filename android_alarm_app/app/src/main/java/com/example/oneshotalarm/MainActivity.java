@@ -55,6 +55,16 @@ public class MainActivity extends Activity {
     private static final int SERVER_STATUS_OFFLINE = 2;
     private static final int SERVER_STATUS_ERROR = 3;
     private static final long SERVER_STATUS_POLL_MS = 30000L;
+    /** 撥停幾耐先開背景補拉（避免連撥幾下疊幾十個 request）。 */
+    private static final long MEAL_SWEEP_DEBOUNCE_MS = 700L;
+    /**
+     * 連唔到電腦嗰陣改用呢個梯級重試（毫秒），通返就回復 SERVER_STATUS_POLL_MS。
+     * 出街由 Wi-Fi 轉流動數據，NordLynx tunnel 要幾秒至十幾秒先重建好；
+     * 固定 30 秒一敲門會白等成分鐘先話你知 online。
+     */
+    private static final long[] SERVER_STATUS_RETRY_MS = new long[]{2000L, 4000L, 8000L, 15000L};
+    /** 餐單攞唔到嘅自動重試梯級（毫秒）——期間照顯示 cache，通返自動填。 */
+    private static final long[] MEAL_RETRY_MS = new long[]{2000L, 5000L, 10000L};
     private static final String ACTION_TEST_DAILY_IMPORT = "com.example.oneshotalarm.ACTION_TEST_DAILY_IMPORT";
     private static final Pattern TIME_RE = Pattern.compile("^\\d{1,2}:\\d{2}$");
     private static final Pattern SCHEDULE_GRID_HEADER_RE = Pattern.compile(
@@ -84,6 +94,15 @@ public class MainActivity extends Activity {
     private boolean serverStatusCheckInFlight = false;
     private final android.os.Handler serverStatusHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
+    /** 撥動用：每撥一下 +1，舊嘅背景 sweep／過期 response 見到唔同就自己收手。 */
+    private volatile int mealFetchSeq = 0;
+    private final android.os.Handler mealSweepHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private final android.os.Handler mealRetryHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    /** 連續失敗次數：決定用 SERVER_STATUS_RETRY_MS／MEAL_RETRY_MS 邊一級。 */
+    private int serverStatusFailStreak = 0;
+    private int mealRetryAttempt = 0;
     private Button importXmlButton;
     private Button shiftVariantButton;
     private Button watchAlarmToggleButton;
@@ -157,22 +176,36 @@ public class MainActivity extends Activity {
     protected void onPause() {
         super.onPause();
         serverStatusHandler.removeCallbacksAndMessages(null);
+        mealRetryHandler.removeCallbacksAndMessages(null);
     }
 
     private void scheduleServerStatusChecks() {
         serverStatusHandler.removeCallbacksAndMessages(null);
+        serverStatusFailStreak = 0;
         checkServerStatus();
-        serverStatusHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                checkServerStatus();
-                serverStatusHandler.postDelayed(this, SERVER_STATUS_POLL_MS);
-            }
-        }, SERVER_STATUS_POLL_MS);
+    }
+
+    /** 下一次幾時敲門：通嘅話 30 秒一次，唔通就 2/4/8/15 秒追住試。 */
+    private void scheduleNextServerStatusCheck(boolean online) {
+        serverStatusHandler.removeCallbacksAndMessages(null);
+        long delay;
+        if (online) {
+            serverStatusFailStreak = 0;
+            delay = SERVER_STATUS_POLL_MS;
+        } else {
+            int idx = Math.min(serverStatusFailStreak, SERVER_STATUS_RETRY_MS.length - 1);
+            delay = SERVER_STATUS_RETRY_MS[idx];
+            serverStatusFailStreak++;
+        }
+        serverStatusHandler.postDelayed(this::checkServerStatus, delay);
     }
 
     private void checkServerStatus() {
         if (serverStatusCheckInFlight) {
+            // 上一次仲喺度等（meshnet 最長 9 秒），遲啲再嚟——唔好就咁 return，
+            // 否則成條輪詢鏈斷咗，之後永遠唔會再敲門。
+            serverStatusHandler.removeCallbacksAndMessages(null);
+            serverStatusHandler.postDelayed(this::checkServerStatus, 1000L);
             return;
         }
         serverStatusCheckInFlight = true;
@@ -194,7 +227,10 @@ public class MainActivity extends Activity {
             int finalState = state;
             String finalMessage = message;
             serverStatusCheckInFlight = false;
-            runOnUiThread(() -> applyServerStatus(finalState, finalMessage));
+            runOnUiThread(() -> {
+                applyServerStatus(finalState, finalMessage);
+                scheduleNextServerStatusCheck(finalState == SERVER_STATUS_ONLINE);
+            });
         }).start();
     }
 
@@ -1975,7 +2011,10 @@ public class MainActivity extends Activity {
                 mealLastFetchAtMs = System.currentTimeMillis();
                 mealFetchInFlight = false;
                 prefetchNeighborMealPlans(dateIso);
-                runOnUiThread(this::renderMealPage);
+                runOnUiThread(() -> {
+                    cancelMealRetry();
+                    renderMealPage();
+                });
                 return;
             } catch (Exception e) {
                 lastError = e;
@@ -1990,6 +2029,7 @@ public class MainActivity extends Activity {
                 } else {
                     mealFetchErrorText = finalError == null ? "連線電腦失敗" : "更新失敗";
                     renderMealPage();
+                    scheduleMealRetry(dateIso);
                 }
             });
         }).start();
@@ -2037,7 +2077,9 @@ public class MainActivity extends Activity {
             loadMealPlanJsonForSelectedDateFromStore();
             mealFetchErrorText = "";
             renderMealPage();
-            refreshMealPlansFromTodayToEnd(targetDate);
+            // 眼見嗰日行先（一個 request），其餘日子撥停咗先喺背景補。
+            refreshSelectedMealDate(targetDate);
+            scheduleBackgroundMealSweep(targetDate);
         } catch (Exception ignored) {
             setMealDate(todayIso(), true);
         }
@@ -2050,6 +2092,94 @@ public class MainActivity extends Activity {
             return a.compareTo(b);
         }
         return a.compareTo(b);
+    }
+
+    /** 攞到嘢就收工：清走排緊隊嘅重試。 */
+    private void cancelMealRetry() {
+        mealRetryHandler.removeCallbacksAndMessages(null);
+        mealRetryAttempt = 0;
+    }
+
+    /**
+     * 攞唔到就自己再試（2/5/10 秒），期間畫面照顯示 cache。
+     * 出街轉流動數據頭嗰十幾秒 tunnel 未起身，一律會 fail；有呢個梯級就唔使你
+     * 退出再入返個版先重試。試夠三次都唔得先認輸。
+     */
+    private void scheduleMealRetry(String dateIso) {
+        String target = dateIso == null ? "" : dateIso.trim();
+        if (target.isEmpty() || mealRetryAttempt >= MEAL_RETRY_MS.length) {
+            return;
+        }
+        long delay = MEAL_RETRY_MS[mealRetryAttempt];
+        mealRetryAttempt++;
+        mealRetryHandler.removeCallbacksAndMessages(null);
+        mealRetryHandler.postDelayed(() -> {
+            if (currentPage != PAGE_MEAL || !target.equals(mealSelectedDate)) {
+                return;
+            }
+            refreshSelectedMealDate(target);
+        }, delay);
+    }
+
+    /**
+     * 撥到邊日就攞邊日：淨係打一個 request。畫面已經用 cache 出咗，呢度返到
+     * 新版先重畫——即刻郁到，又唔會睇住舊嘢。
+     * 撥快啲嗰陣舊 response 會被 seq 擋住，唔會倒轉蓋咗新嗰日。
+     */
+    private void refreshSelectedMealDate(String dateIso) {
+        String target = dateIso == null ? "" : dateIso.trim();
+        if (target.isEmpty()) {
+            return;
+        }
+        final int seq = ++mealFetchSeq;
+        mealFetchInFlight = true;
+        updateMealLastUpdateStatus();
+        new Thread(() -> {
+            JSONObject json = null;
+            try {
+                json = fetchMealPlanJson(target);
+                AlarmStore.saveMealPlanJson(
+                        this,
+                        target,
+                        json.toString(),
+                        json.optString("content_version", "").trim()
+                );
+            } catch (Exception ignored) {
+                json = null;
+            }
+            final JSONObject finalJson = json;
+            runOnUiThread(() -> {
+                if (seq != mealFetchSeq) {
+                    return; // 已經撥去第二日，呢個結果過咗期
+                }
+                mealFetchInFlight = false;
+                if (finalJson != null) {
+                    cancelMealRetry();
+                    mealLastFetchAtMs = System.currentTimeMillis();
+                    if (target.equals(mealSelectedDate)) {
+                        mealPlanJson = finalJson;
+                        mealPlanJsonDate = target;
+                        mealPlanJsonVersion = finalJson.optString("content_version", "").trim();
+                    }
+                    mealFetchErrorText = "";
+                } else {
+                    // 有 cache 就唔好嘈——右邊個綠色時間本身已經話你知幾時校過。
+                    mealFetchErrorText = mealPlanJson == null ? "連線電腦失敗" : "";
+                    scheduleMealRetry(target);
+                }
+                renderMealPage();
+            });
+        }, "meal-day-fetch").start();
+    }
+
+    /** 成個月嘅補拉：撥停 MEAL_SWEEP_DEBOUNCE_MS 先開，連撥唔會疊。 */
+    private void scheduleBackgroundMealSweep(String displayDateIso) {
+        String target = displayDateIso == null ? "" : displayDateIso.trim();
+        mealSweepHandler.removeCallbacksAndMessages(null);
+        mealSweepHandler.postDelayed(
+                () -> refreshMealPlansFromTodayToEnd(target),
+                MEAL_SWEEP_DEBOUNCE_MS
+        );
     }
 
     private void prefetchNeighborMealPlans(String dateIso) {
@@ -2093,8 +2223,9 @@ public class MainActivity extends Activity {
         if (autoServer == null || autoServer.trim().isEmpty()) {
             return;
         }
-        mealFetchInFlight = true;
-        updateMealLastUpdateStatus();
+        // 背景補拉：唔亮 Updating（嗰個位淨係代表「你睇緊嗰日」攞緊嘢），
+        // 亦唔阻撥動；一撥新嘅 seq 就變，呢個 sweep 自己收手。
+        final int seq = mealFetchSeq;
         new Thread(() -> {
             String today = todayIso();
             String cursor = offsetDateIso(today, -1);
@@ -2106,6 +2237,9 @@ public class MainActivity extends Activity {
             boolean displayedDateLoaded = false;
             Exception lastError = null;
             for (int day = 0; day < 45; day++) {
+                if (seq != mealFetchSeq) {
+                    return; // 用戶又撥咗，唔好再喺度拉舊嗰批
+                }
                 boolean dateLoaded = false;
                 try {
                     JSONObject json = fetchMealPlanJson(cursor);
@@ -2149,9 +2283,11 @@ public class MainActivity extends Activity {
             boolean finalDisplayedDateLoaded = displayedDateLoaded;
             int finalLoaded = loaded;
             String finalLastLoadedDate = lastLoadedDate;
-            mealFetchInFlight = false;
             mealLastFetchAtMs = System.currentTimeMillis();
             runOnUiThread(() -> {
+                if (seq != mealFetchSeq) {
+                    return;
+                }
                 if (!finalLastLoadedDate.isEmpty()) {
                     mealKnownLastDate = finalLastLoadedDate;
                 }

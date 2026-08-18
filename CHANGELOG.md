@@ -4,6 +4,14 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.6.19 — 18/08/2026 25:52
+- Phone app: swiping between days in the meal view no longer re-downloads the whole
+  month, so the day flips right away instead of sitting on "Updating..." when you are
+  out on mobile data.
+- Phone app: when the PC cannot be reached it now retries by itself within seconds
+  instead of every 30s, so the plan fills in and the status returns to Online without
+  leaving and re-entering the page.
+
 ## 7.6.18 — 17/08/2026 18:10
 - Protein is now spread evenly across the day's meals instead of piling into breakfast
   (e.g. 51 / 36 / 15g becomes 34 / 34 / 34g). Daily totals and calories stay the same.

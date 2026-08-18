@@ -151,11 +151,13 @@ final class AlarmStore {
     private static final String HOME_LAN_PREFIX = "192.168.15.";
 
     static String[] getAutoSyncServerCandidates(Context context) {
-        // 部機有 192.168.15.x 呢個 IP＝真係喺屋企個網 → LAN 行先；
-        // 否則（mobile data／街外 Wi-Fi）→ meshnet 行先，慳咗 LAN connect timeout 白等。
+        // 部機有 192.168.15.x 呢個 IP＝真係喺屋企個網 → LAN 行先，meshnet 做後備。
+        // 唔喺屋企（mobile data／街外 Wi-Fi）：嗰個 LAN IP 數學上唔可能通，所以
+        // 索性唔放入候選——以前照放後尾，meshnet 一失敗就硬食佢 2.5 秒 connect
+        // timeout 白等，得個「試咗」嘅假象。
         return isOnHomeLan(context)
                 ? new String[]{DEFAULT_AUTO_SYNC_SERVER, MESHNET_AUTO_SYNC_SERVER}
-                : new String[]{MESHNET_AUTO_SYNC_SERVER, DEFAULT_AUTO_SYNC_SERVER};
+                : new String[]{MESHNET_AUTO_SYNC_SERVER};
     }
 
     private static boolean isOnHomeLan(Context context) {

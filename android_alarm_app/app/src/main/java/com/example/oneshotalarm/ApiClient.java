@@ -15,8 +15,8 @@ import java.nio.charset.StandardCharsets;
  * LAN→meshnet failover HTTP client——全 app 共用一份。
  * 之前 DutyReportView / OnOffDutyView / ScheduleGridAutoImporter 各自抄一套，
  * 已經 drift（views 識記 last-good server、importer 唔識）；而家收歸呢度。
- * candidates 排序來自 AlarmStore.getAutoSyncServerCandidates（屋企 LAN 行先、
- * 出街 meshnet 行先）；成功嗰個 server 記住做首選，全 app 共用。
+ * candidates 來自 AlarmStore.getAutoSyncServerCandidates（屋企＝LAN 行先 meshnet 後備、
+ * 出街＝淨係 meshnet）；成功嗰個 server 記住做首選，全 app 共用。
  */
 final class ApiClient {
     /** LAN candidate：唔喺屋企個網就一定唔通，唔好等，快啲 fail 去試 meshnet。 */
@@ -36,8 +36,12 @@ final class ApiClient {
     private static final String CLIENT_HEADER = "X-Alarm-Client";
     private static final String CLIENT_HEADER_VALUE = "phone";
 
-    /** last-good server index（對應 candidates 排陣）；volatile 俾唔同 thread 嘅 view/worker 共用。 */
-    private static volatile int serverIndex = 0;
+    /**
+     * last-good server：記住個 URL，唔記陣列位置——candidates 嘅次序同長度會跟
+     * 屋企／出街變（出街得 meshnet 一個），記位置即係記錯嘢。
+     * volatile 俾唔同 thread 嘅 view/worker 共用。
+     */
+    private static volatile String lastGoodServer = "";
 
     private ApiClient() {
     }
@@ -57,11 +61,10 @@ final class ApiClient {
             String contentType,
             int readTimeoutMs
     ) throws Exception {
-        String[] candidates = AlarmStore.getAutoSyncServerCandidates(context);
+        String[] candidates = orderByLastGood(AlarmStore.getAutoSyncServerCandidates(context), lastGoodServer);
         Exception lastException = null;
-        for (int i = 0; i < candidates.length; i++) {
-            int idx = (serverIndex + i) % candidates.length;
-            String base = normalizeServer(candidates[idx]);
+        for (String candidate : candidates) {
+            String base = normalizeServer(candidate);
             if (base.isEmpty()) {
                 continue;
             }
@@ -69,13 +72,34 @@ final class ApiClient {
                 String responseBody = "POST".equals(method)
                         ? httpPost(base + path, body, contentType, readTimeoutMs)
                         : httpGet(base + path, readTimeoutMs);
-                serverIndex = idx;
+                lastGoodServer = base;
                 return responseBody;
             } catch (Exception e) {
                 lastException = e;
             }
         }
         throw lastException != null ? lastException : new Exception("no server candidates");
+    }
+
+    /** 上次成功嗰個排先（要仲喺候選名單先算）；其餘維持原本次序。 */
+    static String[] orderByLastGood(String[] candidates, String preferred) {
+        if (preferred == null || preferred.isEmpty() || candidates.length < 2) {
+            return candidates;
+        }
+        java.util.ArrayList<String> first = new java.util.ArrayList<>(candidates.length);
+        java.util.ArrayList<String> rest = new java.util.ArrayList<>(candidates.length);
+        for (String candidate : candidates) {
+            if (preferred.equals(normalizeServer(candidate))) {
+                first.add(candidate);
+            } else {
+                rest.add(candidate);
+            }
+        }
+        if (first.isEmpty()) {
+            return candidates;
+        }
+        first.addAll(rest);
+        return first.toArray(new String[0]);
     }
 
     static String normalizeServer(String raw) {
