@@ -281,12 +281,21 @@ class RecalcRequest(BaseModel):
     days: list[RecalcDayRequest] = Field(default_factory=list)
 
 
+class MealItemSwap(BaseModel):
+    """指定食材：邊一餐、邊一格、換做營養清單邊一行。"""
+
+    meal: str
+    item_index: int
+    row_index: int
+
+
 class OutOfStockResolveRequest(BaseModel):
     date: str
     row_index: int | None = None  # None＝唔標記冇貨，齋做 partial re-solve
     locked_meals: list[str] = Field(default_factory=list)
     nutrient_indicators: dict[str, Any] = Field(default_factory=dict)
     meal_plan: dict[str, Any] = Field(default_factory=dict)
+    swaps: list[MealItemSwap] = Field(default_factory=list)  # 指定食材，空＝唔指定
 
 
 class UiStateRequest(BaseModel):
@@ -919,6 +928,7 @@ def api_oos_resolve(body: OutOfStockResolveRequest) -> dict[str, Any]:
 
     try:
         paused_name = set_catalog_paused(body.row_index, True) if body.row_index is not None else None
+        forced = {(s.meal, int(s.item_index)): int(s.row_index) for s in body.swaps}
         day = resolve_day_out_of_stock(
             {
                 "date": body.date,
@@ -926,6 +936,7 @@ def api_oos_resolve(body: OutOfStockResolveRequest) -> dict[str, Any]:
                 "meal_plan": body.meal_plan,
             },
             body.locked_meals,
+            forced_item_rows=forced or None,
         )
         return {"paused_name": paused_name, **day}
     except IndicatorDataError as e:
@@ -934,6 +945,19 @@ def api_oos_resolve(body: OutOfStockResolveRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Out-of-stock resolve failed: {e}") from e
+
+
+@app.get("/api/item-candidates")
+def api_item_candidates() -> dict[str, Any]:
+    """每餐每格可以指定嘅食材（畀「Swap → 指定食材」個 picker 用）。"""
+    from meal_planner.preview import meal_item_candidates
+
+    try:
+        return {"meals": meal_item_candidates()}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Load item candidates failed: {e}") from e
 
 
 @app.get("/api/memory-list")

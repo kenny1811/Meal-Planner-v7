@@ -208,6 +208,7 @@
     function hideOosMenu() {
       const menu = document.getElementById("oos-menu");
       if (menu) menu.remove();
+      hideSwapPicker();
     }
 
     function oosMenuNote(menu, text) {
@@ -217,8 +218,71 @@
       menu.appendChild(note);
     }
 
-    function showOosMenu(ev, cell) {
+    // 指定食材：{item_index: {row, name}}。每次開 menu 重新嚟過，唔會跨餐殘留。
+    let pendingSwaps = {};
+    let itemCandidatesCache = null;
+
+    async function loadItemCandidates() {
+      if (itemCandidatesCache) return itemCandidatesCache;
+      const r = await fetch("/api/item-candidates");
+      const data = await parseJsonSafe(r);
+      if (!r.ok) throw new Error(apiErrorMessage(data, "Load item candidates failed.", r.status));
+      itemCandidatesCache = (data && data.meals) || {};
+      return itemCandidatesCache;
+    }
+
+    function hideSwapPicker() {
+      const el = document.getElementById("oos-swap-picker");
+      if (el) el.remove();
+    }
+
+    function placeMenu(menu, x, y) {
+      const pad = 6;
+      const left = Math.min(x, window.innerWidth - menu.offsetWidth - pad);
+      const top = Math.min(y, window.innerHeight - menu.offsetHeight - pad);
+      menu.style.left = `${Math.max(pad, left)}px`;
+      menu.style.top = `${Math.max(pad, top)}px`;
+    }
+
+    // 撳「Swap」入面一格 → 彈出嗰格揀得嘅食材。後端 candidate 已經同 solver 同一條路，
+    // 所以缺貨（暫停）嗰啲根本唔會出現。
+    async function showSwapPicker(anchorBtn, meal, itemIndex, currentRow, onPick) {
+      hideSwapPicker();
+      let slots;
+      try {
+        slots = (await loadItemCandidates())[meal] || [];
+      } catch (x) {
+        const errBox = document.getElementById("err");
+        errBox.textContent = String(x);
+        errBox.style.display = "block";
+        return;
+      }
+      const slot = slots.find((s) => Number(s.item_index) === Number(itemIndex));
+      const picker = document.createElement("div");
+      picker.id = "oos-swap-picker";
+      picker.className = "catalog-row-menu";
+      oosMenuNote(picker, slot ? `${slot.label} →` : "揀食材");
+      const choices = ((slot && slot.candidates) || []).filter((c) => Number(c.row) !== Number(currentRow));
+      if (!choices.length) oosMenuNote(picker, "冇其他候選");
+      for (const c of choices) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = String(c.name || "");
+        b.addEventListener("click", () => {
+          hideSwapPicker();
+          onPick({ row: Number(c.row), name: String(c.name || "") });
+        });
+        picker.appendChild(b);
+      }
+      document.body.appendChild(picker);
+      const box = anchorBtn.getBoundingClientRect();
+      placeMenu(picker, box.right + 2, box.top);
+    }
+
+    async function showOosMenu(ev, cell) {
       hideOosMenu();
+      pendingSwaps = {};
+      const openAt = { x: ev.clientX, y: ev.clientY };
       const dateIso = cell.getAttribute("data-date");
       const meal = cell.getAttribute("data-meal");
       const day = storedMealPlanDay(dateIso);
@@ -226,9 +290,21 @@
       if (!mealPlan) return;
       const items = (mealPlan.meal_items && Array.isArray(mealPlan.meal_items[meal]) ? mealPlan.meal_items[meal] : [])
         .filter((it) => it && it.row != null);
+
+      // 指定食材要跟「而家個 pattern」嘅格位，唔可以用餐單入面嘅位置——舊餐單可能
+      // 係用另一個 pattern 生成（例如晚餐有兩款蛋白，格數對唔上），照位置數就會
+      // 指錯格（第 2 個 item 係雞胸肉，但 pattern 第 2 格其實係蔬菜）。
+      let slots = [];
+      try {
+        slots = (await loadItemCandidates())[meal] || [];
+      } catch (_) {
+        slots = [];
+      }
+
       const menu = document.createElement("div");
       menu.id = "oos-menu";
       menu.className = "catalog-row-menu";
+
       oosMenuNote(menu, "Out of stock → Re-Generate");
       if (!items.length) {
         oosMenuNote(menu, "No markable item in this meal");
@@ -244,6 +320,53 @@
           menu.appendChild(btn);
         }
       }
+
+      if (slots.length) {
+        const swapTitle = document.createElement("div");
+        swapTitle.className = "oos-menu-title oos-menu-section";
+        swapTitle.textContent = "Swap → 指定食材";
+        menu.appendChild(swapTitle);
+        const runBtn = document.createElement("button");
+        for (const slot of slots) {
+          const rows = new Set((slot.candidates || []).map((c) => Number(c.row)));
+          const current = items.find((it) => rows.has(Number(it.row)));
+          const base = current ? String(current.name || "") : String(slot.label || "");
+          const idx = Number(slot.item_index);
+          const btn = document.createElement("button");
+          btn.type = "button";
+          const paint = () => {
+            const picked = pendingSwaps[idx];
+            btn.textContent = picked ? `${base} → ${picked.name}` : base;
+            btn.classList.toggle("oos-menu-picked", !!picked);
+          };
+          paint();
+          btn.addEventListener("click", async () => {
+            await showSwapPicker(btn, meal, idx, current ? current.row : null, (pick) => {
+              if (current && Number(pick.row) === Number(current.row)) delete pendingSwaps[idx];
+              else pendingSwaps[idx] = pick;
+              paint();
+              runBtn.disabled = !Object.keys(pendingSwaps).length;
+            });
+          });
+          menu.appendChild(btn);
+        }
+        runBtn.type = "button";
+        runBtn.className = "oos-menu-run";
+        runBtn.textContent = "Re-Generate with swaps";
+        runBtn.disabled = true;
+        runBtn.addEventListener("click", async () => {
+          const swaps = Object.keys(pendingSwaps).map((idx) => ({
+            meal,
+            item_index: Number(idx),
+            row_index: Number(pendingSwaps[idx].row),
+          }));
+          if (!swaps.length) return;
+          hideOosMenu();
+          await runOosResolve(dateIso, meal, null, swaps);
+        });
+        menu.appendChild(runBtn);
+      }
+
       const resolveOnly = document.createElement("button");
       resolveOnly.type = "button";
       resolveOnly.className = "oos-menu-none";
@@ -254,21 +377,19 @@
       });
       menu.appendChild(resolveOnly);
       document.body.appendChild(menu);
-      const pad = 6;
-      const left = Math.min(ev.clientX, window.innerWidth - menu.offsetWidth - pad);
-      const top = Math.min(ev.clientY, window.innerHeight - menu.offsetHeight - pad);
-      menu.style.left = `${Math.max(pad, left)}px`;
-      menu.style.top = `${Math.max(pad, top)}px`;
+      placeMenu(menu, openAt.x, openAt.y);
     }
 
     document.addEventListener("click", (ev) => {
-      if (!ev.target || !ev.target.closest || !ev.target.closest("#oos-menu")) hideOosMenu();
+      const inMenu = ev.target && ev.target.closest
+        && (ev.target.closest("#oos-menu") || ev.target.closest("#oos-swap-picker"));
+      if (!inMenu) hideOosMenu();
     });
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") hideOosMenu();
     });
 
-    async function runOosResolve(dateIso, meal, item) {
+    async function runOosResolve(dateIso, meal, item, swaps = []) {
       const err = document.getElementById("err");
       err.style.display = "none";
       err.textContent = "";
@@ -288,6 +409,7 @@
             locked_meals: locked,
             nutrient_indicators: day.nutrient_indicators || {},
             meal_plan: day.meal_plan || {},
+            swaps,
           }),
         });
         const data = await parseJsonSafe(r);
@@ -905,6 +1027,31 @@
       window.addEventListener("scroll", schedulePickupListReposition, true);
     }
 
+    // Refresh 之後返返去上次嗰個畫面：panel key → point 返佢自己嗰個「開返佢」。
+    // 冇 entry（planner／shopping）＝畫面本身已經有嘢睇，唔使再載。
+    // 加新 panel 就喺 PANEL_KEYS 加個 key，喺呢度加返一行，兩處對齊。
+    const PANEL_RESTORE = {
+      config: () => applyActiveConfigView(false),
+      maint: async () => {
+        if (!activeMaintSheetKey) return;
+        try {
+          await openMaintSheet(activeMaintSheetKey, false);
+        } catch (_) {
+          // 嗰張表冇咗（改過名／刪咗）就開返第一張，唔好卡喺度乜都冇。
+          if (maintSheets.length) await openMaintSheet(maintSheets[0].sheet_key, false);
+        }
+      },
+      reports: () => openShiftCodeAnalysisReport(),
+      duty_report: () => refreshDutyReport(),
+      onoffduty: () => openOnOffDutyPanel(),
+      typhoon: () => openTyphoonPanel(),
+    };
+
+    async function restoreActivePanel(panel) {
+      const restore = PANEL_RESTORE[panel];
+      if (restore) await restore();
+    }
+
     (async function bootUi() {
       await loadUiState();
       applyMenuOrder();
@@ -924,16 +1071,7 @@
       applyActiveMenuPathToState();
       setActivePanel(activePanel, false);
       applyActiveMenuPathTree();
-      if (activePanel === "config") applyActiveConfigView(false);
-      if (activePanel === "maint" && activeMaintSheetKey) {
-        try {
-          await openMaintSheet(activeMaintSheetKey, false);
-        } catch (_) {
-          if (maintSheets.length) await openMaintSheet(maintSheets[0].sheet_key, false);
-        }
-      }
-      if (activePanel === "reports") await openShiftCodeAnalysisReport();
-      if (activePanel === "duty_report") await refreshDutyReport();
+      await restoreActivePanel(activePanel);
       applyTableOffsets();
       attachTableDragHandles();
       applyFormColumnWidths();

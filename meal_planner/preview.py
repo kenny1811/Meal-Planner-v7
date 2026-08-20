@@ -27,7 +27,9 @@ from meal_planner.indicators import (
     indicator_to_json,
     profile_from_json_map,
 )
+from meal_planner.nutrition_catalog import candidate_entries_from_alternatives
 from meal_planner.nutrition_db import load_catalog_entries, load_target_rows
+from meal_planner.patterns import parse_meal_patterns
 from meal_planner.roster import code_for_date, load_roster_map
 from meal_planner.maintenance_db import roster_code_defs
 from meal_planner.roster_codes import is_work_day
@@ -532,6 +534,7 @@ def recalc_days_from_edits(days_payload: list[dict[str, Any]]) -> dict[str, Any]
 def resolve_day_out_of_stock(
     day_payload: dict[str, Any],
     locked_meal_names: list[str],
+    forced_item_rows: dict[tuple[str, int], int] | None = None,
 ) -> dict[str, Any]:
     """
     Partial-day re-solve：鎖住已食餐（原內容當固定營養），只對其餘餐次重跑 MILP。
@@ -606,9 +609,39 @@ def resolve_day_out_of_stock(
         cache=planning_cache,
         locked_meals=locked,
         bound_overrides=bound_overrides or None,
+        forced_item_rows=forced_item_rows or None,
     )
     meal_plan["summary"] = _calc_day_summary(meal_plan, indicators, settings)
     return {"date": date_s, "meal_plan": meal_plan}
+
+
+def meal_item_candidates() -> dict[str, Any]:
+    """
+    每個餐次每格可以揀咩食材（畀前端「指定食材」個 picker 用）。
+
+    Pattern 表同日期／更碼無關（同一份 早餐／午餐／小食／晚餐 pattern），所以呢度
+    唔使收日期。候選次序同內容跟足 solver 嗰條路（`candidate_entries_from_alternatives`
+    會篩走暫停＝缺貨嘅食材），所以 picker 見到嘅就係 solver 真係揀得到嘅。
+    """
+    settings = get_settings()
+    cache = build_meal_planning_cache(settings)
+    parts = parse_meal_patterns(dict(cache.meal_patterns), settings.pattern)
+    out: dict[str, Any] = {}
+    for meal, items in parts.items():
+        slots = []
+        for i, item in enumerate(items):
+            alts = item.get("alternatives", [])
+            alts_list = [str(x) for x in alts] if isinstance(alts, list) else []
+            entries = candidate_entries_from_alternatives(cache.nutrition_entries, alts_list)
+            slots.append(
+                {
+                    "item_index": i,
+                    "label": str(item.get("raw", "")).strip(),
+                    "candidates": [{"row": int(e.row_index), "name": str(e.name)} for e in entries],
+                }
+            )
+        out[meal] = slots
+    return out
 
 
 def refresh_payload_with_latest_indicators(payload: dict[str, Any]) -> dict[str, Any]:

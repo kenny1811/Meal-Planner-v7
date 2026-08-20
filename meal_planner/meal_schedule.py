@@ -208,6 +208,7 @@ def choose_ingredients_for_meals(
     nutrition_entries: list[Any] | None = None,
     bound_overrides: dict[int, dict[str, float]] | None = None,
     forced_rice_row: int | None = None,
+    forced_item_rows: dict[tuple[str, int], int] | None = None,
 ) -> tuple[
     dict[str, list[str]],
     dict[str, dict[str, float]],
@@ -240,6 +241,17 @@ def choose_ingredients_for_meals(
             alts = item.get("alternatives", [])
             alts_list = [str(x) for x in alts] if isinstance(alts, list) else []
             candidates_by_item[(meal, i)] = candidate_entries_from_alternatives(entries, alts_list)
+
+    # 指定食材：直接收窄嗰格嘅候選。唔用 solver 個 forced_item_rows 參數，因為
+    # auto-retry／replacement search／relaxation 嗰幾條遞歸路唔會帶住佢——帶頭嗰次
+    # 指定得中，一有違規就會被「冇指定」嘅重試方案蓋過。
+    for (f_meal, f_idx), f_row in (forced_item_rows or {}).items():
+        cands = candidates_by_item.get((f_meal, int(f_idx)))
+        if not cands:
+            continue
+        picked = [e for e in cands if int(e.row_index) == int(f_row)]
+        if picked:
+            candidates_by_item[(f_meal, int(f_idx))] = picked
 
     if forced_rice_row is not None:
         # 一日一米：鎖咗嘅餐已經食咗某款米，重解餐次嘅米類候選只准同款
@@ -423,6 +435,9 @@ def build_day_meal_plan(
     locked_meals: dict[str, dict[str, Any]] | None = None,
     bound_overrides: dict[int, dict[str, float]] | None = None,
     meal_time_overrides: dict[str, str] | None = None,
+    # 指定食材：{(餐, item 位置): 營養清單 row}。淨係喺嗰格原本嘅候選入面篩，
+    # 所以只可以換成同格嘅嘢（米格換唔到魚）。
+    forced_item_rows: dict[tuple[str, int], int] | None = None,
 ) -> dict[str, Any]:
     """組合飯時主規則、各餐 Pattern、返工日午餐餐廳（第一命中）；可選 `day` 以解析行位表實際用餐時間。"""
     if not roster_code:
@@ -570,6 +585,7 @@ def build_day_meal_plan(
         nutrition_entries=cache.nutrition_entries if cache is not None else None,
         bound_overrides=bound_overrides,
         forced_rice_row=forced_rice_row,
+        forced_item_rows=forced_item_rows,
     )
     if rest and isinstance(rest.get("nutrients"), dict):
         meal_nutrients["午餐"] = {

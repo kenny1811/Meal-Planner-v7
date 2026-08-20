@@ -1797,6 +1797,22 @@
       border-top: 1px solid var(--grid);
       color: #2563eb;
     }
+    #oos-menu .oos-menu-section {
+      margin-top: 2px;
+      border-top: 1px solid var(--grid);
+    }
+    #oos-menu .oos-menu-picked {
+      color: #166534;
+      font-weight: 600;
+    }
+    #oos-menu .oos-menu-run {
+      color: #2563eb;
+    }
+    #oos-menu .oos-menu-run:disabled {
+      color: #94a3b8;
+      cursor: default;
+      background: #fff;
+    }
     table.catalog-table input[type="checkbox"] {
       width: 14px;
       height: 14px;

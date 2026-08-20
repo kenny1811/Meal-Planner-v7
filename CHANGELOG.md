@@ -4,6 +4,11 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.7.20 — 20/08/2026 14:25
+- Right-click a meal → "Swap → 指定食材": pick one or more slots, choose the ingredient
+  you want in each, then Re-Generate. Amounts are still worked out for you, and nothing
+  gets marked out of stock.
+
 ## 7.6.20 — 20/08/2026 14:22
 - The plan table rolls over on its own at 24:00 — the first row becomes the new day and
   the blue "today" box moves with it, without reloading the page.
