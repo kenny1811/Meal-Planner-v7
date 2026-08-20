@@ -314,6 +314,10 @@
       if (!el) return;
       const tick = () => {
         el.textContent = formatClockDateHK();
+        // 過咗 24:00：喺餐單版就即刻重畫（第一日同藍框跟住郁）。
+        if (activePanel === "planner" && typeof rollOverIfDateChanged === "function") {
+          rollOverIfDateChanged();
+        }
       };
       tick();
       applyClockPosition();
@@ -741,6 +745,10 @@
       if (mOnOff) mOnOff.classList.toggle("active", activePanel === "onoffduty");
       if (mTyphoon) mTyphoon.classList.toggle("active", activePanel === "typhoon");
       if (persist) persistColumnWidths();
+      // 揀返餐單：如果期間過咗 24:00，趁而家補返個 re-render。
+      if (activePanel === "planner" && typeof rollOverIfDateChanged === "function") {
+        rollOverIfDateChanged();
+      }
       return true;
     }
 

@@ -4,6 +4,10 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.6.20 — 20/08/2026 14:22
+- The plan table rolls over on its own at 24:00 — the first row becomes the new day and
+  the blue "today" box moves with it, without reloading the page.
+
 ## 7.6.19 — 18/08/2026 25:52
 - Phone app: swiping between days in the meal view no longer re-downloads the whole
   month, so the day flips right away instead of sitting on "Updating..." when you are

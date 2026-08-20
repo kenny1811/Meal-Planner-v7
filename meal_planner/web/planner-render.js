@@ -317,6 +317,31 @@
       return `${y}-${mm}-${dd}`;
     }
 
+    // 個版可以開成日唔 refresh。跨咗 24:00 就要自己捲上，否則 today-cell 藍框同
+    // 「今日-1」起計嘅過濾都仲停留喺開頁嗰日（試過開通宵，第二朝仲當緊係前一日）。
+    // 唔另開 timer：右上角浮動鐘本身每秒行一次，喺嗰度順手對；當時唔喺餐單版
+    // 就唔郁，等你揀返餐單嗰陣先重畫。
+    let lastRenderedTodayIso = "";
+
+    function rollOverIfDateChanged() {
+      const today = todayIsoHK();
+      if (!lastRenderedTodayIso || lastRenderedTodayIso === today) return;
+      const panel = document.querySelector(".panel-bottom");
+      // 正喺度打緊字就唔好夾硬重畫，下一格 tick 再算。
+      const editing = panel && panel.contains(document.activeElement)
+        && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName || "");
+      if (editing) return;
+      const anchor = captureViewportAnchor();
+      renderFromMemory(null);
+      const stillThere = anchor && panel && panel.querySelector(`tr[data-day="${anchor.date}"]`);
+      if (stillThere) {
+        restoreViewportAnchor(anchor);
+      } else if (panel) {
+        // 本來睇緊嗰日已經跌出名單（showPast 關咗）＝之前喺頂，就捲返上新嘅第一日。
+        panel.scrollTop = 0;
+      }
+    }
+
     function visibleDays() {
       const days = Array.isArray(memoryPayload.days) ? memoryPayload.days : [];
       if (showPast) return sortDaysByDate(days);
@@ -375,6 +400,7 @@
 
     function renderFromMemory(anchor = null) {
       const out = document.getElementById("out");
+      lastRenderedTodayIso = todayIsoHK();
       const days = visibleDays();
       const headers = memoryPayload.headers && memoryPayload.headers.length
         ? memoryPayload.headers
