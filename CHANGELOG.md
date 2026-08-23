@@ -4,6 +4,11 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.7.21 — 23/08/2026 13:22
+- Fix: one rice per day survived swapping. Re-generating after a swap could leave lunch
+  and dinner on different rices (and the rice note then quoted the wrong grams). The
+  rice slot also only offers the rice an earlier, already-eaten meal had.
+
 ## 7.7.20 — 20/08/2026 14:25
 - Right-click a meal → "Swap → 指定食材": pick one or more slots, choose the ingredient
   you want in each, then Re-Generate. Amounts are still worked out for you, and nothing

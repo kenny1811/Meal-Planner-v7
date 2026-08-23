@@ -46,6 +46,26 @@ def _search_replacement_plan(
     attempts = 0
 
     mutable_keys = [k for k, cs in by_item.items() if len(cs) >= 2 and k in chosen_by_key]
+    # 米格要成日一齊郁：淨係 force 一格米，另一格米同佢冇交集，solve_day_meal_plan
+    # 個「一日一米」約束就會靜靜哋唔建立（嗰度係 `if common_rows:`），出到嚟兩餐
+    # 唔同米。所以試米嘅時候，要嗰款米每一格米都揀得到，然後一次過全部 force。
+    rice_keys = [k for k, cs in by_item.items() if cs and cs[0].is_rice_item]
+    rice_rows_by_key = {
+        k: {int(c.entry.row_index) for c in by_item.get(k, [])} for k in rice_keys
+    }
+
+    def _forced_with(base: dict[tuple[str, int], int], key: tuple[str, int], to_row: int):
+        """回傳 trial 用嘅 forced dict；米格唔夾就回 None（跳過呢個 candidate）。"""
+        out = dict(base)
+        if key in rice_rows_by_key:
+            if any(to_row not in rows for rows in rice_rows_by_key.values()):
+                return None
+            for rk in rice_keys:
+                out[rk] = to_row
+        else:
+            out[key] = to_row
+        return out
+
     for _round in range(2):
         best_local: dict[str, Any] | None = None
         for key in mutable_keys:
@@ -61,8 +81,9 @@ def _search_replacement_plan(
                 to_row = int(cand.entry.row_index)
                 if to_row == int(cur_row):
                     continue
-                trial_forced = dict(forced)
-                trial_forced[key] = to_row
+                trial_forced = _forced_with(forced, key, to_row)
+                if trial_forced is None:
+                    continue
                 sim = solve_fn(
                     settings=settings,
                     indicators=indicators,
@@ -98,7 +119,8 @@ def _search_replacement_plan(
         if best_local is None:
             break
         key = best_local["key"]
-        forced[key] = int(best_local["to_row"])
+        accepted = _forced_with(forced, key, int(best_local["to_row"]))
+        forced = accepted if accepted is not None else dict(forced)
         best_artifact = best_local["artifact"]
         current_score = best_local["score"]
         plan_steps.append(

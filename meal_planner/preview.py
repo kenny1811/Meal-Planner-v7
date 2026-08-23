@@ -626,6 +626,7 @@ def meal_item_candidates() -> dict[str, Any]:
     settings = get_settings()
     cache = build_meal_planning_cache(settings)
     parts = parse_meal_patterns(dict(cache.meal_patterns), settings.pattern)
+    rice_token = settings.rice.rice_category_exact.strip().lower()
     out: dict[str, Any] = {}
     for meal, items in parts.items():
         slots = []
@@ -637,6 +638,8 @@ def meal_item_candidates() -> dict[str, Any]:
                 {
                     "item_index": i,
                     "label": str(item.get("raw", "")).strip(),
+                    # 前端靠呢個 flag 執行「一日一米」：已食嘅餐有米嘅話，米格只准揀返同款。
+                    "is_rice": any((a or "").strip().lower() == rice_token for a in alts_list),
                     "candidates": [{"row": int(e.row_index), "name": str(e.name)} for e in entries],
                 }
             )

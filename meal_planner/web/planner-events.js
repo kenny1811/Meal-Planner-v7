@@ -246,7 +246,7 @@
 
     // 撳「Swap」入面一格 → 彈出嗰格揀得嘅食材。後端 candidate 已經同 solver 同一條路，
     // 所以缺貨（暫停）嗰啲根本唔會出現。
-    async function showSwapPicker(anchorBtn, meal, itemIndex, currentRow, onPick) {
+    async function showSwapPicker(anchorBtn, meal, itemIndex, currentRow, onPick, lockedRiceRow) {
       hideSwapPicker();
       let slots;
       try {
@@ -262,8 +262,14 @@
       picker.id = "oos-swap-picker";
       picker.className = "catalog-row-menu";
       oosMenuNote(picker, slot ? `${slot.label} →` : "揀食材");
-      const choices = ((slot && slot.candidates) || []).filter((c) => Number(c.row) !== Number(currentRow));
-      if (!choices.length) oosMenuNote(picker, "冇其他候選");
+      let choices = ((slot && slot.candidates) || []).filter((c) => Number(c.row) !== Number(currentRow));
+      // 一日一米：之前嗰餐（已食、鎖住咗）已經有米就改唔到，所以米格只准揀返同一款。
+      if (slot && slot.is_rice && lockedRiceRow != null) {
+        choices = choices.filter((c) => Number(c.row) === Number(lockedRiceRow));
+      }
+      if (!choices.length) {
+        oosMenuNote(picker, slot && slot.is_rice && lockedRiceRow != null ? "一日一米：跟已食嗰餐" : "冇其他候選");
+      }
       for (const c of choices) {
         const b = document.createElement("button");
         b.type = "button";
@@ -301,6 +307,22 @@
         slots = [];
       }
 
+      // 已食（鎖住）嘅餐如果已經有米，米格就唔可以再揀第二款——嗰餐改唔到，
+      // 一日一米數學上做唔到。
+      let lockedRiceRow = null;
+      const riceSlot = slots.find((s) => s && s.is_rice);
+      if (riceSlot) {
+        const riceRows = new Set((riceSlot.candidates || []).map((c) => Number(c.row)));
+        for (const before of lockedMealsBefore(meal)) {
+          const arr = (mealPlan.meal_items && mealPlan.meal_items[before]) || [];
+          const hit = arr.find((it) => it && it.row != null && riceRows.has(Number(it.row)));
+          if (hit) {
+            lockedRiceRow = Number(hit.row);
+            break;
+          }
+        }
+      }
+
       const menu = document.createElement("div");
       menu.id = "oos-menu";
       menu.className = "catalog-row-menu";
@@ -321,7 +343,9 @@
         }
       }
 
-      if (slots.length) {
+      // 冇可標記 item ＝ 嗰餐唔係由 solver 話事（例如餐廳午餐係固定營養，
+      // 根本唔入 LP），指定食材做唔到嘢，所以連個段都唔好出。
+      if (slots.length && items.length) {
         const swapTitle = document.createElement("div");
         swapTitle.className = "oos-menu-title oos-menu-section";
         swapTitle.textContent = "Swap → 指定食材";
@@ -346,7 +370,7 @@
               else pendingSwaps[idx] = pick;
               paint();
               runBtn.disabled = !Object.keys(pendingSwaps).length;
-            });
+            }, lockedRiceRow);
           });
           menu.appendChild(btn);
         }
