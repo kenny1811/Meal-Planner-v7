@@ -69,7 +69,7 @@
         if (data && typeof data.show_past === "boolean") {
           showPast = data.show_past;
         }
-        if (data && ["planner", "config", "maint", "shopping", "reports", "duty_report"].includes(data.active_panel)) {
+        if (data && PANEL_KEYS.includes(data.active_panel)) {
           activePanel = data.active_panel;
         }
         const hasServerConfigView = data && ["targets", "catalog", "details"].includes(data.active_config_view);

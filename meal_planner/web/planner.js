@@ -20,6 +20,11 @@
     let activeRosterMonthIndex = 0;
     let showPast = true;
     let sidebarWidth = 260;
+    // 所有 panel key 得呢一份名單：setActivePanel 認得嘅，refresh 之後就返得返去。
+    // 加新 panel 淨係改呢度，唔會再出現「開得到但 refresh 就彈返餐單」。
+    const PANEL_KEYS = [
+      "planner", "config", "maint", "shopping", "reports", "duty_report", "onoffduty", "typhoon",
+    ];
     let activePanel = "planner";
     let activeConfigView = "targets";
     let activeMenuPath = ["top", "planner"];
@@ -720,7 +725,7 @@
       const mOnOff = document.getElementById("menu-onoffduty");
       const mTyphoon = document.getElementById("menu-typhoon");
       const target = panel || "planner";
-      activePanel = ["planner", "config", "maint", "shopping", "reports", "duty_report", "onoffduty", "typhoon"].includes(target) ? target : "planner";
+      activePanel = PANEL_KEYS.includes(target) ? target : "planner";
       planner.style.display = activePanel === "planner" ? "" : "none";
       config.style.display = activePanel === "config" ? "" : "none";
       maint.style.display = activePanel === "maint" ? "" : "none";

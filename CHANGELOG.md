@@ -4,6 +4,10 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.7.22 — 23/08/2026 13:28
+- Fix: On/Off Duty and Typhoon now stay open after a refresh instead of bouncing back
+  to the meal plan.
+
 ## 7.7.21 — 23/08/2026 13:22
 - Fix: one rice per day survived swapping. Re-generating after a swap could leave lunch
   and dinner on different rices (and the rice note then quoted the wrong grams). The

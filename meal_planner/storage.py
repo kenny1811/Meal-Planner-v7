@@ -36,6 +36,17 @@ def _default_memory_payload() -> dict[str, Any]:
     return {"headers": [], "indicator_rows": {}, "nutrient_keys": [], "days": []}
 
 
+# 記得住嘅 panel 得呢一份名單（同 web/planner.js 嘅 PANEL_KEYS 對應）。
+# 唔喺名單入面嘅一律當 planner —— 加新 panel 唔加落嚟，refresh 之後就會彈返餐單。
+# alarm_sync 係舊 panel，留住等舊 ui_state 唔會突然跳走。
+PANEL_KEYS = frozenset(
+    {
+        "planner", "config", "maint", "shopping", "alarm_sync", "reports",
+        "duty_report", "onoffduty", "typhoon",
+    }
+)
+
+
 def _default_ui() -> dict[str, Any]:
     return {
         "column_widths": {},
@@ -119,7 +130,7 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
             pass
         ui["show_past"] = bool(raw.get("show_past", ui["show_past"]))
         panel = str(raw.get("active_panel", ui["active_panel"]))
-        ui["active_panel"] = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports", "duty_report"} else "planner"
+        ui["active_panel"] = panel if panel in PANEL_KEYS else "planner"
         fallback_config_view = "catalog" if ui["active_panel"] == "config" and "active_config_view" not in raw else ui["active_config_view"]
         config_view = str(raw.get("active_config_view", fallback_config_view))
         ui["active_config_view"] = config_view if config_view in {"targets", "catalog", "details"} else "targets"
@@ -724,14 +735,14 @@ def load_show_past(ui: dict[str, Any] | None = None) -> bool:
 
 
 def save_active_panel(panel: str) -> None:
-    value = panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports", "duty_report"} else "planner"
+    value = panel if panel in PANEL_KEYS else "planner"
     _update_ui(lambda ui: ui.update({"active_panel": value}))
 
 
 def load_active_panel(ui: dict[str, Any] | None = None) -> str:
     ui = _load_ui() if ui is None else ui
     panel = str(ui.get("active_panel", "planner"))
-    return panel if panel in {"planner", "config", "maint", "shopping", "alarm_sync", "reports", "duty_report"} else "planner"
+    return panel if panel in PANEL_KEYS else "planner"
 
 
 def save_active_config_view(view: str) -> None:
