@@ -4,6 +4,10 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.8.22 — 23/08/2026 13:29
+- Phone app: the next alarm (time and label) can now be read by another launcher's
+  widget, so the shift alarm shows up on the home screen without opening the app.
+
 ## 7.7.22 — 23/08/2026 13:28
 - Fix: On/Off Duty and Typhoon now stay open after a refresh instead of bouncing back
   to the meal plan.

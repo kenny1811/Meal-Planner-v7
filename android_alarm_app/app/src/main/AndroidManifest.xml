@@ -72,6 +72,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- 唯讀出口：畀門前直樹Launcher 個 W widget 讀「下一個鬧鐘」。
+             Android 冇公開 API 讀第二個 app 嘅鬧鐘，所以要由呢邊主動出。
+             只出時間同標籤，唔支援寫入。 -->
+        <provider
+            android:name=".NextAlarmProvider"
+            android:authorities="com.example.oneshotalarm.nextalarm"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
         <receiver
             android:name=".NextAlarmWidgetProvider"
             android:exported="true">
