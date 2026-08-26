@@ -294,6 +294,20 @@
       const day = storedMealPlanDay(dateIso);
       const mealPlan = day && day.meal_plan ? day.meal_plan : null;
       if (!mealPlan) return;
+
+      // 過去嘅日子唔可以再郁：嗰啲餐已經食咗，重算只會洗走食過乜嘅記錄。
+      // 今日同將來照舊——撳邊餐就由嗰餐起重算。
+      if (String(dateIso) < isoFromYmd(ymdNow())) {
+        const menu = document.createElement("div");
+        menu.id = "oos-menu";
+        menu.className = "catalog-row-menu";
+        oosMenuNote(menu, "過去嘅日子唔可以重算");
+        oosMenuNote(menu, "（呢日食過乜係記錄，唔好改）");
+        document.body.appendChild(menu);
+        placeMenu(menu, openAt.x, openAt.y);
+        return;
+      }
+
       const items = (mealPlan.meal_items && Array.isArray(mealPlan.meal_items[meal]) ? mealPlan.meal_items[meal] : [])
         .filter((it) => it && it.row != null);
 
@@ -434,6 +448,7 @@
             nutrient_indicators: day.nutrient_indicators || {},
             meal_plan: day.meal_plan || {},
             swaps,
+            meal,
           }),
         });
         const data = await parseJsonSafe(r);

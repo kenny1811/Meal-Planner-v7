@@ -296,6 +296,7 @@ class OutOfStockResolveRequest(BaseModel):
     nutrient_indicators: dict[str, Any] = Field(default_factory=dict)
     meal_plan: dict[str, Any] = Field(default_factory=dict)
     swaps: list[MealItemSwap] = Field(default_factory=list)  # 指定食材，空＝唔指定
+    meal: str | None = None  # 右 click 咗邊餐（純為記 log；鎖邊幾餐仍然睇 locked_meals）
 
 
 class UiStateRequest(BaseModel):
@@ -921,10 +922,31 @@ def api_recalc(body: RecalcRequest) -> dict[str, Any]:
 
 
 @app.post("/api/oos-resolve")
-def api_oos_resolve(body: OutOfStockResolveRequest) -> dict[str, Any]:
+def api_oos_resolve(body: OutOfStockResolveRequest, request: Request) -> dict[str, Any]:
     """標記食材冇貨（營養清單暫停）並對未食嘅餐次做 partial-day re-solve。"""
     from meal_planner.nutrition_db import set_catalog_paused
     from meal_planner.preview import resolve_day_out_of_stock
+    from meal_planner.storage import log_resolve_event
+
+    settings = get_settings()
+    today_iso = datetime.now(ZoneInfo(settings.dates.timezone)).date().isoformat()
+    client = request.client.host if request.client else None
+    action = "swap" if body.swaps else ("out_of_stock" if body.row_index is not None else "regenerate")
+
+    # 過去嘅日子唔准再郁——嗰啲餐已經食咗，重算只會洗走食過乜嘅記錄。
+    # 今日同將來照舊：撳邊餐就由嗰餐起重算。
+    if str(body.date or "") < today_iso:
+        log_resolve_event(
+            plan_date=body.date, meal=body.meal, action=action,
+            row_index=body.row_index, row_name=None,
+            locked_meals=body.locked_meals,
+            swaps=[s.model_dump() for s in body.swaps],
+            client=client, outcome="blocked_past_date",
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"{body.date} 已經過去，唔可以再重算（過去嘅餐單係食過乜嘅記錄）。",
+        )
 
     try:
         paused_name = set_catalog_paused(body.row_index, True) if body.row_index is not None else None
@@ -938,6 +960,13 @@ def api_oos_resolve(body: OutOfStockResolveRequest) -> dict[str, Any]:
             body.locked_meals,
             forced_item_rows=forced or None,
         )
+        log_resolve_event(
+            plan_date=body.date, meal=body.meal, action=action,
+            row_index=body.row_index, row_name=paused_name,
+            locked_meals=body.locked_meals,
+            swaps=[s.model_dump() for s in body.swaps],
+            client=client, outcome="ok",
+        )
         return {"paused_name": paused_name, **day}
     except IndicatorDataError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -945,6 +974,17 @@ def api_oos_resolve(body: OutOfStockResolveRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Out-of-stock resolve failed: {e}") from e
+
+
+@app.get("/api/resolve-log")
+def api_resolve_log(limit: int = 100) -> dict[str, Any]:
+    """右 click 重算嘅歷史（邊日／邊餐／做過乜／邊部機）。"""
+    from meal_planner.storage import load_resolve_log
+
+    try:
+        return {"entries": load_resolve_log(limit)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Load resolve log failed: {e}") from e
 
 
 @app.get("/api/item-candidates")

@@ -252,6 +252,20 @@ def _ensure_plan_schema(conn: sqlite3.Connection) -> None:
             value_json TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS resolve_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            plan_date TEXT NOT NULL,
+            meal TEXT,
+            action TEXT,
+            row_index INTEGER,
+            row_name TEXT,
+            locked_meals TEXT,
+            swaps_json TEXT,
+            client TEXT,
+            outcome TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_resolve_log_ts ON resolve_log(ts);
         """
     )
 
@@ -348,6 +362,12 @@ def load_ui_snapshot() -> dict[str, Any]:
     return _load_ui()
 
 
+# 每日留幾多個舊版本。以前係每次存都 DELETE 晒再寫一版，所有日共用同一個
+# timestamp——出事想查「幾時變咗、之前係乜」係查唔到嘅。而家內容一樣就唔寫，
+# 唔一樣先加多一版，超額就丟最舊嗰啲。
+KEEP_PLAN_VERSIONS = 12
+
+
 def save_plan_versions(days: list[dict[str, Any]]) -> dict[str, Any]:
     ts = datetime.now().isoformat(timespec="seconds")
     saved_dates: list[str] = []
@@ -356,13 +376,95 @@ def save_plan_versions(days: list[dict[str, Any]]) -> dict[str, Any]:
             date_s = str(day.get("date") or "")
             if not date_s:
                 continue
-            conn.execute("DELETE FROM plan_versions WHERE date = ?", (date_s,))
+            day_json = _sqlite_json_dumps(day)
+            latest = conn.execute(
+                "SELECT day_json FROM plan_versions WHERE date = ? ORDER BY timestamp DESC LIMIT 1",
+                (date_s,),
+            ).fetchone()
+            if latest is not None and str(latest["day_json"]) == day_json:
+                continue  # 內容一模一樣，唔使再開一版
             conn.execute(
-                "INSERT INTO plan_versions(date, timestamp, day_json) VALUES (?, ?, ?)",
-                (date_s, ts, _sqlite_json_dumps(day)),
+                "INSERT OR REPLACE INTO plan_versions(date, timestamp, day_json) VALUES (?, ?, ?)",
+                (date_s, ts, day_json),
+            )
+            conn.execute(
+                """
+                DELETE FROM plan_versions
+                WHERE date = ?
+                  AND timestamp NOT IN (
+                      SELECT timestamp FROM plan_versions
+                      WHERE date = ? ORDER BY timestamp DESC LIMIT ?
+                  )
+                """,
+                (date_s, date_s, KEEP_PLAN_VERSIONS),
             )
             saved_dates.append(date_s)
     return {"timestamp": ts, "saved_dates": saved_dates}
+
+
+def log_resolve_event(
+    *,
+    plan_date: str,
+    meal: str | None,
+    action: str,
+    row_index: int | None,
+    row_name: str | None,
+    locked_meals: list[str] | None,
+    swaps: list[dict[str, Any]] | None,
+    client: str | None,
+    outcome: str,
+) -> None:
+    """每次右 click 重算都記一筆（包括俾人擋咗嘅）——出事唔使靠估。"""
+    with _plan_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO resolve_log(
+                ts, plan_date, meal, action, row_index, row_name,
+                locked_meals, swaps_json, client, outcome
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                datetime.now().isoformat(timespec="seconds"),
+                str(plan_date or ""),
+                str(meal) if meal else None,
+                str(action or ""),
+                int(row_index) if row_index is not None else None,
+                str(row_name) if row_name else None,
+                ",".join(str(x) for x in (locked_meals or [])),
+                _sqlite_json_dumps(swaps or []),
+                str(client) if client else None,
+                str(outcome or ""),
+            ),
+        )
+
+
+def load_resolve_log(limit: int = 100) -> list[dict[str, Any]]:
+    with _plan_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT ts, plan_date, meal, action, row_index, row_name,
+                   locked_meals, swaps_json, client, outcome
+            FROM resolve_log ORDER BY id DESC LIMIT ?
+            """,
+            (max(1, min(int(limit), 1000)),),
+        ).fetchall()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        out.append(
+            {
+                "ts": str(r["ts"]),
+                "date": str(r["plan_date"]),
+                "meal": r["meal"],
+                "action": r["action"],
+                "row_index": r["row_index"],
+                "row_name": r["row_name"],
+                "locked_meals": [x for x in str(r["locked_meals"] or "").split(",") if x],
+                "swaps": _sqlite_json_loads(str(r["swaps_json"] or "[]"), []),
+                "client": r["client"],
+                "outcome": r["outcome"],
+            }
+        )
+    return out
 
 
 def load_latest_versions(dates: list[str], versions: dict[str, str] | None = None) -> dict[str, Any]:
