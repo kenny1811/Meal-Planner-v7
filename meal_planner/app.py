@@ -921,6 +921,22 @@ def api_recalc(body: RecalcRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Recalculation failed: {e}") from e
 
 
+def _is_yesterday_last_meal(body: "OutOfStockResolveRequest", today_iso: str) -> bool:
+    """前一日 + 撳緊嗰日最後一餐（通常係晚餐）＝仲未食，照准重算。"""
+    from meal_planner.meal_schedule import MEAL_LABELS
+    from meal_planner.preview import _visible_meals_from_resolved
+
+    try:
+        yesterday = (date.fromisoformat(today_iso) - timedelta(days=1)).isoformat()
+    except ValueError:
+        return False
+    if str(body.date or "") != yesterday or not body.meal:
+        return False
+    visible = _visible_meals_from_resolved(body.meal_plan if isinstance(body.meal_plan, dict) else {})
+    ordered = [m for m in MEAL_LABELS if m in visible]
+    return bool(ordered) and str(body.meal) == ordered[-1]
+
+
 @app.post("/api/oos-resolve")
 def api_oos_resolve(body: OutOfStockResolveRequest, request: Request) -> dict[str, Any]:
     """標記食材冇貨（營養清單暫停）並對未食嘅餐次做 partial-day re-solve。"""
@@ -934,8 +950,9 @@ def api_oos_resolve(body: OutOfStockResolveRequest, request: Request) -> dict[st
     action = "swap" if body.swaps else ("out_of_stock" if body.row_index is not None else "regenerate")
 
     # 過去嘅日子唔准再郁——嗰啲餐已經食咗，重算只會洗走食過乜嘅記錄。
-    # 今日同將來照舊：撳邊餐就由嗰餐起重算。
-    if str(body.date or "") < today_iso:
+    # 例外：前一日嘅最後一餐照准。用戶過咗 24:00 先食晚餐，喺佢嚟講嗰餐仲未食，
+    # 但系統日曆已經跳咗做第二日。
+    if str(body.date or "") < today_iso and not _is_yesterday_last_meal(body, today_iso):
         log_resolve_event(
             plan_date=body.date, meal=body.meal, action=action,
             row_index=body.row_index, row_name=None,

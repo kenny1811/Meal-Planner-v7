@@ -205,6 +205,15 @@
       return idx > 0 ? MEALS.slice(0, idx) : [];
     }
 
+    // 前一日最後一餐（通常係晚餐）：過咗 24:00 先食，喺用戶嚟講仲未食，所以照准。
+    function isYesterdayLastMeal(dateIso, meal, mealPlan) {
+      const yesterday = isoFromYmd(ymdAddDays(ymdNow(), -1));
+      if (String(dateIso) !== yesterday || !meal) return false;
+      const resolved = (mealPlan && mealPlan.meal_times_resolved) || {};
+      const visible = MEALS.filter((m) => String(resolved[m] == null ? "" : resolved[m]).trim() !== "");
+      return visible.length > 0 && meal === visible[visible.length - 1];
+    }
+
     function hideOosMenu() {
       const menu = document.getElementById("oos-menu");
       if (menu) menu.remove();
@@ -296,8 +305,9 @@
       if (!mealPlan) return;
 
       // 過去嘅日子唔可以再郁：嗰啲餐已經食咗，重算只會洗走食過乜嘅記錄。
-      // 今日同將來照舊——撳邊餐就由嗰餐起重算。
-      if (String(dateIso) < isoFromYmd(ymdNow())) {
+      // 例外：前一日嘅最後一餐照准——過咗 24:00 先食晚餐，喺你嚟講嗰餐仲未食。
+      // 今日同將來完全冇限制，撳邊餐就由嗰餐起重算。
+      if (String(dateIso) < isoFromYmd(ymdNow()) && !isYesterdayLastMeal(dateIso, meal, mealPlan)) {
         const menu = document.createElement("div");
         menu.id = "oos-menu";
         menu.className = "catalog-row-menu";
