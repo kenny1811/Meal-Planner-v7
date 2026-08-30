@@ -28,6 +28,12 @@ final class AlarmStore {
     private static final String KEY_LAST_IMPORT_AT = "last_import_at_epoch_ms";
     private static final String KEY_WATCH_ALARM_ENABLED = "watch_alarm_enabled";
     private static final String KEY_SCHEDULE_GRID_VARIANTS = "schedule_grid_variants_json";
+    // 「上一個響咗」長存版。唔靠 alarms list 反推：排新 plan 會成個 list
+    // 換走，啱啱響完嗰個（收工之後成日都係咁）就跟 plan 陪葬埋 ——
+    // 對面個 launcher 嘅 Prev 會突然倒退去第二個 app 嘅舊鬧鐘。
+    // clear() 都特登唔剷呢兩條：清 plan 唔等於改寫歷史。
+    private static final String KEY_LAST_FIRED_AT = "last_fired_at_epoch_ms";
+    private static final String KEY_LAST_FIRED_LABEL = "last_fired_label";
 
     private AlarmStore() {
     }
@@ -215,6 +221,21 @@ final class AlarmStore {
                 nextAt = triggerAt;
             }
         }
+        // 長存嗰份都要問埋：plan 換咗之後 list 入面已經冇已響嗰個。
+        // 齋要 label 一個欄位就夠 —— 三個出口（provider、widget、手錶 tile）
+        // 都係淨讀 label。
+        long storedAt = prefs(context).getLong(KEY_LAST_FIRED_AT, 0L);
+        if (storedAt > prevAt && storedAt <= now) {
+            try {
+                JSONObject stored = new JSONObject();
+                stored.put("label", prefs(context).getString(KEY_LAST_FIRED_LABEL, ""));
+                stored.put("trigger_at_epoch_ms", storedAt);
+                prev = stored;
+                prevAt = storedAt;
+            } catch (JSONException ignored) {
+                // 砌唔成就用返 scan 嗰個，唔好連 next 都陪葬
+            }
+        }
         return new PrevNext(prev, prevAt, next, nextAt == Long.MAX_VALUE ? 0L : nextAt);
     }
 
@@ -250,6 +271,14 @@ final class AlarmStore {
                     alarm.put("fired_at_epoch_ms", firedAt);
                 } catch (JSONException ignored) {
                 }
+                // 響嗰刻另外長存一份 —— 呢度係唯一有齊時間同標籤嘅位
+                // （AlarmReceiver 同手錶 dismiss 兩條路都經呢度入嚟）。
+                // 時間用排程嗰個 trigger_at，同 findPrevNext 嘅口徑一致。
+                long at = alarm.optLong("trigger_at_epoch_ms", firedAt);
+                prefs(context).edit()
+                        .putLong(KEY_LAST_FIRED_AT, at)
+                        .putString(KEY_LAST_FIRED_LABEL, alarm.optString("label", ""))
+                        .apply();
             }
             next.put(alarm);
         }
