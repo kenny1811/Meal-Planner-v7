@@ -54,6 +54,7 @@ final class AlarmStore {
                 .putString(KEY_PLAN_DATE, planDate == null ? "" : planDate)
                 .putString(KEY_ROSTER_CODE, rosterCode == null ? "" : rosterCode)
                 .apply();
+        NextAlarmProvider.notifyChanged(context);
     }
 
     static JSONArray getAlarms(Context context) {
@@ -119,6 +120,7 @@ final class AlarmStore {
             editor.putString(KEY_MEAL_PLAN_JSON_VERSION_BY_DATE_PREFIX + normalizedDate, version == null ? "" : version);
         }
         editor.apply();
+        NextAlarmProvider.notifyChanged(context);     // 更碼跟餐單 JSON 走
     }
 
     static String getMealPlanJson(Context context) {
@@ -283,6 +285,7 @@ final class AlarmStore {
             next.put(alarm);
         }
         prefs(context).edit().putString(KEY_ALARMS, next.toString()).apply();
+        NextAlarmProvider.notifyChanged(context);     // 響咗＝Prev／Next 都變
     }
 
     static void clear(Context context) {
@@ -304,6 +307,7 @@ final class AlarmStore {
             }
         }
         editor.apply();
+        NextAlarmProvider.notifyChanged(context);
     }
 
     private static SharedPreferences prefs(Context context) {
