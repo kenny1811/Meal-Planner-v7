@@ -26,10 +26,12 @@ public class PhoneBatteryDataListenerService extends WearableListenerService {
 
             DataMap dataMap = DataMapItem.fromDataItem(event.getDataItem()).getDataMap();
             int percent = dataMap.getInt(PhoneBatteryStore.KEY_PERCENT, -1);
-            long timestamp = dataMap.getLong(PhoneBatteryStore.KEY_TIMESTAMP, System.currentTimeMillis());
             if (percent >= 0) {
                 Log.d(TAG, "Received phone battery " + percent + "%");
-                PhoneBatteryStore.save(this, percent, timestamp);
+                // Stamp with the watch clock, not the phone's: the complication ages this
+                // value against System.currentTimeMillis() here, so a skew between the two
+                // devices would otherwise make fresh data look stale (or the reverse).
+                PhoneBatteryStore.save(this, percent, System.currentTimeMillis());
                 requestComplicationUpdate();
             }
         }

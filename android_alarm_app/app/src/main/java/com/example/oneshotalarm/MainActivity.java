@@ -140,6 +140,7 @@ public class MainActivity extends Activity {
         loadDraftFromStore();
         render();
         handleTestDailyImportIntent(getIntent());
+        handleOpenTabIntent(getIntent());
         NextAlarmWidgetProvider.updateAll(this);
         requestNotificationPermissionIfNeeded();
         maybeRequestBatteryExemption();
@@ -153,6 +154,7 @@ public class MainActivity extends Activity {
         loadDraftFromStore();
         render();
         handleTestDailyImportIntent(intent);
+        handleOpenTabIntent(intent);
     }
 
     @Override
@@ -606,6 +608,38 @@ public class MainActivity extends Activity {
                 enabled ? "手錶鬧鐘已開" : "手錶鬧鐘已關",
                 Toast.LENGTH_SHORT
         ).show();
+    }
+
+    /**
+     * 外面（例如門前直樹Launcher 個 W widget）撳落嚟嗰陣，可以指定一開就落邊一版。
+     * 值：{@value #TAB_MEAL}／{@value #TAB_SHIFT}／{@value #TAB_DUTY}／{@value #TAB_ONOFF}。
+     */
+    public static final String EXTRA_OPEN_TAB = "open_tab";
+    public static final String TAB_MEAL = "meal";
+    public static final String TAB_SHIFT = "shift";
+    public static final String TAB_DUTY = "duty";
+    public static final String TAB_ONOFF = "onoff";
+
+    private void handleOpenTabIntent(Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        String tab = intent.getStringExtra(EXTRA_OPEN_TAB);
+        if (tab == null || tab.isEmpty()) {
+            return;
+        }
+        if (TAB_MEAL.equals(tab)) {
+            switchPage(PAGE_MEAL);
+        } else if (TAB_SHIFT.equals(tab)) {
+            switchPage(PAGE_SHIFT);
+        } else if (TAB_DUTY.equals(tab)) {
+            switchPage(PAGE_DUTY);
+        } else if (TAB_ONOFF.equals(tab)) {
+            switchPage(PAGE_ONOFF);
+        }
+        // 用完即棄。個 activity 係 singleTop，setIntent() 會留住呢個 intent，
+        // 唔清走嘅話下次轉螢幕方向重建，又會硬跳返去嗰版，蓋走你自己揀咗嘅 tab。
+        intent.removeExtra(EXTRA_OPEN_TAB);
     }
 
     private void switchPage(int page) {

@@ -29,6 +29,11 @@ final class BatterySync {
     }
 
     static void schedulePeriodic(Context context) {
+        // The HKO sunrise/sunset sync was removed once the watch face started deriving sun
+        // times from [DAY_OF_YEAR] itself. Cancel its leftover periodic work: without this an
+        // already-installed phone keeps waking every day to instantiate a Worker that is gone.
+        WorkManager.getInstance(context).cancelUniqueWork("hko_sun_times_sync");
+
         PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(
                 PhoneBatteryWorker.class,
                 15,

@@ -6,7 +6,7 @@
     <Scene backgroundColor="#ff000000">
         <Condition>
             <Expressions>
-                <Expression name="dateColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 270]]></Expression>
+                <Expression name="dateColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="dateColor0">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -25,7 +25,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 300]]></Expression>
+                <Expression name="dateColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="dateColor1">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -44,7 +44,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 320]]></Expression>
+                <Expression name="dateColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="dateColor2">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -63,7 +63,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 340]]></Expression>
+                <Expression name="dateColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="dateColor3">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -82,7 +82,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 360]]></Expression>
+                <Expression name="dateColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="dateColor4">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -101,7 +101,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 380]]></Expression>
+                <Expression name="dateColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="dateColor5">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -120,7 +120,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 405]]></Expression>
+                <Expression name="dateColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="dateColor6">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -139,7 +139,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 435]]></Expression>
+                <Expression name="dateColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="dateColor7">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -158,7 +158,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 480]]></Expression>
+                <Expression name="dateColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="dateColor8">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -177,7 +177,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 600]]></Expression>
+                <Expression name="dateColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
             </Expressions>
             <Compare expression="dateColor9">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -196,7 +196,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 840]]></Expression>
+                <Expression name="dateColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
             </Expressions>
             <Compare expression="dateColor10">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -215,7 +215,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 960]]></Expression>
+                <Expression name="dateColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="dateColor11">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -234,7 +234,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1020]]></Expression>
+                <Expression name="dateColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="dateColor12">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -253,7 +253,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1060]]></Expression>
+                <Expression name="dateColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="dateColor13">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -272,7 +272,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1090]]></Expression>
+                <Expression name="dateColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="dateColor14">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -291,7 +291,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1120]]></Expression>
+                <Expression name="dateColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="dateColor15">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -310,7 +310,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1150]]></Expression>
+                <Expression name="dateColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="dateColor16">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -329,7 +329,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1185]]></Expression>
+                <Expression name="dateColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="dateColor17">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -348,7 +348,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="dateColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1230]]></Expression>
+                <Expression name="dateColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="dateColor18">
                 <PartText x="0" y="0" width="450" height="128" alpha="255">
@@ -400,7 +400,7 @@
 
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 270]]></Expression>
+                <Expression name="mainTimeColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor0">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -417,7 +417,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 300]]></Expression>
+                <Expression name="mainTimeColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor1">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -434,7 +434,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 320]]></Expression>
+                <Expression name="mainTimeColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor2">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -451,7 +451,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 340]]></Expression>
+                <Expression name="mainTimeColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor3">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -468,7 +468,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 360]]></Expression>
+                <Expression name="mainTimeColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor4">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -485,7 +485,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 380]]></Expression>
+                <Expression name="mainTimeColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor5">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -502,7 +502,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 405]]></Expression>
+                <Expression name="mainTimeColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor6">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -519,7 +519,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 435]]></Expression>
+                <Expression name="mainTimeColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor7">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -536,7 +536,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 480]]></Expression>
+                <Expression name="mainTimeColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor8">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -553,7 +553,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 600]]></Expression>
+                <Expression name="mainTimeColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor9">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -570,7 +570,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 840]]></Expression>
+                <Expression name="mainTimeColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor10">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -587,7 +587,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 960]]></Expression>
+                <Expression name="mainTimeColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor11">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -604,7 +604,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1020]]></Expression>
+                <Expression name="mainTimeColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor12">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -621,7 +621,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1060]]></Expression>
+                <Expression name="mainTimeColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor13">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -638,7 +638,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1090]]></Expression>
+                <Expression name="mainTimeColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor14">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -655,7 +655,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1120]]></Expression>
+                <Expression name="mainTimeColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor15">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -672,7 +672,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1150]]></Expression>
+                <Expression name="mainTimeColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor16">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -689,7 +689,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1185]]></Expression>
+                <Expression name="mainTimeColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor17">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -706,7 +706,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="mainTimeColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1230]]></Expression>
+                <Expression name="mainTimeColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="mainTimeColor18">
                 <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
@@ -754,7 +754,7 @@
 
         <Condition>
             <Expressions>
-                <Expression name="secondsColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 270]]></Expression>
+                <Expression name="secondsColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor0">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -766,7 +766,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 300]]></Expression>
+                <Expression name="secondsColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor1">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -778,7 +778,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 320]]></Expression>
+                <Expression name="secondsColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor2">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -790,7 +790,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 340]]></Expression>
+                <Expression name="secondsColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor3">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -802,7 +802,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 360]]></Expression>
+                <Expression name="secondsColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor4">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -814,7 +814,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 380]]></Expression>
+                <Expression name="secondsColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor5">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -826,7 +826,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 405]]></Expression>
+                <Expression name="secondsColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor6">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -838,7 +838,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 435]]></Expression>
+                <Expression name="secondsColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor7">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -850,7 +850,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 480]]></Expression>
+                <Expression name="secondsColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor8">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -862,7 +862,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 600]]></Expression>
+                <Expression name="secondsColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor9">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -874,7 +874,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 840]]></Expression>
+                <Expression name="secondsColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor10">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -886,7 +886,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 960]]></Expression>
+                <Expression name="secondsColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor11">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -898,7 +898,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1020]]></Expression>
+                <Expression name="secondsColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor12">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -910,7 +910,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1060]]></Expression>
+                <Expression name="secondsColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor13">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -922,7 +922,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1090]]></Expression>
+                <Expression name="secondsColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor14">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -934,7 +934,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1120]]></Expression>
+                <Expression name="secondsColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor15">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -946,7 +946,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1150]]></Expression>
+                <Expression name="secondsColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor16">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -958,7 +958,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1185]]></Expression>
+                <Expression name="secondsColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor17">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -970,7 +970,7 @@
             <Default>
         <Condition>
             <Expressions>
-                <Expression name="secondsColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1230]]></Expression>
+                <Expression name="secondsColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
             </Expressions>
             <Compare expression="secondsColor18">
                 <DigitalClock x="0" y="0" width="450" height="450">
@@ -1413,7 +1413,7 @@
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 270]]></Expression>
+                        <Expression name="prevAlarmTimeColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor0">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1428,7 +1428,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 300]]></Expression>
+                        <Expression name="prevAlarmTimeColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor1">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1443,7 +1443,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 320]]></Expression>
+                        <Expression name="prevAlarmTimeColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor2">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1458,7 +1458,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 340]]></Expression>
+                        <Expression name="prevAlarmTimeColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor3">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1473,7 +1473,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 360]]></Expression>
+                        <Expression name="prevAlarmTimeColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor4">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1488,7 +1488,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 380]]></Expression>
+                        <Expression name="prevAlarmTimeColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor5">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1503,7 +1503,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 405]]></Expression>
+                        <Expression name="prevAlarmTimeColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor6">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1518,7 +1518,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 435]]></Expression>
+                        <Expression name="prevAlarmTimeColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor7">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1533,7 +1533,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 480]]></Expression>
+                        <Expression name="prevAlarmTimeColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor8">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1548,7 +1548,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 600]]></Expression>
+                        <Expression name="prevAlarmTimeColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor9">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1563,7 +1563,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 840]]></Expression>
+                        <Expression name="prevAlarmTimeColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor10">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1578,7 +1578,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 960]]></Expression>
+                        <Expression name="prevAlarmTimeColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor11">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1593,7 +1593,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1020]]></Expression>
+                        <Expression name="prevAlarmTimeColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor12">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1608,7 +1608,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1060]]></Expression>
+                        <Expression name="prevAlarmTimeColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor13">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1623,7 +1623,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1090]]></Expression>
+                        <Expression name="prevAlarmTimeColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor14">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1638,7 +1638,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1120]]></Expression>
+                        <Expression name="prevAlarmTimeColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor15">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1653,7 +1653,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1150]]></Expression>
+                        <Expression name="prevAlarmTimeColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor16">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1668,7 +1668,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1185]]></Expression>
+                        <Expression name="prevAlarmTimeColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor17">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1683,7 +1683,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="prevAlarmTimeColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1230]]></Expression>
+                        <Expression name="prevAlarmTimeColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="prevAlarmTimeColor18">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1745,7 +1745,7 @@
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 270]]></Expression>
+                        <Expression name="nextAlarmTimeColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor0">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1760,7 +1760,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 300]]></Expression>
+                        <Expression name="nextAlarmTimeColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor1">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1775,7 +1775,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 320]]></Expression>
+                        <Expression name="nextAlarmTimeColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor2">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1790,7 +1790,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 340]]></Expression>
+                        <Expression name="nextAlarmTimeColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor3">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1805,7 +1805,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 360]]></Expression>
+                        <Expression name="nextAlarmTimeColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor4">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1820,7 +1820,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 380]]></Expression>
+                        <Expression name="nextAlarmTimeColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor5">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1835,7 +1835,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 405]]></Expression>
+                        <Expression name="nextAlarmTimeColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor6">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1850,7 +1850,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 435]]></Expression>
+                        <Expression name="nextAlarmTimeColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor7">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1865,7 +1865,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 480]]></Expression>
+                        <Expression name="nextAlarmTimeColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor8">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1880,7 +1880,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 600]]></Expression>
+                        <Expression name="nextAlarmTimeColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor9">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1895,7 +1895,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 840]]></Expression>
+                        <Expression name="nextAlarmTimeColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor10">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1910,7 +1910,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 960]]></Expression>
+                        <Expression name="nextAlarmTimeColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor11">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1925,7 +1925,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1020]]></Expression>
+                        <Expression name="nextAlarmTimeColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor12">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1940,7 +1940,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1060]]></Expression>
+                        <Expression name="nextAlarmTimeColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor13">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1955,7 +1955,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1090]]></Expression>
+                        <Expression name="nextAlarmTimeColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor14">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1970,7 +1970,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1120]]></Expression>
+                        <Expression name="nextAlarmTimeColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor15">
                         <PartText x="0" y="0" width="207" height="40">
@@ -1985,7 +1985,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1150]]></Expression>
+                        <Expression name="nextAlarmTimeColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor16">
                         <PartText x="0" y="0" width="207" height="40">
@@ -2000,7 +2000,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1185]]></Expression>
+                        <Expression name="nextAlarmTimeColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor17">
                         <PartText x="0" y="0" width="207" height="40">
@@ -2015,7 +2015,7 @@
                     <Default>
                 <Condition>
                     <Expressions>
-                        <Expression name="nextAlarmTimeColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < 1230]]></Expression>
+                        <Expression name="nextAlarmTimeColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
                     </Expressions>
                     <Compare expression="nextAlarmTimeColor18">
                         <PartText x="0" y="0" width="207" height="40">

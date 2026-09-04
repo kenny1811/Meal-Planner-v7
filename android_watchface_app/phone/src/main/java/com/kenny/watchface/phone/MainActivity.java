@@ -15,7 +15,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        SunTimesSync.scheduleDailyAt0400(this);
         BatterySync.schedulePeriodic(this);
 
         LinearLayout root = new LinearLayout(this);
@@ -48,7 +47,6 @@ public class MainActivity extends Activity {
         sync.setText("Sync now");
         sync.setOnClickListener(v -> {
             BatterySync.syncNow(this);
-            SunTimesSync.syncNowAsync(this);
             updateStatus();
         });
         root.addView(sync, buttonParams());
