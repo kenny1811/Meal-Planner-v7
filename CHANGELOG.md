@@ -4,6 +4,10 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.8.25 — 07/09/2026 17:30
+- Watch face companion (phone): removed the stale "Sunrise/sunset syncs from HKO daily
+  at 04:00" line — the watch face works out sun times on its own, nothing is synced.
+
 ## 7.8.24 — 27/08/2026 24:40
 - Yesterday's last meal can still be re-generated (out of stock or swap), for dinners
   eaten after midnight. Everything earlier in the past stays locked.

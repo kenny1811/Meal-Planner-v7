@@ -66,7 +66,6 @@ public class MainActivity extends Activity {
         int percent = BatterySync.readBatteryPercent(this);
         String percentText = percent >= 0 ? percent + "%" : "--%";
         status.setText("Phone battery " + percentText
-                + "\nPhone battery syncs every 15 minutes."
-                + "\nSunrise/sunset syncs from HKO daily at 04:00.");
+                + "\nPhone battery syncs every 15 minutes.");
     }
 }
