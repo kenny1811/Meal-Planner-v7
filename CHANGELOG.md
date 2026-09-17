@@ -4,6 +4,12 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.9.25 — 17/09/2026 22:28
+- Schedule grid: a row starting with `*` (e.g. `* 飯 55`) keeps the duration you typed,
+  and the next row moves to start right after it — on the web editor and the phone.
+- Schedule grid editor: Disable / Enable Row is now in the right-click menu instead of
+  its own column.
+
 ## 7.8.25 — 07/09/2026 17:30
 - Watch face companion (phone): removed the stale "Sunrise/sunset syncs from HKO daily
   at 04:00" line — the watch face works out sun times on its own, nothing is synced.

@@ -305,6 +305,9 @@ def split_content_duration(label: Any) -> tuple[str, str]:
     content = text[: match.start()].rstrip()
     if not content:
         return text, ""
+    # 星號行「* 飯 55」：尾數係人手打嘅固定時長，要留喺內容度（同網頁一樣），唔係會變返普通行。
+    if text.startswith("*"):
+        return text, match.group(0).strip()
     return content, match.group(0).strip()
 
 

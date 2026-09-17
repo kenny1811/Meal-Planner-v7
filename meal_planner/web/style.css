@@ -2520,30 +2520,9 @@
       user-select: none;
     }
 
-    /* 行位表停用：成行 dim（唔要刪除線），最前面窄欄一粒 toggle。 */
+    /* 行位表停用：成行 dim（唔要刪除線）；切換喺 right-click menu。 */
     tr.maint-row-off > td {
       opacity: 0.45;
-    }
-    tr.maint-row-off > td.maint-off-cell {
-      opacity: 1;
-    }
-    td.maint-off-cell {
-      text-align: center;
-      padding: 0;
-    }
-    .maint-off-toggle {
-      font-size: 10px;
-      line-height: 1;
-      padding: 2px 4px;
-      cursor: pointer;
-      border: 1px solid var(--grid);
-      border-radius: 3px;
-      background: #fff;
-      color: var(--muted);
-    }
-    .maint-off-toggle:hover {
-      border-color: var(--accent);
-      color: var(--accent);
     }
 
 /* Typhoon：模擬邊一個工作日（落波之後最近嗰個）——同落波日期分得開 */

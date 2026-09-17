@@ -17,6 +17,7 @@ from meal_planner.schedule_grid import (
     first_food_time,
     grid_row_matches_roster,
     load_schedule_rows_from_rows,
+    recompute_durations,
     report_start_end,
     resolve_meal_times_display,
     rows_for_roster,
@@ -184,6 +185,48 @@ class ScheduleGridTests(unittest.TestCase):
         self.assertEqual(split_content_duration("- 簽簿"), ("- 簽簿", ""))
         self.assertEqual(split_content_duration("報收工"), ("報收工", ""))
         self.assertEqual(split_content_duration("105"), ("105", ""))
+
+    def test_split_content_duration_keeps_star_row_number_in_content(self):
+        self.assertEqual(split_content_duration("* 飯 55"), ("* 飯 55", "55"))
+        self.assertEqual(split_content_duration("* 飯"), ("* 飯", ""))
+
+
+class StarRowFixedDurationTests(unittest.TestCase):
+    def _rows(self):
+        return load_schedule_rows_from_rows(
+            [
+                ["更碼", "時間", "內容", "時長", "生效日期", "停用"],
+                ["VPP", "13:15", "* 飯 55", "", "", ""],
+                ["VPP", "13:45", "- 報平安更", "", "", ""],
+                ["VPP", "14:10", "埋位", "", "", ""],
+                ["VPP", "17:25", "Break 14", "", "", ""],
+                ["VPP", "17:39", "埋位", "", "", ""],
+            ]
+        )
+
+    def test_star_row_reads_fixed_duration_from_content(self):
+        rows = self._rows()
+        self.assertEqual(rows[0].fixed_duration_min, 55)
+        self.assertEqual(rows[0].duration_min, 55)
+        self.assertFalse(rows[0].is_marker)
+        self.assertIsNone(rows[2].fixed_duration_min)
+
+    def test_recompute_keeps_star_duration_and_derives_the_rest(self):
+        rows = recompute_durations(self._rows())
+        self.assertEqual([r.duration_min for r in rows], [55, None, 195, 14, None])
+
+    def test_star_row_without_number_is_a_normal_row(self):
+        rows = recompute_durations(
+            load_schedule_rows_from_rows(
+                [
+                    ["更碼", "時間", "內容", "時長"],
+                    ["VPP", "13:15", "* 飯", ""],
+                    ["VPP", "14:10", "埋位", ""],
+                ]
+            )
+        )
+        self.assertIsNone(rows[0].fixed_duration_min)
+        self.assertEqual(rows[0].duration_min, 55)
 
 
 class ReportStartEndWeekdayTests(unittest.TestCase):

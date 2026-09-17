@@ -30,8 +30,15 @@
       const newVersion = menu.querySelector('[data-maint-row-action="new-version"]');
       const deleteVersion = menu.querySelector('[data-maint-row-action="delete-version"]');
       const addShiftCode = menu.querySelector('[data-maint-row-action="add-shift-code"]');
+      const toggleDisable = menu.querySelector('[data-maint-row-action="toggle-disable"]');
       const versionActionVisible = activeMaintSheetKey === "schedule_grid" && Number.isInteger(rowIndex) && rowIndex > 0;
       const scheduleGridVisible = activeMaintSheetKey === "schedule_grid";
+      if (toggleDisable) {
+        // 行位表停用／啟用：由 right-click menu 做，唔再佔一欄。
+        toggleDisable.style.display = versionActionVisible ? "" : "none";
+        const row = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows[rowIndex] : null;
+        toggleDisable.textContent = versionActionVisible && isScheduleGridRowDisabled(row) ? "Enable Row" : "Disable Row";
+      }
       if (addShiftCode) {
         addShiftCode.style.display = scheduleGridVisible ? "" : "none";
       }
@@ -63,6 +70,10 @@
       }
       if (action === "add-shift-code") {
         addScheduleGridShiftCodeRows(rowIndex);
+        return;
+      }
+      if (action === "toggle-disable") {
+        toggleScheduleGridRowDisabled(rowIndex);
         return;
       }
       if (activeMaintSheetKey === "schedule_grid" && (action === "insert" || action === "append")) {
@@ -186,7 +197,7 @@
       if (focus) focusMaintCell(focus, true);
     }
 
-    // 行位表「停用」欄係 logical field：唔會當一般欄 render，改為每行一粒 toggle + 成行 dim。
+    // 行位表「停用」欄係 logical field：唔會當一般欄 render，改為 right-click menu 切換 + 成行 dim。
     const SCHEDULE_GRID_DISABLED_HEADER = "停用";
 
     function scheduleGridDisabledColIdx() {
@@ -203,12 +214,7 @@
 
     function maintRowHtml(row, rIdx, cols, formKey, isShiftCodeCol) {
       const disabledColIdx = scheduleGridDisabledColIdx();
-      const toggleCell = disabledColIdx < 0
-        ? ""
-        : (rIdx === 0
-          ? `<td data-form-col-key="${formKey}_col_off"></td>`
-          : `<td class="maint-off-cell"><button type="button" class="maint-off-toggle" data-maint-disable-row="${rIdx}" title="停用／啟用呢格行位（停用＝當日冇咗，時長會自動吸收）">${isScheduleGridRowDisabled(row) ? "Enable" : "Disable"}</button></td>`);
-      return toggleCell + Array.from({ length: cols }, (_, cIdx) => {
+      return Array.from({ length: cols }, (_, cIdx) => {
         if (cIdx === disabledColIdx) return "";
         const value = formatMaintTimeValue(maintSheetPayload.sheet_key, rIdx, cIdx, Array.isArray(row) ? row[cIdx] : "");
         const resizeKey = rIdx === 0 ? ` data-form-col-key="${formKey}_col_${cIdx}"` : "";
@@ -622,6 +628,8 @@
       const s = String(text ?? "");
       if (!s.trim()) return s;
       if (s.trimStart().startsWith("-")) return s;
+      // 星號行嘅尾數係人手打嘅時長，唔可以俾自動計嘅數蓋過。
+      if (s.trimStart().startsWith("*")) return s;
       if (!Number.isFinite(minutes)) return s.replace(/\s+\d+\s*$/, "").trimEnd();
       const rounded = Math.round(minutes);
       if (/\s+\d+\s*$/.test(s)) return s.replace(/\s+\d+\s*$/, ` ${rounded}`);
@@ -631,6 +639,54 @@
     function isScheduleGridMarkerRow(row, cols) {
       if (!Array.isArray(row) || cols.content < 0) return false;
       return String(row[cols.content] || "").trimStart().startsWith("-");
+    }
+
+    /**
+     * 星號行：「* 飯 55」＝時長 55 由人手打，唔係計出嚟；
+     * 由呢行原本位置向下搵第一個唔係 `-`／`*` 開頭嘅行（停用與否唔理），
+     * 將佢個時間改做「星號行時間 + 55」。星號行同 marker 行本身唔郁。
+     */
+    function isScheduleGridStarRow(row, cols) {
+      if (!Array.isArray(row) || cols.content < 0) return false;
+      return String(row[cols.content] || "").trimStart().startsWith("*");
+    }
+
+    function scheduleGridStarMinutes(content) {
+      const m = String(content ?? "").trim().match(/^\*.*?\s(\d{1,3})$/);
+      return m ? Number(m[1]) : null;
+    }
+
+    function clockFromMinutes(minutes) {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    }
+
+    function applyScheduleGridStarRows(rows, cols, onlyGroupKey = "") {
+      if (cols.code < 0 || cols.time < 0 || cols.content < 0) return rows;
+      rows.forEach((row, idx) => {
+        if (idx === 0 || !Array.isArray(row)) return;
+        const n = scheduleGridStarMinutes(row[cols.content]);
+        const start = timeMinutes(row[cols.time]);
+        if (n == null || start == null) return;
+        const key = scheduleGridGroupKey(row, cols);
+        if (!key || (onlyGroupKey && key !== onlyGroupKey)) return;
+        for (let j = idx + 1; j < rows.length; j++) {
+          const cand = rows[j];
+          if (!Array.isArray(cand) || scheduleGridGroupKey(cand, cols) !== key) continue;
+          if (isScheduleGridMarkerRow(cand, cols) || isScheduleGridStarRow(cand, cols)) continue;
+          const nextTime = clockFromMinutes(start + n);
+          if (String(cand[cols.time] || "").trim() !== nextTime) {
+            const updated = [...cand];
+            while (updated.length <= cols.time) updated.push("");
+            updated[cols.time] = nextTime;
+            rows[j] = updated;
+            setScheduleGridCellValue(j, cols.time, nextTime);
+          }
+          break;
+        }
+      });
+      return rows;
     }
 
     function scheduleGridGroupKey(row, cols) {
@@ -644,6 +700,7 @@
     function recalculateScheduleGridDurations(rows, onlyGroupKey = "") {
       const cols = scheduleGridColumnIndexes(rows);
       if (cols.code < 0 || cols.time < 0 || cols.duration < 0) return rows;
+      applyScheduleGridStarRows(rows, cols, onlyGroupKey);
       const groups = new Map();
       rows.forEach((row, idx) => {
         if (idx === 0 || !Array.isArray(row)) return;
@@ -656,7 +713,10 @@
         group.forEach((item, pos) => {
           const isMarker = isScheduleGridMarkerRow(item.row, cols);
           const next = group.slice(pos + 1).find((candidate) => !isScheduleGridMarkerRow(candidate.row, cols));
-          const duration = !isMarker && next ? minutesBetween(item.row[cols.time], next.row[cols.time]) : null;
+          const starMinutes = scheduleGridStarMinutes(item.row[cols.content]);
+          const duration = starMinutes != null
+            ? starMinutes
+            : (!isMarker && next ? minutesBetween(item.row[cols.time], next.row[cols.time]) : null);
           const durationText = duration == null ? "" : String(Math.round(duration));
           item.row[cols.duration] = durationText;
           setScheduleGridCellValue(item.idx, cols.duration, durationText);

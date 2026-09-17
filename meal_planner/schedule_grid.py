@@ -23,6 +23,8 @@ def is_disabled_cell(value: Any) -> bool:
     return str(value or "").strip().casefold() in _DISABLED_TRUE
 
 _RE_BEFORE = re.compile(r"開工前\s*(\d+(?:\.\d+)?)\s*小時")
+# 星號行「* 飯 55」：時長 55 係人手打嘅固定值，唔係由下一行時間計出嚟。
+_RE_STAR_DURATION = re.compile(r"^\*.*?\s(\d{1,3})\s*$")
 _RE_AFTER = re.compile(r"收工後\s*(\d+(?:\.\d+)?)\s*小時")
 
 
@@ -88,6 +90,12 @@ class ScheduleRow:
         前一格嘅時長跨過佢哋。"""
         return self.content.strip().startswith("-")
 
+    @property
+    def fixed_duration_min(self) -> int | None:
+        """`*` 開頭嘅行（「* 飯 55」）：尾數係人手打嘅固定時長；冇尾數就當普通行。"""
+        m = _RE_STAR_DURATION.match(self.content.strip())
+        return int(m.group(1)) if m else None
+
 
 def rows_for_roster(
     rows: list[ScheduleRow],
@@ -141,16 +149,18 @@ def load_schedule_rows_from_rows(rows: list[list[Any]]) -> list[ScheduleRow]:
                 dur = int(float(dur_raw))
             except (TypeError, ValueError):
                 dur = None
-        out.append(
-            ScheduleRow(
-                code=code,
-                t=_to_time(row[c_time]) if c_time < len(row) else None,
-                content=str(row[c_content] if c_content < len(row) and row[c_content] is not None else ""),
-                duration_min=dur,
-                effective_from=_to_date(row[c_eff]) if c_eff is not None and c_eff < len(row) else None,
-                disabled=is_disabled_cell(row[c_off]) if c_off is not None and c_off < len(row) else False,
-            )
+        item = ScheduleRow(
+            code=code,
+            t=_to_time(row[c_time]) if c_time < len(row) else None,
+            content=str(row[c_content] if c_content < len(row) and row[c_content] is not None else ""),
+            duration_min=dur,
+            effective_from=_to_date(row[c_eff]) if c_eff is not None and c_eff < len(row) else None,
+            disabled=is_disabled_cell(row[c_off]) if c_off is not None and c_off < len(row) else False,
         )
+        # 星號行：時長欄漏空都用返內容尾數。
+        if item.duration_min is None and item.fixed_duration_min is not None:
+            item.duration_min = item.fixed_duration_min
+        out.append(item)
     return out
 
 
@@ -197,6 +207,9 @@ def recompute_durations(rows: list[ScheduleRow]) -> list[ScheduleRow]:
         key=lambda x: (x.t.hour * 60 + x.t.minute),
     )
     for i, row in enumerate(live):
+        if row.fixed_duration_min is not None:
+            row.duration_min = row.fixed_duration_min
+            continue
         if i + 1 >= len(live):
             row.duration_min = None
             continue

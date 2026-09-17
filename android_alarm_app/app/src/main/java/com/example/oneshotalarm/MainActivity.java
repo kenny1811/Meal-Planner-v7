@@ -73,6 +73,8 @@ public class MainActivity extends Activity {
     private static final Pattern SCHEDULE_GRID_DATE_RE = Pattern.compile(
             "^\\s*(\\d{4}-\\d{2}-\\d{2}|(\\d{1,2})/(\\d{1,2})/(\\d{4}))\\s*$"
     );
+    /** 星號行「* 飯 55」：尾數係人手打嘅固定時長（同網頁 scheduleGridStarMinutes 一樣）。 */
+    private static final Pattern STAR_DURATION_RE = Pattern.compile("^\\*.*?\\s(\\d{1,3})$");
     private TextView headerView;
     private TextView statusView;
     private TextView mealPlanView;
@@ -2877,6 +2879,7 @@ public class MainActivity extends Activity {
     /**
      * 重算時長：一格嘅時長 ＝ 去下一個「佔時間」行嘅距離。
      * `-` 開頭嘅 marker 行同停用行都唔佔時間，前一格跨過佢哋。
+     * `*` 開頭嘅星號行照佔時間，但 label 係人手打嘅（尾數＝固定時長），停用與否都唔改。
      * 插入／刪除／停用／改時間之後行一次，成張表啲數跟住啱返。
      */
     private void recomputeDraftDurations() {
@@ -2886,16 +2889,23 @@ public class MainActivity extends Activity {
             if (alarm == null) {
                 continue;
             }
-            String content = splitLabelContent(alarm.optString("label", ""));
+            String label = alarm.optString("label", "");
+            String content = splitLabelContent(label);
             if (alarm.optBoolean("disabled", false) || content.startsWith("-")) {
-                setLabelDuration(alarm, content, -1);
+                if (!isStarLabel(label)) {
+                    setLabelDuration(alarm, content, -1);
+                }
                 continue;
             }
             live.add(alarm);
         }
         for (int i = 0; i < live.size(); i++) {
             JSONObject alarm = live.get(i);
-            String content = splitLabelContent(alarm.optString("label", ""));
+            String label = alarm.optString("label", "");
+            if (isStarLabel(label)) {
+                continue;
+            }
+            String content = splitLabelContent(label);
             if (i + 1 >= live.size()) {
                 setLabelDuration(alarm, content, -1);
                 continue;
@@ -2904,6 +2914,54 @@ public class MainActivity extends Activity {
                     - alarm.optLong("trigger_at_epoch_ms", 0L);
             setLabelDuration(alarm, content, gap > 0 ? (int) (gap / 60000L) : -1);
         }
+    }
+
+    /**
+     * 星號行推下一行時間（同網頁 applyScheduleGridStarRows 一樣）：由星號行向下搵
+     * 第一個唔係 `-`／`*` 開頭嘅行（停用與否唔理），時間改做「星號行時間 + 尾數」。
+     * 要喺 sort 之前行——咁「向下」先係改時間之前嘅行序。
+     */
+    private void pushRowsAfterStarRows() {
+        for (int i = 0; i < draftAlarms.length(); i++) {
+            JSONObject star = draftAlarms.optJSONObject(i);
+            if (star == null) {
+                continue;
+            }
+            int minutes = starMinutes(star.optString("label", ""));
+            long start = star.optLong("trigger_at_epoch_ms", 0L);
+            if (minutes < 0 || start <= 0L) {
+                continue;
+            }
+            long next = start + minutes * 60000L;
+            for (int j = i + 1; j < draftAlarms.length(); j++) {
+                JSONObject candidate = draftAlarms.optJSONObject(j);
+                if (candidate == null) {
+                    continue;
+                }
+                String label = candidate.optString("label", "").trim();
+                if (label.startsWith("-") || label.startsWith("*")) {
+                    continue;
+                }
+                if (candidate.optLong("trigger_at_epoch_ms", 0L) != next) {
+                    try {
+                        candidate.put("trigger_at_epoch_ms", next);
+                        candidate.put("trigger_at", formatIso(next));
+                    } catch (JSONException ignored) {
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    private static boolean isStarLabel(String label) {
+        return label != null && label.trim().startsWith("*");
+    }
+
+    /** 「* 飯 55」→ 55；唔係星號行或者冇尾數 → -1（當普通行計）。 */
+    private static int starMinutes(String label) {
+        Matcher matcher = STAR_DURATION_RE.matcher(label == null ? "" : label.trim());
+        return matcher.matches() ? Integer.parseInt(matcher.group(1)) : -1;
     }
 
     /** 「M 75」→「M」；冇尾數就原樣。 */
@@ -3018,6 +3076,7 @@ public class MainActivity extends Activity {
             return;
         }
         shiftEmptyMessage = "";
+        pushRowsAfterStarRows();
         sortDraftAlarms();
         recomputeDraftDurations();
         if (draftAlarms.length() == 0) {
