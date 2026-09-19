@@ -748,6 +748,14 @@
     table.maint-table td.maint-duration-cell input[type="text"] {
       padding-right: 12px;
     }
+    /* 飯時表：執唔正嘅時間格——紅框困住，唔俾離開。 */
+    table.maint-table td.maint-invalid-cell:focus-within {
+      outline: 2px solid #d33;
+    }
+    table.maint-table td.maint-invalid-cell textarea,
+    table.maint-table td.maint-invalid-cell input[type="text"] {
+      background: #fff2f2;
+    }
     table.maint-table td:focus-within {
       outline: 2px solid var(--accent);
       outline-offset: -2px;

@@ -450,6 +450,85 @@
       return String(header[colIndex] || "").trim() === "時間";
     }
 
+    const MEAL_TIME_HEADERS = new Set(["早餐", "午餐", "小食", "晚餐"]);
+    const MEAL_TIME_RULE_WORDS = ["開工前", "收工後", "跟行位表"];
+
+    function isMealTimeCol(sheetKey, rowIndex, colIndex) {
+      if (sheetKey !== "meal_times" || rowIndex === 0) return false;
+      const header = Array.isArray(maintSheetPayload.rows && maintSheetPayload.rows[0]) ? maintSheetPayload.rows[0] : [];
+      return MEAL_TIME_HEADERS.has(String(header[colIndex] || "").trim());
+    }
+
+    // 飯時表時間格：900 / 0900 / 09:00 / 9:00 一律執成 HH:MM（30 小時制）；分鐘 >59 唔算時間。
+    function mealTimeNormalised(value) {
+      const s = String(value ?? "").trim();
+      if (!/^\d{1,2}:?\d{2}$/.test(s)) return "";
+      const t = normalTime(s);
+      if (!t || Number(t.slice(-2)) > 59) return "";
+      return t;
+    }
+
+    // 合格＝空、含「開工前」「收工後」「跟行位表」嘅規則字句、或者執得出嘅時間；其他唔俾離開格。
+    function isMealTimeValueValid(value) {
+      const s = String(value ?? "").trim();
+      if (!s) return true;
+      if (MEAL_TIME_RULE_WORDS.some((word) => s.includes(word))) return true;
+      return mealTimeNormalised(s) !== "";
+    }
+
+    function isMaintInputValid(input) {
+      if (!input) return true;
+      const rowIndex = Number(input.getAttribute("data-maint-row"));
+      const colIndex = Number(input.getAttribute("data-maint-col"));
+      if (!isMealTimeCol(activeMaintSheetKey, rowIndex, colIndex)) return true;
+      return isMealTimeValueValid(input.value);
+    }
+
+    // 而家困住緊嘅格（執唔正、未離開）；有佢喺度，其他格一律唔俾 focus／開始編輯。
+    let maintTrappedInput = null;
+
+    function markMaintInputInvalid(input, invalid) {
+      if (!input) return;
+      if (invalid) {
+        input.dataset.maintInvalid = "1";
+        maintTrappedInput = input;
+      } else {
+        delete input.dataset.maintInvalid;
+        if (maintTrappedInput === input) maintTrappedInput = null;
+      }
+      const cell = input.closest("td");
+      if (cell) cell.classList.toggle("maint-invalid-cell", Boolean(invalid));
+    }
+
+    // 想 focus／編輯另一格之前問一問：有冇格困住緊？有就彈返去嗰格，唔俾走。
+    function maintTrapBlocks(target) {
+      const trapped = maintTrappedInput;
+      if (!trapped || trapped === target) return false;
+      if (!trapped.isConnected || trapped.dataset.maintEditing !== "1" || isMaintInputValid(trapped)) {
+        markMaintInputInvalid(trapped, false);
+        return false;
+      }
+      setTimeout(() => {
+        if (trapped.dataset.maintEditing === "1" && document.activeElement !== trapped) trapped.focus();
+      }, 0);
+      return true;
+    }
+
+    // 離開格前把關：唔合格就紅框困住，唔俾走（得 Escape 可以取消還原）。
+    function guardMaintCellLeave(input) {
+      const ok = isMaintInputValid(input);
+      markMaintInputInvalid(input, !ok);
+      return ok;
+    }
+
+    function firstInvalidMaintInput() {
+      if (activeMaintSheetKey !== "meal_times") return null;
+      for (const input of document.querySelectorAll("#maint-editor [data-maint-row][data-maint-col]")) {
+        if (!isMaintInputValid(input)) return input;
+      }
+      return null;
+    }
+
     function formatMaintTimeValue(sheetKey, rowIndex, colIndex, value, isInputEvent = false) {
       if (rowIndex === 0) return value;
       const s = String(value ?? "").trim();
@@ -493,6 +572,11 @@
         if (isInputEvent) return value;
         const t = normalTime(s);
         if (t) return t;
+      }
+
+      if (isMealTimeCol(sheetKey, rowIndex, colIndex)) {
+        if (isInputEvent) return value;
+        return mealTimeNormalised(s) || s;
       }
 
       return value;
@@ -1267,6 +1351,13 @@
     async function saveMaintEditor() {
       if (!activeMaintSheetKey) return;
       showMaintError("");
+      const invalidInput = firstInvalidMaintInput();
+      if (invalidInput) {
+        markMaintInputInvalid(invalidInput, true);
+        showMaintError("飯時表有格唔合格：要係時間（900 / 0900 / 09:00 / 9:00）或者「開工前…」「收工後…」「跟行位表」，改正先可以 Save。");
+        invalidInput.focus();
+        return;
+      }
       setMaintStatus("Saving...");
       try {
         const rows = rowsForMaintSave(collectMaintRows());

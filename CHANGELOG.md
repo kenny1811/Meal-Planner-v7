@@ -4,6 +4,12 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.10.25 — 19/09/2026 15:30
+- Meal Times: breakfast / lunch / snack / dinner cells accept `900`, `0900`, `09:00` or `9:00`
+  and are tidied to `HH:MM` when you leave the cell.
+- A cell that is not a valid time (or blank, or a rule phrase 開工前／收工後／跟行位表) turns red
+  and keeps focus until fixed; Escape restores the old value. Save is refused while such a cell exists.
+
 ## 7.9.25 — 17/09/2026 22:28
 - Schedule grid: a row starting with `*` (e.g. `* 飯 55`) keeps the duration you typed,
   and the next row moves to start right after it — on the web editor and the phone.

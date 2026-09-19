@@ -244,6 +244,13 @@
           if (activeMaintSheetKey === "schedule_grid") setUnsavedChanges("餐單參數");
         });
         input.addEventListener("blur", () => {
+          if (input.dataset.maintEditing === "1" && !guardMaintCellLeave(input)) {
+            // 執唔正：困住喺呢格，唔俾 lost focus。
+            setTimeout(() => {
+              if (input.dataset.maintEditing === "1" && document.activeElement !== input) input.focus();
+            }, 0);
+            return;
+          }
           endMaintCellEdit(input);
           updateMaintInputFormatting(input, false);
           if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
@@ -291,6 +298,7 @@
 
     function focusMaintCell(input, fromKeyboard = false) {
       if (!input) return;
+      if (maintTrapBlocks(input)) return;
       delete input.dataset.maintEditing;
       delete input.dataset.maintReplaceOnComposition;
       delete input.dataset.maintPendingDirectKey;
@@ -382,10 +390,12 @@
 
     function beginMaintCellEdit(input, replaceValue = false) {
       if (!input) return;
+      if (maintTrapBlocks(input)) return;
       delete input.dataset.maintKeyboardSelected;
       const rowIndex = Number(input.getAttribute("data-maint-row"));
       const colIndex = Number(input.getAttribute("data-maint-col"));
-      input.dataset.maintOriginalValue = input.value;
+      // 已經編輯緊（例如困住咗再 double-click 自己）就唔好覆寫原值，Escape 先還原得返。
+      if (input.dataset.maintEditing !== "1") input.dataset.maintOriginalValue = input.value;
       if (activeMaintSheetKey === "schedule_grid") {
         const rows = Array.isArray(maintSheetPayload.rows) ? maintSheetPayload.rows : [];
         const cols = scheduleGridColumnIndexes(rows);
@@ -411,6 +421,7 @@
 
     function endMaintCellEdit(input, options = {}) {
       if (!input) return;
+      markMaintInputInvalid(input, false);
       const wasEditing = input.dataset.maintEditing === "1";
       if (!wasEditing) {
         if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
@@ -471,6 +482,7 @@
       if (input.dataset.maintEditing === "1") {
         if (ev.key === "Enter") {
           ev.preventDefault();
+          if (!guardMaintCellLeave(input)) return;
           const next = maintCellInputFrom(input, 1, 0);
           if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
           endMaintCellEdit(input);
@@ -481,6 +493,7 @@
           input.focus();
         } else if (ev.key === "Tab") {
           ev.preventDefault();
+          if (!guardMaintCellLeave(input)) return;
           const next = maintCellInputFrom(input, 0, ev.shiftKey ? -1 : 1) || maintCellInputFrom(input, ev.shiftKey ? -1 : 1, 0);
           if (input.dataset) input.dataset.skipAutosaveOnce = "1";
           endMaintCellEdit(input);
@@ -488,6 +501,7 @@
         } else if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
           if (textareaShouldKeepArrow(input, ev.key)) return;
           ev.preventDefault();
+          if (!guardMaintCellLeave(input)) return;
           const next = maintCellInputFrom(input, ev.key === "ArrowUp" ? -1 : 1, 0);
           if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
           endMaintCellEdit(input);
