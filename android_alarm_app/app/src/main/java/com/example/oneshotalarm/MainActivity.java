@@ -1220,6 +1220,8 @@ public class MainActivity extends Activity {
                 target.put("label", source.optString("label", "鬧鐘"));
                 target.put("trigger_at_epoch_ms", targetCal.getTimeInMillis());
                 target.put("trigger_at", formatIso(targetCal.getTimeInMillis()));
+                // 停用咗嘅行位要跟住過去，否則用快取更碼作今日行位會令佢哋變返啟用。
+                target.put("disabled", source.optBoolean("disabled", false));
             } catch (JSONException ignored) {
             }
             copied.put(target);

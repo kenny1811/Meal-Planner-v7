@@ -670,11 +670,7 @@
       return m ? Number(m[1]) : null;
     }
 
-    function clockFromMinutes(minutes) {
-      const h = Math.floor(minutes / 60);
-      const m = minutes % 60;
-      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-    }
+    // clockFromMinutes（30 小時制版）定義喺下面 defaultWakeTimeForStart 附近，星號行同起身時間共用。
 
     function applyScheduleGridStarRows(rows, cols, onlyGroupKey = "") {
       if (cols.code < 0 || cols.time < 0 || cols.content < 0) return rows;

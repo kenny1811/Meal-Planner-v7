@@ -4,6 +4,10 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.10.26 — 21/09/2026 03:55
+- Phone app 7.3: "use cached roster as today's schedule" now keeps disabled rows disabled
+  instead of silently re-enabling them.
+
 ## 7.10.25 — 19/09/2026 15:30
 - Meal Times: breakfast / lunch / snack / dinner cells accept `900`, `0900`, `09:00` or `9:00`
   and are tidied to `HH:MM` when you leave the cell.
