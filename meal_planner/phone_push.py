@@ -26,15 +26,27 @@ CLIENT_HEADER = "x-alarm-client"
 CLIENT_HEADER_VALUE = "phone"
 
 
-def remember_phone_host(host: str | None) -> None:
-    """電話打上嚟嗰陣叫一次；同一個 IP 就唔使再寫 DB。"""
+TOKEN_HEADER = "X-Alarm-Token"
+CAPTURE_PATH = "/capture/watch"
+
+
+def remember_phone_host(host: str | None, token: str | None = None) -> None:
+    """電話打上嚟嗰陣叫一次；IP 同 token 都冇變就唔使再寫 DB。
+
+    token 係電話 8765 嘅門匙（電話自己生成，每次打上嚟都帶住）；電腦 push／截圖要帶返去。
+    """
     clean = (host or "").strip()
     if not clean or clean in {"127.0.0.1", "::1", "localhost"}:
         return
+    clean_token = (token or "").strip()
     current = load_phone_endpoint()
-    if current.get("host") == clean:
+    if current.get("host") == clean and (not clean_token or current.get("token") == clean_token):
         return
-    save_phone_endpoint({"host": clean, "seen_at": time.strftime("%Y-%m-%d %H:%M:%S")})
+    save_phone_endpoint({
+        "host": clean,
+        "seen_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "token": clean_token or str(current.get("token") or ""),
+    })
 
 
 def phone_endpoint() -> dict[str, Any]:
@@ -44,7 +56,28 @@ def phone_endpoint() -> dict[str, Any]:
         "host": host,
         "seen_at": str(endpoint.get("seen_at") or ""),
         "url": f"http://{host}:{PHONE_PORT}{PUSH_PATH}" if host else "",
+        "has_token": bool(endpoint.get("token")),
     }
+
+
+def _phone_headers() -> dict[str, str]:
+    token = str(load_phone_endpoint().get("token") or "")
+    return {TOKEN_HEADER: token} if token else {}
+
+
+def capture_watch(timeout: float = 30.0) -> tuple[int, bytes, str]:
+    """經電話攞手錶截圖（電話做中繼）。回傳 (HTTP status, body, content-type)。"""
+    host = phone_endpoint()["host"]
+    if not host:
+        return 503, "電腦未見過電話上嚟，冇位置可以攞截圖。".encode("utf-8"), "text/plain; charset=utf-8"
+    request = urllib.request.Request(f"http://{host}:{PHONE_PORT}{CAPTURE_PATH}", headers=_phone_headers())
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status, response.read(), response.headers.get("Content-Type", "image/png")
+    except urllib.error.HTTPError as e:
+        return e.code, (e.read() if e.fp else str(e).encode("utf-8")), "text/plain; charset=utf-8"
+    except Exception as e:  # noqa: BLE001
+        return 503, str(e).encode("utf-8"), "text/plain; charset=utf-8"
 
 
 def push_schedule_grid(timeout: float = PUSH_TIMEOUT_S) -> dict[str, Any]:
@@ -55,7 +88,7 @@ def push_schedule_grid(timeout: float = PUSH_TIMEOUT_S) -> dict[str, Any]:
             "status": "unknown_phone",
             "detail": "電腦未見過電話上嚟（電話 app 未開過、或者未連到電腦），冇位置可以 push。",
         }
-    request = urllib.request.Request(endpoint["url"], data=b"", method="POST")
+    request = urllib.request.Request(endpoint["url"], data=b"", method="POST", headers=_phone_headers())
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read().decode("utf-8", "replace")

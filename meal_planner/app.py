@@ -78,6 +78,7 @@ from meal_planner.phone_push import (
     CLIENT_HEADER,
     CLIENT_HEADER_VALUE,
     phone_endpoint,
+    capture_watch,
     push_schedule_grid,
     remember_phone_host,
 )
@@ -199,7 +200,10 @@ def _health_payload() -> dict[str, Any]:
 async def record_debug_stats(request: Request, call_next):
     # 電話會喺 header 報上名——記低佢個 IP，之後打風 Apply 就 push 得返落電話。
     if request.headers.get(CLIENT_HEADER) == CLIENT_HEADER_VALUE:
-        remember_phone_host(request.client.host if request.client else "")
+        remember_phone_host(
+            request.client.host if request.client else "",
+            request.headers.get("x-alarm-token"),
+        )
     started = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -1760,6 +1764,13 @@ def api_phone_endpoint() -> dict[str, Any]:
 def api_phone_push_schedule_grid() -> dict[str, Any]:
     """叫電話即刻重新匯入行位表（電話跟住會排鬧鐘 + 通知手錶）。"""
     return push_schedule_grid()
+
+
+@app.get("/api/phone/capture-watch")
+def api_phone_capture_watch() -> Response:
+    """經電話攞手錶截圖（電腦帶 token 去打電話 8765，唔使自己知 token）。"""
+    status, body, content_type = capture_watch()
+    return Response(content=body, status_code=status, media_type=content_type)
 
 
 @app.post("/api/typhoon/apply")

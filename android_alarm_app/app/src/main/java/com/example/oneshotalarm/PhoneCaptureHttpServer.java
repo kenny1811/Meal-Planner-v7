@@ -66,10 +66,16 @@ final class PhoneCaptureHttpServer {
              BufferedInputStream in = new BufferedInputStream(client.getInputStream());
              BufferedOutputStream out = new BufferedOutputStream(client.getOutputStream())) {
             String requestLine = readRequestLine(in);
-            drainHeaders(in);
+            String token = readTokenHeader(in);
             String path = parsePath(requestLine);
             if ("/health".equals(path)) {
                 writeResponse(out, 200, "application/json; charset=utf-8", "{\"ok\":true}\n".getBytes("UTF-8"));
+                return;
+            }
+            // /health 以外一律要 token（電話打上電腦嗰陣已經報咗俾佢）。
+            if (!AlarmStore.getPhoneHttpToken(context).equals(token)) {
+                Log.w(TAG, "Rejected " + path + " from " + client.getInetAddress() + ": bad token");
+                writeResponse(out, 401, "text/plain; charset=utf-8", "Unauthorized\n".getBytes("UTF-8"));
                 return;
             }
             if ("/push/schedule-grid".equals(path)) {
@@ -119,21 +125,20 @@ final class PhoneCaptureHttpServer {
         return buffer.toString("UTF-8");
     }
 
-    private static void drainHeaders(BufferedInputStream in) throws IOException {
-        int previous = -1;
-        int current;
-        int lfCount = 0;
-        while ((current = in.read()) >= 0) {
-            if (current == '\n') {
-                lfCount++;
-                if (previous == '\n' || lfCount >= 2) {
-                    return;
-                }
-            } else if (current != '\r') {
-                lfCount = 0;
+    /** 讀晒 header 直到空行，回傳 X-Alarm-Token 嘅值（冇就空字串）。 */
+    private static String readTokenHeader(BufferedInputStream in) throws IOException {
+        String token = "";
+        for (int i = 0; i < 100; i++) {
+            String line = readRequestLine(in);
+            if (line.isEmpty()) {
+                break;
             }
-            previous = current;
+            int colon = line.indexOf(':');
+            if (colon > 0 && line.substring(0, colon).trim().equalsIgnoreCase("X-Alarm-Token")) {
+                token = line.substring(colon + 1).trim();
+            }
         }
+        return token;
     }
 
     private static String parsePath(String requestLine) {

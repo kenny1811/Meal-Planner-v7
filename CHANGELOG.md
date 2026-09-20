@@ -4,6 +4,12 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.11.26 — 21/09/2026 04:10
+- Phone app 7.4: the phone's own HTTP port (schedule-grid push, watch capture) now requires a
+  per-phone token. The phone hands the token to the PC on every request; anyone else on the
+  network calling the port gets 401. Watch screenshots are now fetched through the PC at
+  `/api/phone/capture-watch`.
+
 ## 7.10.26 — 21/09/2026 03:55
 - Phone app 7.3: "use cached roster as today's schedule" now keeps disabled rows disabled
   instead of silently re-enabling them.

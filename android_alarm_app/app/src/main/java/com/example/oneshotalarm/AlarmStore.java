@@ -310,6 +310,29 @@ final class AlarmStore {
         NextAlarmProvider.notifyChanged(context);
     }
 
+    private static final String KEY_PHONE_HTTP_TOKEN = "phone_http_token";
+
+    /**
+     * 電話本機 HTTP server（8765）嘅 token：第一次要用先生成，之後固定。
+     * 電話每次打上電腦都會帶住（X-Alarm-Token），電腦記低，push／截圖嗰陣帶返嚟先受理，
+     * 同網其他人打 8765 會食 401。
+     */
+    static String getPhoneHttpToken(Context context) {
+        SharedPreferences p = prefs(context);
+        String token = p.getString(KEY_PHONE_HTTP_TOKEN, "");
+        if (token == null || token.isEmpty()) {
+            byte[] bytes = new byte[16];
+            new java.security.SecureRandom().nextBytes(bytes);
+            StringBuilder sb = new StringBuilder(32);
+            for (byte b : bytes) {
+                sb.append(String.format("%02x", b & 0xff));
+            }
+            token = sb.toString();
+            p.edit().putString(KEY_PHONE_HTTP_TOKEN, token).apply();
+        }
+        return token;
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }

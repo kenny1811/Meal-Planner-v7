@@ -35,6 +35,9 @@ final class ApiClient {
      */
     private static final String CLIENT_HEADER = "X-Alarm-Client";
     private static final String CLIENT_HEADER_VALUE = "phone";
+    /** 電話 8765 嘅 token 亦順便報上去，電腦 push／截圖嗰陣要帶返嚟。 */
+    static final String TOKEN_HEADER = "X-Alarm-Token";
+    private static volatile String phoneToken = "";
 
     /**
      * last-good server：記住個 URL，唔記陣列位置——candidates 嘅次序同長度會跟
@@ -62,6 +65,7 @@ final class ApiClient {
             int readTimeoutMs
     ) throws Exception {
         String[] candidates = orderByLastGood(AlarmStore.getAutoSyncServerCandidates(context), lastGoodServer);
+        phoneToken = AlarmStore.getPhoneHttpToken(context);
         Exception lastException = null;
         for (String candidate : candidates) {
             String base = normalizeServer(candidate);
@@ -128,6 +132,9 @@ final class ApiClient {
             conn.setConnectTimeout(connectTimeoutFor(endpoint));
             conn.setReadTimeout(readTimeoutMs);
             conn.setRequestProperty(CLIENT_HEADER, CLIENT_HEADER_VALUE);
+            if (!phoneToken.isEmpty()) {
+                conn.setRequestProperty(TOKEN_HEADER, phoneToken);
+            }
             return readResponse(conn, endpoint);
         } finally {
             if (conn != null) {
@@ -144,6 +151,9 @@ final class ApiClient {
             conn.setConnectTimeout(connectTimeoutFor(endpoint));
             conn.setReadTimeout(readTimeoutMs);
             conn.setRequestProperty(CLIENT_HEADER, CLIENT_HEADER_VALUE);
+            if (!phoneToken.isEmpty()) {
+                conn.setRequestProperty(TOKEN_HEADER, phoneToken);
+            }
             if (body != null) {
                 conn.setDoOutput(true);
                 conn.setRequestProperty("Content-Type", contentType);

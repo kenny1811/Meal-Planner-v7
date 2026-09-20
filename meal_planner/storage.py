@@ -791,7 +791,7 @@ def save_phone_endpoint(endpoint: dict[str, Any]) -> None:
     """電話最後一次打上嚟嘅位置（IP + 時間）——電腦要 push 落電話嗰陣用。"""
     clean = {
         str(k): endpoint[k]
-        for k in ("host", "seen_at")
+        for k in ("host", "seen_at", "token")
         if isinstance(endpoint, dict) and k in endpoint
     }
     _update_ui(lambda ui: ui.update({"phone_endpoint": clean}))
