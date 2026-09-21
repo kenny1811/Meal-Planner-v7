@@ -72,8 +72,10 @@
       库: "庫",
     };
 
+    const TOOLTIP_TRADITIONAL_CHAR_RE = new RegExp(`[${Object.keys(TOOLTIP_TRADITIONAL_CHAR_MAP).join("")}]`, "g");
+
     function traditionalTooltipText(text) {
-      return String(text || "").replace(/[嘱议现纤维质总胆钠钙饱转体营养标设调剂围类龄历录显隐删选项输览预时间应义页态错认写读为与后发动运较轻区权开关双击栏宽线图复盘师径备导约强数据库]/g, (ch) => TOOLTIP_TRADITIONAL_CHAR_MAP[ch] || ch);
+      return String(text || "").replace(TOOLTIP_TRADITIONAL_CHAR_RE, (ch) => TOOLTIP_TRADITIONAL_CHAR_MAP[ch] || ch);
     }
 
     let targetSelectedBlocks = new Set();
@@ -172,7 +174,6 @@
     }
 
     const TARGET_GRID_INPUT_SELECTOR = 'input[data-target-source]:not([data-target-source="preview"]), input[data-target-setting-key]';
-    const targetDirectKeyTimers = new WeakMap();
 
     function isTargetGridInput(input) {
       return !!(input && input.matches && input.matches(TARGET_GRID_INPUT_SELECTOR));
@@ -331,17 +332,10 @@
       input.dataset.targetOriginalValue = input.value;
       input.readOnly = false;
       input.dataset.targetEditing = "1";
-      input.dataset.targetReplaceOnComposition = replaceValue ? "1" : "";
       input.focus({ preventScroll: true });
       if (replaceValue) input.value = "";
       const pos = replaceValue ? 0 : String(input.value || "").length;
       if (typeof input.setSelectionRange === "function") input.setSelectionRange(pos, pos);
-    }
-
-    function clearTargetDirectKeyTimer(input) {
-      const timer = targetDirectKeyTimers.get(input);
-      if (timer) clearTimeout(timer);
-      targetDirectKeyTimers.delete(input);
     }
 
     function endTargetCellEdit(input, options = {}) {
@@ -356,9 +350,6 @@
       input.readOnly = true;
       delete input.dataset.targetEditing;
       delete input.dataset.targetOriginalValue;
-      delete input.dataset.targetReplaceOnComposition;
-      delete input.dataset.targetPendingDirectKey;
-      clearTargetDirectKeyTimer(input);
       if (!options.cancel && input.value !== oldValue) markTargetCellChanged(input);
     }
 
@@ -447,9 +438,6 @@
           input.addEventListener("dblclick", () => beginTargetCellEdit(input));
           input.addEventListener("compositionstart", () => {
             if (input.readOnly) beginTargetCellEdit(input, true);
-            clearTargetDirectKeyTimer(input);
-            delete input.dataset.targetPendingDirectKey;
-            delete input.dataset.targetReplaceOnComposition;
           });
           input.addEventListener("copy", (ev) => {
             if (input.dataset.targetEditing === "1" || !ev.clipboardData) return;
@@ -1102,10 +1090,7 @@
     function targetDobFullYear(yearText, month, day) {
       if (String(yearText).length === 4) return String(yearText);
       const yy = Number(yearText);
-      const nowParts = new Intl.DateTimeFormat("en-CA", { timeZone: HK_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-      const todayY = Number(nowParts.find((part) => part.type === "year")?.value || 0);
-      const todayM = Number(nowParts.find((part) => part.type === "month")?.value || 0);
-      const todayD = Number(nowParts.find((part) => part.type === "day")?.value || 0);
+      const { y: todayY, m: todayM, d: todayD } = ymdNow();
       if (!Number.isFinite(yy) || !todayY) return String(yearText).padStart(4, "0");
       let year = Math.floor(todayY / 100) * 100 + yy;
       const candidate = new Date(Date.UTC(year, month - 1, day));
@@ -1152,10 +1137,7 @@
       if (!match) return null;
       const born = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
       if (born.getUTCFullYear() !== Number(match[1]) || born.getUTCMonth() !== Number(match[2]) - 1 || born.getUTCDate() !== Number(match[3])) return null;
-      const nowParts = new Intl.DateTimeFormat("en-CA", { timeZone: HK_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-      const todayY = Number(nowParts.find((part) => part.type === "year")?.value || 0);
-      const todayM = Number(nowParts.find((part) => part.type === "month")?.value || 0);
-      const todayD = Number(nowParts.find((part) => part.type === "day")?.value || 0);
+      const { y: todayY, m: todayM, d: todayD } = ymdNow();
       if (!todayY || born > new Date(Date.UTC(todayY, todayM - 1, todayD))) return null;
       const hadBirthday = (todayM > Number(match[2])) || (todayM === Number(match[2]) && todayD >= Number(match[3]));
       return todayY - Number(match[1]) - (hadBirthday ? 0 : 1);
@@ -1811,13 +1793,6 @@
       if (editorWidth > 0) container.style.width = `${editorWidth}px`;
     }
 
-    // 拖 block 一律 snap 到 10px 格：唔係嘅話兩個 block 差一兩 px，肉眼對唔到齊。
-    const BLOCK_SNAP_PX = 10;
-
-    function snapBlockPx(value) {
-      return Math.round(value / BLOCK_SNAP_PX) * BLOCK_SNAP_PX;
-    }
-
     // ---- 系統參數 blocks 多選（同營養指標嗰套一樣）：Ctrl-A 全選、Ctrl-click 逐個揀，
     // 揀咗就一齊拖；Esc 或者喺空白位撳一下取消。 ----
     const detailSelectedBlocks = new Set();
@@ -1972,7 +1947,6 @@
         write: !!(gcSync && gcSync.write),
         client_secret_file: String((gcSync && gcSync.client_secret_file) || ""),
         token_file: String((gcSync && gcSync.token_file) || ""),
-        service_account_file: String((gcSync && gcSync.service_account_file) || ""),
         nonwork_calendar_id: String((gcSync && gcSync.nonwork_calendar_id) || ""),
         work_calendar_id: String((gcSync && gcSync.work_calendar_id) || ""),
         alarm_calendar_id: String((gcSync && gcSync.alarm_calendar_id) || ""),
@@ -2050,40 +2024,71 @@
       return rows.filter((row) => row.name_contains !== "" || row.ratio !== "");
     }
 
-    function hideDetailRiceRowMenu() {
-      const menu = document.getElementById("detail-rice-row-menu");
-      if (!menu) return;
-      menu.hidden = true;
-      menu.removeAttribute("data-detail-rice-row-index");
+    // 系統參數三張細表（更碼定義／更碼→崗位／米類換算）嘅 right-click row menu 完全同構：
+    // 一個 factory 出 show / hide / applyAction / bind，planner-events.js 淨係 bind 一次。
+    function makeDetailRowMenu(cfg) {
+      const menuEl = () => document.getElementById(cfg.menuId);
+      const hide = () => {
+        const menu = menuEl();
+        if (!menu) return;
+        menu.hidden = true;
+        menu.removeAttribute(cfg.indexAttr);
+      };
+      const show = (ev, rowIndex) => {
+        const menu = menuEl();
+        if (!menu) return;
+        ev.preventDefault();
+        menu.hidden = false;
+        menu.setAttribute(cfg.indexAttr, Number.isInteger(rowIndex) ? String(rowIndex) : "-1");
+        const rect = menu.getBoundingClientRect();
+        menu.style.left = `${Math.max(2, Math.min(ev.clientX, window.innerWidth - rect.width - 2))}px`;
+        menu.style.top = `${Math.max(2, Math.min(ev.clientY, window.innerHeight - rect.height - 2))}px`;
+      };
+      const applyAction = (action, rowIndex) => {
+        // collect(true)：保留空行，等 DOM index 同 array index 對齊
+        const rows = cfg.collect(true);
+        const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
+        if (action === "insert") {
+          rows.splice(Math.min(idx, rows.length), 0, cfg.blankRow());
+        } else if (action === "delete") {
+          if (idx < rows.length) rows.splice(idx, 1);
+        } else if (action === "append") {
+          rows.push(cfg.blankRow());
+        }
+        setUnsavedChanges("系統參數");
+        cfg.commit(rows);
+      };
+      const bind = () => {
+        document.getElementById(cfg.tableId).addEventListener("contextmenu", (ev) => {
+          const row = ev.target && ev.target.closest ? ev.target.closest(`tr[${cfg.rowAttr}]`) : null;
+          const idx = row ? Number(row.getAttribute(cfg.rowAttr)) : -1;
+          show(ev, Number.isInteger(idx) ? idx : -1);
+        });
+        menuEl().addEventListener("click", (ev) => {
+          const action = ev.target && ev.target.closest ? ev.target.closest(`[${cfg.actionAttr}]`) : null;
+          const menu = menuEl();
+          if (!action || !menu) return;
+          const idx = Number(menu.getAttribute(cfg.indexAttr));
+          hide();
+          applyAction(action.getAttribute(cfg.actionAttr), Number.isInteger(idx) ? idx : -1);
+        });
+      };
+      return { menuId: cfg.menuId, hide, show, applyAction, bind };
     }
 
-    function showDetailRiceRowMenu(ev, rowIndex) {
-      const menu = document.getElementById("detail-rice-row-menu");
-      if (!menu) return;
-      ev.preventDefault();
-      menu.hidden = false;
-      menu.setAttribute("data-detail-rice-row-index", Number.isInteger(rowIndex) ? String(rowIndex) : "-1");
-      const rect = menu.getBoundingClientRect();
-      const left = Math.max(2, Math.min(ev.clientX, window.innerWidth - rect.width - 2));
-      const top = Math.max(2, Math.min(ev.clientY, window.innerHeight - rect.height - 2));
-      menu.style.left = `${left}px`;
-      menu.style.top = `${top}px`;
-    }
-
-    function applyDetailRiceRowAction(action, rowIndex) {
-      const rows = collectRiceConversions(true);
-      const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
-      if (action === "insert") {
-        rows.splice(Math.min(idx, rows.length), 0, { name_contains: "", ratio: "" });
-      } else if (action === "delete") {
-        if (idx < rows.length) rows.splice(idx, 1);
-      } else if (action === "append") {
-        rows.push({ name_contains: "", ratio: "" });
-      }
-      setUnsavedChanges("系統參數");
-      detailSettingsPayload.rice = { ...(detailSettingsPayload.rice || {}), conversions: rows };
-      renderRiceConversions(detailSettingsPayload.rice);
-    }
+    const detailRiceRowMenu = makeDetailRowMenu({
+      tableId: "detail-rice-conversions",
+      rowAttr: "data-detail-rice-row",
+      menuId: "detail-rice-row-menu",
+      indexAttr: "data-detail-rice-row-index",
+      actionAttr: "data-detail-rice-row-action",
+      collect: (includeEmpty) => collectRiceConversions(includeEmpty),
+      blankRow: () => ({ name_contains: "", ratio: "" }),
+      commit: (rows) => {
+        detailSettingsPayload.rice = { ...(detailSettingsPayload.rice || {}), conversions: rows };
+        renderRiceConversions(detailSettingsPayload.rice);
+      },
+    });
 
     // ---- 更碼 → form Post（交報開工/收工 form 要填嗰個崗位） ----
 
@@ -2177,38 +2182,19 @@
       return rows.filter((row) => row.code !== "" || row.post !== "");
     }
 
-    function hideDetailPostRowMenu() {
-      const menu = document.getElementById("detail-post-row-menu");
-      if (!menu) return;
-      menu.hidden = true;
-      menu.removeAttribute("data-detail-post-row-index");
-    }
-
-    function showDetailPostRowMenu(ev, rowIndex) {
-      const menu = document.getElementById("detail-post-row-menu");
-      if (!menu) return;
-      ev.preventDefault();
-      menu.hidden = false;
-      menu.setAttribute("data-detail-post-row-index", Number.isInteger(rowIndex) ? String(rowIndex) : "-1");
-      const rect = menu.getBoundingClientRect();
-      menu.style.left = `${Math.max(2, Math.min(ev.clientX, window.innerWidth - rect.width - 2))}px`;
-      menu.style.top = `${Math.max(2, Math.min(ev.clientY, window.innerHeight - rect.height - 2))}px`;
-    }
-
-    function applyDetailPostRowAction(action, rowIndex) {
-      const rows = collectRosterPostMapping(true);
-      const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
-      if (action === "insert") {
-        rows.splice(Math.min(idx, rows.length), 0, { code: "", post: "" });
-      } else if (action === "delete") {
-        if (idx < rows.length) rows.splice(idx, 1);
-      } else if (action === "append") {
-        rows.push({ code: "", post: "" });
-      }
-      setUnsavedChanges("系統參數");
-      detailSettingsPayload.roster_post_mapping = rows;
-      renderRosterPostMapping(rows);
-    }
+    const detailPostRowMenu = makeDetailRowMenu({
+      tableId: "detail-post-mapping",
+      rowAttr: "data-detail-post-row",
+      menuId: "detail-post-row-menu",
+      indexAttr: "data-detail-post-row-index",
+      actionAttr: "data-detail-post-row-action",
+      collect: (includeEmpty) => collectRosterPostMapping(includeEmpty),
+      blankRow: () => ({ code: "", post: "" }),
+      commit: (rows) => {
+        detailSettingsPayload.roster_post_mapping = rows;
+        renderRosterPostMapping(rows);
+      },
+    });
 
     function renderRosterCodeDefinitions(defs) {
       const box = document.getElementById("detail-code-definitions");
@@ -2243,45 +2229,22 @@
       });
     }
 
-    function emptyRosterCodeDefinition() {
-      return { pattern: "", label: "" };
-    }
+    const detailCodeRowMenu = makeDetailRowMenu({
+      tableId: "detail-code-definitions",
+      rowAttr: "data-detail-code-row",
+      menuId: "detail-row-menu",
+      indexAttr: "data-detail-row-index",
+      actionAttr: "data-detail-row-action",
+      collect: (includeEmpty) => collectRosterCodeDefinitions(includeEmpty),
+      blankRow: () => ({ pattern: "", label: "" }),
+      commit: (rows) => {
+        detailSettingsPayload.roster_code_definitions = rows;
+        renderRosterCodeDefinitions(rows);
+        refreshRosterMaintReport();
+      },
+    });
 
-    function hideDetailRowMenu() {
-      const menu = document.getElementById("detail-row-menu");
-      if (!menu) return;
-      menu.hidden = true;
-      menu.removeAttribute("data-detail-row-index");
-    }
-
-    function showDetailRowMenu(ev, rowIndex) {
-      const menu = document.getElementById("detail-row-menu");
-      if (!menu) return;
-      ev.preventDefault();
-      menu.hidden = false;
-      menu.setAttribute("data-detail-row-index", Number.isInteger(rowIndex) ? String(rowIndex) : "-1");
-      const rect = menu.getBoundingClientRect();
-      const left = Math.max(2, Math.min(ev.clientX, window.innerWidth - rect.width - 2));
-      const top = Math.max(2, Math.min(ev.clientY, window.innerHeight - rect.height - 2));
-      menu.style.left = `${left}px`;
-      menu.style.top = `${top}px`;
-    }
-
-    function applyDetailRowAction(action, rowIndex) {
-      const rows = collectRosterCodeDefinitions(true);
-      const idx = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : rows.length;
-      if (action === "insert") {
-        rows.splice(Math.min(idx, rows.length), 0, emptyRosterCodeDefinition());
-      } else if (action === "delete") {
-        if (idx < rows.length) rows.splice(idx, 1);
-      } else if (action === "append") {
-        rows.push(emptyRosterCodeDefinition());
-      }
-      setUnsavedChanges("系統參數");
-      detailSettingsPayload.roster_code_definitions = rows;
-      renderRosterCodeDefinitions(rows);
-      refreshRosterMaintReport();
-    }
+    const DETAIL_ROW_MENUS = [detailCodeRowMenu, detailPostRowMenu, detailRiceRowMenu];
 
     function collectRosterCodeDefinitions(includeEmpty = false) {
       const rows = [];
@@ -2345,7 +2308,6 @@
             ...(googleCalendarSync || {}),
             client_secret_file: gcClientSecret,
             token_file: gcTokenFile,
-            service_account_file: "",
             nonwork_calendar_id: gcNonworkCalendar,
             work_calendar_id: gcWorkCalendar,
             alarm_calendar_id: gcAlarmCalendar,
@@ -2623,14 +2585,11 @@
       input.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
 
-    const catalogDirectKeyTimers = new WeakMap();
-
     function beginCatalogCellEdit(input, replaceValue = false) {
       if (!input || input.type === "checkbox") return;
       input.dataset.catalogOriginalValue = input.value;
       input.readOnly = false;
       input.dataset.catalogEditing = "1";
-      input.dataset.catalogReplaceOnComposition = replaceValue ? "1" : "";
       input.focus();
       if (replaceValue) {
         input.value = "";
@@ -2658,22 +2617,12 @@
         input.readOnly = true;
         delete input.dataset.catalogEditing;
         delete input.dataset.catalogOriginalValue;
-        delete input.dataset.catalogReplaceOnComposition;
-        delete input.dataset.catalogPendingDirectKey;
-        const timer = catalogDirectKeyTimers.get(input);
-        if (timer) clearTimeout(timer);
-        catalogDirectKeyTimers.delete(input);
         return;
       }
       normalizeCatalogInputValue(input);
       input.readOnly = true;
       delete input.dataset.catalogEditing;
       delete input.dataset.catalogOriginalValue;
-      delete input.dataset.catalogReplaceOnComposition;
-      delete input.dataset.catalogPendingDirectKey;
-      const timer = catalogDirectKeyTimers.get(input);
-      if (timer) clearTimeout(timer);
-      catalogDirectKeyTimers.delete(input);
     }
 
     function moveCatalogActiveCell(input, key) {
@@ -2687,7 +2636,6 @@
       if (!delta) return false;
       const next = catalogCellInputFrom(input, delta[0], delta[1]);
       if (!next) return false;
-      if (input.dataset) input.dataset.skipAutosaveOnce = "1";
       focusCatalogCell(next);
       return true;
     }

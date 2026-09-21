@@ -7,14 +7,6 @@
     let onoffLoading = false;
     let onoffDate = "";
 
-    function onoffEsc(text) {
-      return String(text == null ? "" : text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
-
     function onoffShowError(message) {
       const err = document.getElementById("onoffduty-err");
       if (err) err.textContent = message || "";
@@ -44,9 +36,7 @@
     async function onoffShiftDate(deltaDays) {
       const base = onoffPlan ? onoffPlan.date_iso : "";
       if (!base || onoffLoading) return;
-      const [y, m, d] = base.split("-").map(Number);
-      const dt = new Date(Date.UTC(y, m - 1, d + deltaDays, 12, 0, 0));
-      const iso = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+      const iso = isoAddDays(base, deltaDays);
       onoffDate = iso === onoffPlan.today_iso ? "" : iso;
       await refreshOnOffDuty();
     }
@@ -58,13 +48,13 @@
 
     function onoffStatusLine(action) {
       if (action.status === "sent") {
-        return `<div class="duty-status-sent">✓ sent ${onoffFmtLoggedAt(action.logged_at)} · ${onoffEsc(action.log_source)}</div>`;
+        return `<div class="duty-status-sent">✓ sent ${onoffFmtLoggedAt(action.logged_at)} · ${esc(action.log_source)}</div>`;
       }
       if (action.status === "failed") {
-        return `<div class="duty-status-bad" title="${onoffEsc(action.detail || "")}">✗ failed ${onoffFmtLoggedAt(action.logged_at)} · retrying</div>`;
+        return `<div class="duty-status-bad" title="${esc(action.detail || "")}">✗ failed ${onoffFmtLoggedAt(action.logged_at)} · retrying</div>`;
       }
       if (action.status === "missed") {
-        return `<div class="duty-status-bad" title="${onoffEsc(action.detail || "")}">✗ missed — open the form yourself</div>`;
+        return `<div class="duty-status-bad" title="${esc(action.detail || "")}">✗ missed — open the form yourself</div>`;
       }
       if (action.status === "hold") {
         const what = action.kind === "start" ? "start" : "finish";
@@ -85,7 +75,7 @@
       // 一行 = 幾時 + 符號 + 當時嗰個時間。狀態字、source、detail 都係符號已經講咗嘅嘢。
       const items = rows.map((h) => {
         const icon = ONOFF_HISTORY_ICON[h.status] || "·";
-        return `<li>${onoffEsc(onoffFmtLoggedAt(h.recorded_at))} ${icon} ${onoffEsc(h.time_text || "")}</li>`;
+        return `<li>${esc(onoffFmtLoggedAt(h.recorded_at))} ${icon} ${esc(h.time_text || "")}</li>`;
       });
       return `<details class="onoff-history"><summary>經過（${rows.length}）</summary><ul>${items.join("")}</ul></details>`;
     }
@@ -95,15 +85,15 @@
       const overridden = onoffPlan && (action.kind === "start" ? onoffPlan.start_override : onoffPlan.end_override);
       const timeText = (action.time || "—") + (overridden ? " *" : "");
       const openBtn = hasUrl
-        ? `<a class="duty-btn duty-btn-primary onoff-open" href="${onoffEsc(action.url)}" target="_blank" rel="noopener" data-onoff-kind="${onoffEsc(action.kind)}">Open form ↗</a>`
+        ? `<a class="duty-btn duty-btn-primary onoff-open" href="${esc(action.url)}" target="_blank" rel="noopener" data-onoff-kind="${esc(action.kind)}">Open form ↗</a>`
         : "";
       const copyBtn = hasUrl
-        ? `<button type="button" class="duty-btn onoff-copy" data-onoff-copy="${onoffEsc(action.url)}">Copy link</button>`
+        ? `<button type="button" class="duty-btn onoff-copy" data-onoff-copy="${esc(action.url)}">Copy link</button>`
         : "";
       // 今日兩張卡都有：Hold（form + 報平安更 slot 一齊 hold）＋ Send now（form + WhatsApp 齊發）。
       let lateBtns = "";
       if (onoffPlan && (onoffPlan.relation || "today") === "today" && action.status !== "sent") {
-        const kind = onoffEsc(action.kind);
+        const kind = esc(action.kind);
         const holding = action.status === "hold";
         const holdTitle = action.kind === "start"
           ? "Hold both sides: the WhatsApp 報開工 slot and the On Duty form stop auto-firing"
@@ -113,12 +103,12 @@
           : "Fire now at the current time: submit the form + send WhatsApp; 加班表 is written only outside the payroll window and over 10.25 h total";
         lateBtns = `${holding
             ? `<button type="button" class="duty-btn" data-onoff-action="duty-release" data-onoff-for="${kind}">Resume</button>`
-            : `<button type="button" class="duty-btn" data-onoff-action="duty-hold" data-onoff-for="${kind}" title="${onoffEsc(holdTitle)}">Hold</button>`}
-           <button type="button" class="duty-btn${holding ? " duty-btn-primary" : ""}" data-onoff-action="duty-send" data-onoff-for="${kind}" title="${onoffEsc(sendTitle)}">Send now</button>`;
+            : `<button type="button" class="duty-btn" data-onoff-action="duty-hold" data-onoff-for="${kind}" title="${esc(holdTitle)}">Hold</button>`}
+           <button type="button" class="duty-btn${holding ? " duty-btn-primary" : ""}" data-onoff-action="duty-send" data-onoff-for="${kind}" title="${esc(sendTitle)}">Send now</button>`;
       }
       return `<div class="duty-stat-card onoff-card">
-        <div class="duty-stat-label">${onoffEsc(action.label)}</div>
-        <div class="duty-stat-value" ${overridden ? 'title="加班表 override"' : ""}>${onoffEsc(timeText)}</div>
+        <div class="duty-stat-label">${esc(action.label)}</div>
+        <div class="duty-stat-value" ${overridden ? 'title="加班表 override"' : ""}>${esc(timeText)}</div>
         ${onoffStatusLine(action)}
         ${onoffHistoryLines(action)}
         <div class="duty-card-actions">${openBtn}${copyBtn}</div>
@@ -137,13 +127,13 @@
       const cards = (plan.actions || []).map(onoffActionCard).join("");
       const body = plan.actions && plan.actions.length
         ? `<div class="duty-stats onoff-stats">${cards}</div>`
-        : `<div class="duty-status-muted onoff-note">${onoffEsc(plan.note || "當日冇嘢報")}</div>`;
+        : `<div class="duty-status-muted onoff-note">${esc(plan.note || "當日冇嘢報")}</div>`;
 
       const metaParts = [
-        `Code ${onoffEsc(plan.roster_code) || "—"}`,
-        onoffEsc(formLabel),
-        onoffEsc(plan.post || ""),
-        plan.staff_number ? `Staff ${onoffEsc(plan.staff_number)}` : "",
+        `Code ${esc(plan.roster_code) || "—"}`,
+        esc(formLabel),
+        esc(plan.post || ""),
+        plan.staff_number ? `Staff ${esc(plan.staff_number)}` : "",
       ].filter(Boolean);
       // 所有嘢一個 block：title 拖得郁（同 ReportNormal blocks 共用位置記憶）。
       out.innerHTML = `
@@ -152,7 +142,7 @@
             <div class="duty-block-title" title="Drag to move · double-click to reset">OnOffDuty</div>
             <div class="duty-toolbar onoff-toolbar">
               <button type="button" class="duty-btn" data-onoff-action="date-prev">◀</button>
-              <span class="duty-date">${onoffEsc(plan.date_iso)}（${relationLabel}）· 30小時制</span>
+              <span class="duty-date">${esc(plan.date_iso)}（${relationLabel}）· 30小時制</span>
               <button type="button" class="duty-btn" data-onoff-action="date-next">▶</button>
               ${relation !== "today" ? '<button type="button" class="duty-btn" data-onoff-action="date-today">返今日</button>' : ""}
               <button type="button" class="duty-btn" data-onoff-action="refresh">Refresh</button>

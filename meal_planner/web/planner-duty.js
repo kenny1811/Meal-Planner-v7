@@ -10,9 +10,7 @@
     async function dutyShiftDate(deltaDays) {
       const base = dutyReportPlan ? dutyReportPlan.date_iso : "";
       if (!base || dutyReportLoading) return;
-      const [y, m, d] = base.split("-").map(Number);
-      const dt = new Date(Date.UTC(y, m - 1, d + deltaDays, 12, 0, 0));
-      const iso = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+      const iso = isoAddDays(base, deltaDays);
       const target = iso === dutyReportPlan.today_iso ? "" : iso;
       dutyReportLoading = true;
       try {
@@ -31,14 +29,6 @@
       } finally {
         dutyReportLoading = false;
       }
-    }
-
-    function dutyEsc(text) {
-      return String(text == null ? "" : text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
     }
 
     function dutyFmtDateTime(iso) {
@@ -74,7 +64,7 @@
         return `<span class="duty-status-sent">✓ sent ${dutyFmtTimeOnly(slot.sent_at)}${manual}</span>`;
       }
       if (slot.status === "failed") {
-        return `<span class="duty-status-bad" title="${dutyEsc(slot.detail)}">✗ failed</span>`;
+        return `<span class="duty-status-bad" title="${esc(slot.detail)}">✗ failed</span>`;
       }
       if (slot.status === "missed") {
         return `<span class="duty-status-bad">✗ missed</span>`;
@@ -94,7 +84,7 @@
       const relation = plan.relation || "today";
       if (relation === "past") return "";
       const btn = (action, label, cls = "") =>
-        `<button type="button" class="duty-btn ${cls}" data-duty-action="${action}" data-duty-slot="${dutyEsc(slot.id)}">${label}</button>`;
+        `<button type="button" class="duty-btn ${cls}" data-duty-action="${action}" data-duty-slot="${esc(slot.id)}">${label}</button>`;
       if (slot.status === "sent") return relation === "today" ? btn("send", "Resend") : "";
       if (slot.status === "stopped") return "";
       const parts = [];
@@ -142,19 +132,19 @@
       const slotRows = plan.slots
         .map((slot, index) => {
           const rowClass = slot.status === "due" ? "duty-row-due" : slot.status === "skipped" || slot.status === "stopped" ? "duty-row-muted" : "";
-          const timeMark = slot.time !== slot.original_time ? ` <span class="duty-status-muted" title="原定 ${dutyEsc(slot.original_time)}">*</span>` : "";
+          const timeMark = slot.time !== slot.original_time ? ` <span class="duty-status-muted" title="原定 ${esc(slot.original_time)}">*</span>` : "";
           const groupEditable = dutyGroupCellEditable(plan, slot);
-          const groupHtml = dutyEsc(slot.group) || '<span class="duty-status-bad">未設定 group</span>';
+          const groupHtml = esc(slot.group) || '<span class="duty-status-bad">未設定 group</span>';
           const groupCell = groupEditable
-            ? `<td class="duty-plain duty-group-cell" tabindex="0" data-duty-group-slot="${dutyEsc(slot.id)}" title="Click / Enter to pick group">${groupHtml}<span class="duty-caret">▾</span></td>`
+            ? `<td class="duty-plain duty-group-cell" tabindex="0" data-duty-group-slot="${esc(slot.id)}" title="Click / Enter to pick group">${groupHtml}<span class="duty-caret">▾</span></td>`
             : `<td class="duty-plain">${groupHtml}</td>`;
           const timeEditable = groupEditable;
           const timeCell = timeEditable
-            ? `<td class="duty-td-time"><input type="text" readonly class="duty-time-input" data-duty-time-slot="${dutyEsc(slot.id)}" value="${dutyEsc(slot.time)}" title="F2 / 雙擊改：09:16 / 0916 / 2416；留空還原原定 ${dutyEsc(slot.original_time)}" />${timeMark}</td>`
-            : `<td class="duty-td-time duty-plain">${dutyEsc(slot.time)}${timeMark}</td>`;
+            ? `<td class="duty-td-time"><input type="text" readonly class="duty-time-input" data-duty-time-slot="${esc(slot.id)}" value="${esc(slot.time)}" title="F2 / 雙擊改：09:16 / 0916 / 2416；留空還原原定 ${esc(slot.original_time)}" />${timeMark}</td>`
+            : `<td class="duty-td-time duty-plain">${esc(slot.time)}${timeMark}</td>`;
           const messageCell = timeEditable
-            ? `<td><input type="text" readonly class="duty-msg-input" data-duty-msg-slot="${dutyEsc(slot.id)}" value="${dutyEsc(slot.message)}" title="F2 / 雙擊改；留空還原預設：${dutyEsc(slot.default_message || "")}" /></td>`
-            : `<td class="duty-plain">${dutyEsc(slot.message)}</td>`;
+            ? `<td><input type="text" readonly class="duty-msg-input" data-duty-msg-slot="${esc(slot.id)}" value="${esc(slot.message)}" title="F2 / 雙擊改；留空還原預設：${esc(slot.default_message || "")}" /></td>`
+            : `<td class="duty-plain">${esc(slot.message)}</td>`;
           return `<tr class="${rowClass}">
             ${timeCell}
             ${messageCell}
@@ -169,22 +159,22 @@
         .map(
           (ev) =>
             `<div class="duty-event"><span class="duty-status-muted">${dutyFmtDateTime(ev.at)}</span> ` +
-            `${dutyEsc(ev.detail || ev.action)} <span class="duty-status-muted">· ${dutyEsc(ev.source)}</span></div>`
+            `${esc(ev.detail || ev.action)} <span class="duty-status-muted">· ${esc(ev.source)}</span></div>`
         )
         .join("");
 
       const mappingRows = Object.entries(plan.mapping)
         .map(
           ([code, group]) =>
-            `<tr><td><input type="text" readonly class="duty-map-cell duty-map-code" data-duty-map-orig="${dutyEsc(code)}" value="${dutyEsc(code)}" /></td>` +
-            `<td><input type="text" readonly class="duty-map-cell duty-map-group" data-duty-map-orig="${dutyEsc(code)}" value="${dutyEsc(group)}" /></td></tr>`
+            `<tr><td><input type="text" readonly class="duty-map-cell duty-map-code" data-duty-map-orig="${esc(code)}" value="${esc(code)}" /></td>` +
+            `<td><input type="text" readonly class="duty-map-cell duty-map-group" data-duty-map-orig="${esc(code)}" value="${esc(group)}" /></td></tr>`
         )
         .join("");
 
       out.innerHTML = `
         <div class="duty-toolbar">
           <button type="button" class="duty-btn" data-duty-action="date-prev">◀</button>
-          <span class="duty-date">${dutyEsc(plan.date_iso)}（${relationLabel}）· 30小時制</span>
+          <span class="duty-date">${esc(plan.date_iso)}（${relationLabel}）· 30小時制</span>
           <button type="button" class="duty-btn" data-duty-action="date-next">▶</button>
           ${relation !== "today" ? '<button type="button" class="duty-btn" data-duty-action="date-today">返今日</button>' : ""}
           ${chip(health.cdp, "Chrome CDP")}
@@ -192,19 +182,19 @@
           <button type="button" class="duty-btn ${plan.auto_send ? "duty-btn-on" : ""}" data-duty-action="toggle-auto">Auto-send: ${plan.auto_send ? "on" : "off"}</button>
           <button type="button" class="duty-btn" data-duty-action="refresh">Refresh</button>
         </div>
-        ${plan.data_error ? `<div class="err">${dutyEsc(plan.data_error)}</div>` : ""}
+        ${plan.data_error ? `<div class="err">${esc(plan.data_error)}</div>` : ""}
         <div class="duty-layout" id="duty-layout">
           <div class="duty-block duty-block-card" data-duty-block="stats">
             <div class="duty-block-title" title="Drag to move · double-click to reset">Summary</div>
             <div class="duty-stats">
               <div class="duty-stat-card"><div class="duty-stat-label">Today's code</div>
-                <div class="duty-stat-value">${dutyEsc(dutySegmentsText(plan)) || "—"}</div>
-                <div class="duty-stat-sub">source: ${dutyEsc(sourceLabel)}${plan.mode === "stop" ? " · 唔報更" : ""}</div></div>
+                <div class="duty-stat-value">${esc(dutySegmentsText(plan)) || "—"}</div>
+                <div class="duty-stat-sub">source: ${esc(sourceLabel)}${plan.mode === "stop" ? " · 唔報更" : ""}</div></div>
               <div class="duty-stat-card"><div class="duty-stat-label">Target group</div>
-                <div class="duty-stat-value duty-stat-group">${dutyEsc(currentGroup) || "—"}</div></div>
+                <div class="duty-stat-value duty-stat-group">${esc(currentGroup) || "—"}</div></div>
               <div class="duty-stat-card"><div class="duty-stat-label">Sent today</div>
                 <div class="duty-stat-value">${plan.sent_count} / ${plan.total_count}</div>
-                <div class="duty-stat-sub">${plan.next_time ? `next ${dutyEsc(plan.next_time)}` : "no more today"}</div></div>
+                <div class="duty-stat-sub">${plan.next_time ? `next ${esc(plan.next_time)}` : "no more today"}</div></div>
             </div>
           </div>
           <div class="duty-block" data-duty-block="sheet">
@@ -229,7 +219,7 @@
           </div>
           <div class="duty-block duty-block-card" data-duty-block="override">
             <div class="duty-block-title" title="Drag to move · double-click to reset">Override</div>
-            <div class="duty-card-sub">${plan.mode === "stop" ? "唔報更（stopped）" : plan.source === "override" ? `Override：${dutyEsc(dutySegmentsText(plan))}` : "None — following roster sheet"}</div>
+            <div class="duty-card-sub">${plan.mode === "stop" ? "唔報更（stopped）" : plan.source === "override" ? `Override：${esc(dutySegmentsText(plan))}` : "None — following roster sheet"}</div>
             ${relation === "past" ? '<div class="duty-status-muted">過去日只供回顧，唔可以改。</div>' : `
             <div class="duty-card-actions">
               <button type="button" class="duty-btn" data-duty-action="change-code">Change code…</button>
@@ -260,7 +250,7 @@
             </div>
             <div class="duty-card-actions">
               <span class="duty-status-muted">Template:</span>
-              <input type="text" id="duty-template-input" class="duty-template-input" value="${dutyEsc(plan.message_template)}" title="改完 Enter / 點走即存；必須含 {code}" />
+              <input type="text" id="duty-template-input" class="duty-template-input" value="${esc(plan.message_template)}" title="改完 Enter / 點走即存；必須含 {code}" />
             </div>
           </div>
         </div>`;
@@ -292,13 +282,7 @@
       if (el) el.focus();
     }
 
-    // 拖 block 以 10px 為單位落格——排出嚟自然對齊，唔會差一兩個 pixel。
-    // 淨係「移動」落格，改闊度／高度照舊逐 pixel。
-    const DUTY_BLOCK_SNAP_PX = 10;
-
-    function dutyBlockSnap(value) {
-      return Math.round(value / DUTY_BLOCK_SNAP_PX) * DUTY_BLOCK_SNAP_PX;
-    }
+    // 拖 block 以 10px 為單位落格（snapBlockPx，planner.js）——淨係「移動」落格，改闊度／高度照舊逐 pixel。
 
     function dutyBlockWidthPx(block, key) {
       const table = block.querySelector("table[data-form-table], table.sheet");
@@ -422,8 +406,8 @@
             startWindowDrag({
               bodyClass: "is-dnd-dragging",
               onMove: (mv) => {
-                formColumnWidths[`duty_block_${key}_x`] = dutyBlockSnap(start.x + (mv.clientX - startX));
-                formColumnWidths[`duty_block_${key}_y`] = Math.max(0, dutyBlockSnap(start.y + (mv.clientY - startY)));
+                formColumnWidths[`duty_block_${key}_x`] = snapBlockPx(start.x + (mv.clientX - startX));
+                formColumnWidths[`duty_block_${key}_y`] = Math.max(0, snapBlockPx(start.y + (mv.clientY - startY)));
                 applyDutyBlockLayout();
               },
               onUp: () => {
@@ -523,7 +507,9 @@
 
     function dutyCloseGroupPicker() {
       const menu = document.getElementById("duty-group-picker");
-      if (menu) menu.remove();
+      if (!menu) return;
+      if (menu.__outsideClick) menu.__outsideClick.abort();
+      menu.remove();
     }
 
     function dutyShowGroupPicker(slotId, anchor) {
@@ -566,14 +552,13 @@
       const rect = anchor.getBoundingClientRect();
       menu.style.left = `${Math.max(6, Math.min(window.innerWidth - 300, rect.left))}px`;
       menu.style.top = `${rect.bottom + 4}px`;
+      // 撳 menu 出面就收埋；listener 跟住個 menu 一齊死（dutyCloseGroupPicker abort）。
+      const outsideClick = new AbortController();
+      menu.__outsideClick = outsideClick;
       setTimeout(() => {
-        const onDocClick = (ev) => {
-          if (!menu.contains(ev.target)) {
-            dutyCloseGroupPicker();
-            document.removeEventListener("click", onDocClick);
-          }
-        };
-        document.addEventListener("click", onDocClick);
+        document.addEventListener("click", (ev) => {
+          if (!menu.contains(ev.target)) dutyCloseGroupPicker();
+        }, { signal: outsideClick.signal });
       }, 0);
     }
 

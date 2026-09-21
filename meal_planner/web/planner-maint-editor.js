@@ -21,7 +21,6 @@
       input.dataset.maintOriginalValue = input.value;
       input.readOnly = false;
       input.dataset.maintEditing = "1";
-      input.dataset.maintReplaceOnComposition = replaceValue ? "1" : "";
       input.focus();
       if (replaceValue) input.value = "";
       const pos = replaceValue ? 0 : String(input.value || "").length;
@@ -132,11 +131,6 @@
       input.readOnly = true;
       delete input.dataset.maintEditing;
       delete input.dataset.maintOriginalValue;
-      delete input.dataset.maintReplaceOnComposition;
-      delete input.dataset.maintPendingDirectKey;
-      const timer = rosterDirectKeyTimers.get(input);
-      if (timer) clearTimeout(timer);
-      rosterDirectKeyTimers.delete(input);
       autoResizeTextarea(input);
       // 郁過就查（連加個 space 都算），有錯就即刻彈。
       if (editedValue !== null && editedValue !== beforeEdit) {
@@ -187,8 +181,6 @@
     function focusFirstRosterWakeInput() {
       return focusRosterWakeInput(0);
     }
-    const rosterDirectKeyTimers = new WeakMap();
-
     function handleRosterCellKeydown(ev) {
       const input = ev.currentTarget;
       const rowIdx = Number(input.getAttribute("data-maint-roster-row"));
@@ -295,7 +287,7 @@
         if (!googleCalendarAuth.authenticated) {
           if (googleCalendarSync && (googleCalendarSync.enabled || googleCalendarSync.write)) {
             googleCalendarSync = { ...(googleCalendarSync || {}), enabled: false, write: false };
-            await persistGoogleCalendarSync();
+            await persistUiState({ google_calendar_sync: googleCalendarSync });
           }
           if (status) status.textContent = "";
         } else if (status && (options.showConnected || !status.textContent)) {
@@ -313,7 +305,7 @@
         if (!googleCalendarAuth || !googleCalendarAuth.authenticated) {
           if (toggle) toggle.checked = false;
           googleCalendarSync = { ...(googleCalendarSync || {}), enabled: false, write: false };
-          await persistGoogleCalendarSync();
+          await persistUiState({ google_calendar_sync: googleCalendarSync });
           if (status) status.textContent = "";
           return;
         }
@@ -323,7 +315,7 @@
           enabled: !!(toggle && toggle.checked),
           write: !!(toggle && toggle.checked),
         };
-        await persistGoogleCalendarSync();
+        await persistUiState({ google_calendar_sync: googleCalendarSync });
       };
       [toggle, login].forEach((el) => {
         if (!el) return;
@@ -389,31 +381,32 @@
         </div>`;
       editor.querySelectorAll("textarea[data-maint-roster-row]").forEach((input) => {
         input.readOnly = true;
+        // 淨係綁 focus（mousedown 之後一定會 focus）：以前 focus + mousedown + tr mousedown 三個都叫
+        // setActiveRosterMonthIndex，一下 click 重畫報表三次、POST ui-state 三次。
         input.addEventListener("focus", () => setActiveRosterMonthIndex(Number(input.getAttribute("data-maint-roster-row"))));
-        input.addEventListener("mousedown", () => setActiveRosterMonthIndex(Number(input.getAttribute("data-maint-roster-row"))));
         input.addEventListener("input", () => {
           activeRosterMonthIndex = Number(input.getAttribute("data-maint-roster-row"));
           setUnsavedChanges("餐單參數");
-          refreshRosterMaintReport();
+          scheduleRosterReportRefresh();
         });
-        input.addEventListener("blur", () => endRosterCellEdit(input));
+        input.addEventListener("blur", () => {
+          flushRosterReportRefresh();
+          endRosterCellEdit(input);
+        });
         input.addEventListener("dblclick", () => beginRosterCellEdit(input));
         input.addEventListener("compositionstart", () => {
-          if (input.readOnly) {
-            beginRosterCellEdit(input, true);
-          }
-          const timer = rosterDirectKeyTimers.get(input);
-          if (timer) {
-            clearTimeout(timer);
-            rosterDirectKeyTimers.delete(input);
-          }
-          delete input.dataset.maintPendingDirectKey;
-          delete input.dataset.maintReplaceOnComposition;
+          if (input.readOnly) beginRosterCellEdit(input, true);
         });
         input.addEventListener("keydown", handleRosterCellKeydown);
       });
+      // 撳中 td 嘅 padding（textarea 以外）一樣要揀到嗰個月：focus 落 textarea，由 focus handler 一次過搞。
       editor.querySelectorAll(".maint-roster-table tr[data-maint-row-index]").forEach((row) => {
-        row.addEventListener("mousedown", () => setActiveRosterMonthIndex(Number(row.getAttribute("data-maint-row-index"))));
+        row.addEventListener("mousedown", (ev) => {
+          const input = row.querySelector("textarea[data-maint-roster-row]");
+          if (!input || ev.target === input) return;
+          ev.preventDefault();
+          input.focus();
+        });
       });
       bindMaintContextMenu(editor);
       attachRosterGcSyncToggle(editor);
@@ -667,7 +660,8 @@
       const nowDisabled = !String(row[offIdx] || "").trim();
       row[offIdx] = nowDisabled ? "1" : "";
       rows[rIdx] = row;
-      maintSheetPayload.rows = recomputeScheduleGridDurations(rows);
+      recalculateScheduleGridDurations(rows);
+      maintSheetPayload.rows = rows;
       setUnsavedChanges("餐單參數");
       // 唔叫 renderMaintEditor()——重砌 639 行又慢又會令捲軸彈返上頂。
       // 停用實際只郁兩樣嘢：嗰行 dim、受影響嗰幾格時長／內容。
@@ -696,76 +690,6 @@
           if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
         });
       });
-    }
-
-    /** 內容尾巴嗰個數字同時長欄一致：先剝走舊數字，再貼返新嘅（同電腦出 label 一樣做法）。 */
-    function contentWithDuration(content, duration) {
-      const base = String(content ?? "").replace(/\s+\d{1,3}$/, "").trim();
-      if (!base) return String(content ?? "").trim();
-      return duration ? `${base} ${duration}` : base;
-    }
-
-    /**
-     * 重算時長：一格嘅時長 ＝ 去下一個「佔時間」行嘅距離。
-     * `-` 開頭嘅 marker 行同停用行都唔佔時間，前一格跨過佢哋；最後一格留空。
-     * 逐個（更碼 + 生效日期）版本各自計。
-     */
-    function recomputeScheduleGridDurations(rows) {
-      if (maintSheetPayload.sheet_key !== "schedule_grid" || !Array.isArray(rows[0])) return rows;
-      const header = rows[0].map((cell) => String(cell || "").trim());
-      const cCode = header.indexOf("更碼");
-      const cTime = header.indexOf("時間");
-      const cContent = header.indexOf("內容");
-      const cDur = header.indexOf("時長");
-      const cEff = header.findIndex((h) => h === "生效日期" || h === "生效" || h === "Effective From");
-      const cOff = header.indexOf("停用");
-      if (cCode < 0 || cTime < 0 || cContent < 0 || cDur < 0) return rows;
-      // 星號行先推下一行嘅時間，之後先計時長。
-      applyScheduleGridStarRows(rows, scheduleGridColumnIndexes(rows));
-
-      const minutesOf = (text) => {
-        const m = String(text || "").trim().match(/^(\d{1,2}):(\d{2})$/);
-        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-      };
-      const groups = new Map();
-      rows.forEach((row, rIdx) => {
-        if (rIdx === 0 || !Array.isArray(row)) return;
-        const key = `${String(row[cCode] || "").trim()}@@${cEff >= 0 ? String(row[cEff] || "").trim() : ""}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(rIdx);
-      });
-      groups.forEach((indexes) => {
-        const live = indexes.filter((rIdx) => {
-          const row = rows[rIdx];
-          const off = cOff >= 0 && String(row[cOff] || "").trim();
-          const marker = String(row[cContent] || "").trim().startsWith("-");
-          return !off && !marker && minutesOf(row[cTime]) !== null;
-        }).sort((a, b) => minutesOf(rows[a][cTime]) - minutesOf(rows[b][cTime]));
-        const isStar = (row) => String(row[cContent] || "").trimStart().startsWith("*");
-        indexes.forEach((rIdx) => {
-          if (!live.includes(rIdx)) {
-            const row = [...rows[rIdx]];
-            while (row.length <= cDur) row.push("");
-            row[cDur] = "";
-            if (!isStar(row)) row[cContent] = contentWithDuration(row[cContent], "");
-            rows[rIdx] = row;
-          }
-        });
-        live.forEach((rIdx, i) => {
-          const row = [...rows[rIdx]];
-          while (row.length <= cDur) row.push("");
-          const starMinutes = scheduleGridStarMinutes(row[cContent]);
-          row[cDur] = starMinutes != null
-            ? String(starMinutes)
-            : (i + 1 < live.length
-              ? String(minutesOf(rows[live[i + 1]][cTime]) - minutesOf(rows[rIdx][cTime]))
-              : "");
-          // 星號行嘅內容係人手打嘅，唔改；其他行照舊將時長貼落內容尾。
-          if (!isStar(row)) row[cContent] = contentWithDuration(row[cContent], row[cDur]);
-          rows[rIdx] = row;
-        });
-      });
-      return rows;
     }
 
     function renderMaintEditor() {
@@ -1152,7 +1076,7 @@
       (existing || []).slice(1).forEach((row) => {
         if (!Array.isArray(row)) return;
         const d = parseYmd(row[0]);
-        const key = d ? dateKey(d.year, d.month, d.day) : "";
+        const key = d ? isoFromYmd({ y: d.year, m: d.month, d: d.day }) : "";
         const wake = normalTime(row[1]) || "";
         const note = String(row[2] || "").trim();
         // 淨係有備註、冇改起身時間嘅日子一樣要留低。
@@ -1185,7 +1109,7 @@
       const effectiveKey = (row) => {
         if (cols.effective < 0) return "";
         const parsed = parseYmd(row[cols.effective]);
-        if (parsed) return dateKey(parsed.year, parsed.month, parsed.day);
+        if (parsed) return isoFromYmd({ y: parsed.year, m: parsed.month, d: parsed.day });
         const raw = String(row[cols.effective] || "").trim();
         return raw;
       };
@@ -1228,9 +1152,10 @@
       return [header, ...body];
     }
 
+    /** 開一張 maint sheet；回傳 true = 載入成功，false = 取消／載入失敗（錯誤已顯示喺 maint-err）。 */
     async function openMaintSheet(sheetKey, openTree = true) {
-      if (!sheetKey) return;
-      if (sheetKey !== activeMaintSheetKey && !(await resolveUnsavedBeforeLeaving())) return;
+      if (!sheetKey) return false;
+      if (sheetKey !== activeMaintSheetKey && !(await resolveUnsavedBeforeLeaving())) return false;
       setActivePanel("maint");
       setActiveMenuPathForKey(sheetKey);
       if (openTree) openMenuTreeForGroup(menuGroupForKey(sheetKey));
@@ -1240,6 +1165,7 @@
       } catch (_) {}
       showMaintError("");
       setMaintStatus("Loading...");
+      let ok = true;
       try {
         maintSheetPayload = await loadMaintSheet(sheetKey);
         if (!Array.isArray(maintSheetPayload.rows)) maintSheetPayload.rows = [];
@@ -1271,8 +1197,10 @@
       } catch (e) {
         showMaintError(String(e.message || e));
         setMaintStatus("");
+        ok = false;
       }
       setActivePanel("maint", false);
+      return ok;
     }
 
     async function refreshScheduleGridForPicker(nextFilters = null) {

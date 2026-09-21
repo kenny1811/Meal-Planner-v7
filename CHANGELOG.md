@@ -4,6 +4,15 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.11.28 — 21/09/2026 13:20
+- Maint panel: if the remembered sheet is gone, the first sheet opens instead of an empty panel.
+- Leaving Typhoon via any sidebar entry (Maint sheets, custom menus) now saves the typhoon state.
+- Midnight rollover no longer discards a meal cell you are still editing.
+- Schedule grid: disabling / enabling a row recalculates durations on the 30-hour clock, same as the editor.
+- 30-hour clock: meal times 00:00-05:59 count as 24:00-29:59 in the first-meal check.
+- Sidebar drag-and-drop is pointer-only (the dead native drag path is gone); menu tree open state and the
+  active config view now follow the server, with browser storage only as a fallback.
+
 ## 7.11.27 — 21/09/2026 12:50
 - Weight history: saving the profile no longer wipes records older than the 30 shown on screen.
 - Meal-plan version history keeps every generation, even two within the same second.

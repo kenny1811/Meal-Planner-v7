@@ -53,10 +53,6 @@
           const w = Number(data.sidebar_width);
           if (Number.isFinite(w)) sidebarWidth = w;
         }
-        if (data && data.target_editor_width != null) {
-          const w = Number(data.target_editor_width);
-          if (Number.isFinite(w)) targetEditorWidth = w;
-        }
         if (data && typeof data.target_column_widths === "object" && data.target_column_widths) {
           targetColumnWidths = data.target_column_widths;
         }
@@ -72,6 +68,8 @@
         if (data && PANEL_KEYS.includes(data.active_panel)) {
           activePanel = data.active_panel;
         }
+        // config view 同 menu path 兩邊都有存（server ui-state + localStorage）：
+        // 一律 server 贏，localStorage 淨係 server 冇值時嘅後備。
         const hasServerConfigView = data && ["targets", "catalog", "details"].includes(data.active_config_view);
         if (hasServerConfigView) {
           activeConfigView = data.active_config_view;
@@ -81,14 +79,15 @@
           if (activeMenuPath.some((part) => typeof isRemovedMenuKey === "function" && isRemovedMenuKey(part))) {
             activeMenuPath = ["top", "planner"];
           }
+        } else {
+          try {
+            const savedMenuPath = String(window.localStorage.getItem("mealplanner_active_menu_path") || "").trim();
+            const path = savedMenuPath.split("/").map((part) => part.trim()).filter(Boolean);
+            if (path.length && !path.some((part) => typeof isRemovedMenuKey === "function" && isRemovedMenuKey(part))) {
+              activeMenuPath = path;
+            }
+          } catch (_) {}
         }
-        try {
-          const savedMenuPath = String(window.localStorage.getItem("mealplanner_active_menu_path") || "").trim();
-          const path = savedMenuPath.split("/").map((part) => part.trim()).filter(Boolean);
-          if (path.length && !path.some((part) => typeof isRemovedMenuKey === "function" && isRemovedMenuKey(part))) {
-            activeMenuPath = path;
-          }
-        } catch (_) {}
         if (!hasServerConfigView) {
           let hasLocalConfigView = false;
           try {
@@ -152,7 +151,6 @@
             write: !!data.google_calendar_sync.write,
             client_secret_file: String(data.google_calendar_sync.client_secret_file || ""),
             token_file: String(data.google_calendar_sync.token_file || ""),
-            service_account_file: String(data.google_calendar_sync.service_account_file || ""),
             nonwork_calendar_id: String(data.google_calendar_sync.nonwork_calendar_id || ""),
           };
         }
@@ -174,7 +172,6 @@
       await persistUiState({
         column_widths: columnWidths,
         sidebar_width: sidebarWidth,
-        target_editor_width: targetEditorWidth,
         target_column_widths: targetColumnWidths,
         catalog_column_widths: catalogColumnWidths,
         form_column_widths: formColumnWidths,
@@ -185,21 +182,9 @@
       });
     }
 
-    async function persistActiveConfigViewState() {
-      await persistUiState({ active_config_view: activeConfigView });
-    }
-
-    async function persistActiveMenuPathState() {
-      await persistUiState({ active_menu_path: activeMenuPath });
-    }
-
     async function persistMenuOrder() {
       if (typeof cleanMenuOrder === "function") cleanMenuOrder();
       await persistUiState({ menu_order: menuOrder, menu_hidden_keys: menuHiddenKeys });
-    }
-
-    async function persistMenuTreeOpen() {
-      await persistUiState({ menu_tree_open: menuTreeOpen });
     }
 
     async function persistMenuLayout() {
@@ -210,10 +195,6 @@
         menu_hidden_keys: menuHiddenKeys,
         menu_tree_open: menuTreeOpen,
       });
-    }
-
-    async function persistGoogleCalendarSync() {
-      await persistUiState({ google_calendar_sync: googleCalendarSync });
     }
 
     async function connectGoogleCalendar() {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Meal Planner v7</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20260709-bowl" />
-  <link rel="stylesheet" href="style.css?v=20260919-mealtime-v1" />
+  <link rel="stylesheet" href="style.css?v=20260921-cleanup-v1" />
 </head>
 <body>
   <div id="clock-top-right" class="clock-top-right">--/--/---- --- --:--:--</div>
@@ -64,40 +64,40 @@
       <button type="button" class="menu-add-button" id="menu-add" title="Create menu item" aria-label="Create menu item">+</button>
     </div>
     <div class="menu-list" data-menu-drop-group="top">
-      <div class="menu-tree is-open" id="config-menu-tree">
+      <div class="menu-tree is-open" id="config-menu-tree" data-menu-tree-key="config">
         <button type="button" class="menu-item menu-tree-toggle" data-panel="config" data-menu-group="top" data-menu-key="config" id="menu-config" aria-expanded="true">
-          <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Config</span><span class="menu-tree-mark" aria-hidden="true"></span>
+          <span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Config</span><span class="menu-tree-mark" aria-hidden="true"></span>
         </button>
         <div class="menu-tree-children" data-menu-drop-group="config">
-          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="target" id="menu-config-target"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">營養指標 / Target</span></button>
-          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="catalog" id="menu-config-catalog"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Catalog</span></button>
-          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="details" id="menu-config-details"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Detail Settings</span></button>
+          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="target" id="menu-config-target"><span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">營養指標 / Target</span></button>
+          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="catalog" id="menu-config-catalog"><span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Catalog</span></button>
+          <button type="button" class="menu-item menu-child" data-menu-group="config" data-menu-key="details" id="menu-config-details"><span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Detail Settings</span></button>
         </div>
       </div>
-      <div class="menu-tree" id="maint-menu-tree">
+      <div class="menu-tree" id="maint-menu-tree" data-menu-tree-key="maint">
         <button type="button" class="menu-item menu-tree-toggle" data-panel="maint" data-menu-group="top" data-menu-key="maint" id="menu-maint" aria-expanded="false">
-          <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Maint</span><span class="menu-tree-mark" aria-hidden="true"></span>
+          <span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Maint</span><span class="menu-tree-mark" aria-hidden="true"></span>
         </button>
         <div class="menu-tree-children" id="maint-menu-children" data-menu-drop-group="maint"></div>
       </div>
-      <div class="menu-tree" id="reports-menu-tree">
+      <div class="menu-tree" id="reports-menu-tree" data-menu-tree-key="reports">
         <button type="button" class="menu-item menu-tree-toggle" data-panel="reports" data-menu-group="top" data-menu-key="reports" id="menu-reports" aria-expanded="false">
-          <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">報表</span><span class="menu-tree-mark" aria-hidden="true"></span>
+          <span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">報表</span><span class="menu-tree-mark" aria-hidden="true"></span>
         </button>
         <div class="menu-tree-children" data-menu-drop-group="reports">
-          <button type="button" class="menu-item menu-child" data-menu-group="reports" data-menu-key="shift_code_analysis" id="menu-report-shift-code-analysis"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">更碼分析</span></button>
+          <button type="button" class="menu-item menu-child" data-menu-group="reports" data-menu-key="shift_code_analysis" id="menu-report-shift-code-analysis"><span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">更碼分析</span></button>
         </div>
       </div>
-      <button type="button" class="menu-item" data-panel="duty_report" data-menu-group="top" data-menu-key="duty_report" id="menu-duty-report"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">ReportNormal</span></button>
-      <button type="button" class="menu-item" data-panel="onoffduty" data-menu-group="top" data-menu-key="onoffduty" id="menu-onoffduty"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">OnOffDuty</span></button>
-      <button type="button" class="menu-item" data-panel="typhoon" data-menu-group="top" data-menu-key="typhoon" id="menu-typhoon"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Typhoon</span></button>
-      <button type="button" class="menu-item active" data-panel="planner" data-menu-group="top" data-menu-key="planner" id="menu-planner"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Menu Planner</span></button>
-      <button type="button" class="menu-item" data-panel="shopping" data-menu-group="top" data-menu-key="shopping" id="menu-shopping"><span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Shopping List</span></button>
+      <button type="button" class="menu-item" data-panel="duty_report" data-menu-group="top" data-menu-key="duty_report" id="menu-duty-report"><span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">ReportNormal</span></button>
+      <button type="button" class="menu-item" data-panel="onoffduty" data-menu-group="top" data-menu-key="onoffduty" id="menu-onoffduty"><span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">OnOffDuty</span></button>
+      <button type="button" class="menu-item" data-panel="typhoon" data-menu-group="top" data-menu-key="typhoon" id="menu-typhoon"><span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Typhoon</span></button>
+      <button type="button" class="menu-item active" data-panel="planner" data-menu-group="top" data-menu-key="planner" id="menu-planner"><span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Menu Planner</span></button>
+      <button type="button" class="menu-item" data-panel="shopping" data-menu-group="top" data-menu-key="shopping" id="menu-shopping"><span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label">Shopping List</span></button>
     </div>
   </aside>
   <div id="sidebar-resizer" class="sidebar-resizer" title="Drag to resize sidebar"></div>
   <main class="main">
-  <section id="planner-panel">
+  <section id="planner-panel" data-panel="planner">
   <h1 data-title-key="planner">Meal Planner v7</h1>
   <div class="top">
     <span><label for="year">Year</label><input type="number" id="year" min="2000" max="2100" required /></span>
@@ -112,7 +112,7 @@
   <div id="err" class="err"></div>
   <div id="out"></div>
   </section>
-  <section id="config-panel" style="display:none;">
+  <section id="config-panel" data-panel="config" style="display:none;">
     <h1 data-title-key="config">Config</h1>
     <div class="config-views">
       <section class="config-view" data-config-view="targets">
@@ -293,7 +293,7 @@
       </section>
     </div>
   </section>
-  <section id="maint-panel" style="display:none;">
+  <section id="maint-panel" data-panel="maint" style="display:none;">
     <h1 data-title-key="maint">Maint</h1>
     <div class="config-toolbar">
       <button type="button" class="btn" id="maint-save" title="Ctrl+S" disabled>Save</button>
@@ -311,7 +311,7 @@
       <button type="button" data-maint-row-action="delete-version">Delete This Version</button>
     </div>
   </section>
-  <section id="reports-panel" class="reports-panel" style="display:none;">
+  <section id="reports-panel" class="reports-panel" data-panel="reports" style="display:none;">
     <h1 data-title-key="reports">報表</h1>
     <section class="report-view" data-report-view="shift_code_analysis">
       <h2 data-title-key="shift_code_analysis">更碼分析</h2>
@@ -319,22 +319,22 @@
       <div id="shift-code-analysis-out"></div>
     </section>
   </section>
-  <section id="duty-report-panel" style="display:none;">
+  <section id="duty-report-panel" data-panel="duty_report" style="display:none;">
     <h1 data-title-key="duty_report">ReportNormal</h1>
     <div id="duty-report-err" class="err"></div>
     <div id="duty-report-out" class="duty-report-out"></div>
   </section>
-  <section id="onoffduty-panel" style="display:none;">
+  <section id="onoffduty-panel" data-panel="onoffduty" style="display:none;">
     <h1 data-title-key="onoffduty">OnOffDuty</h1>
     <div id="onoffduty-err" class="err"></div>
     <div id="onoffduty-out" class="duty-report-out"></div>
   </section>
-  <section id="typhoon-panel" style="display:none;">
+  <section id="typhoon-panel" data-panel="typhoon" style="display:none;">
     <h1 data-title-key="typhoon">Typhoon</h1>
     <div id="typhoon-err" class="err"></div>
     <div id="typhoon-out" class="duty-report-out"></div>
   </section>
-  <section id="shopping-panel" style="display:none;">
+  <section id="shopping-panel" data-panel="shopping" style="display:none;">
     <div id="shopping-content" class="shopping-content">
       <h1 data-title-key="shopping">Shopping List</h1>
       <div class="top">
@@ -372,17 +372,17 @@
       <div class="changelog-body" id="changelog-body"></div>
     </div>
   </div>
-    <script defer src="api.js?v=20260811-nosemi-v1"></script>
-  <script defer src="shopping.js?v=20260723-drag-helper-v1"></script>
-  <script defer src="planner.js?v=20260820-date-rollover-v2"></script>
-  <script defer src="planner-menu.js?v=20260727-typhoon-v1"></script>
-  <script defer src="planner-maint.js?v=20260919-mealtime-v1"></script>
-  <script defer src="planner-maint-editor.js?v=20260919-mealtime-v1"></script>
-  <script defer src="planner-config.js?v=20260723-celledit-shared-v1"></script>
-  <script defer src="planner-render.js?v=20260820-date-rollover-v2"></script>
-  <script defer src="planner-duty.js?v=20260723-drag-helper-v1"></script>
-  <script defer src="planner-onoffduty.js?v=20260811-nosemi-v1"></script>
-  <script defer src="planner-typhoon.js?v=20260727-typhoon-v1"></script>
-    <script defer src="planner-events.js?v=20260827-past-guard-v2"></script>
+    <script defer src="api.js?v=20260921-cleanup-v1"></script>
+  <script defer src="shopping.js?v=20260921-cleanup-v1"></script>
+  <script defer src="planner.js?v=20260921-cleanup-v1"></script>
+  <script defer src="planner-menu.js?v=20260921-cleanup-v1"></script>
+  <script defer src="planner-maint.js?v=20260921-cleanup-v1"></script>
+  <script defer src="planner-maint-editor.js?v=20260921-cleanup-v1"></script>
+  <script defer src="planner-config.js?v=20260921-cleanup-v1"></script>
+  <script defer src="planner-render.js?v=20260921-cleanup-v1"></script>
+  <script defer src="planner-duty.js?v=20260921-cleanup-v1"></script>
+  <script defer src="planner-onoffduty.js?v=20260921-cleanup-v1"></script>
+  <script defer src="planner-typhoon.js?v=20260921-cleanup-v1"></script>
+    <script defer src="planner-events.js?v=20260921-cleanup-v1"></script>
 </body>
 </html>

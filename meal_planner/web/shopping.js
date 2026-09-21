@@ -12,10 +12,6 @@
       return ["shop_category", "shop_name", "shop_total_g"].reduce((total, key) => total + shopColWidthPx(key), 0);
     }
 
-    function escAttr(s) {
-      return esc(s).replace(/"/g, "&quot;");
-    }
-
     function attachShoppingResizers() {
       const table = document.querySelector("table.sheet.shopping-table");
       if (!table) return;
@@ -45,27 +41,11 @@
       });
     }
 
-    function datePlusDaysIso(iso, days) {
-      const dt = new Date(`${iso}T00:00:00`);
-      if (Number.isNaN(dt.getTime())) return "";
-      dt.setDate(dt.getDate() + days);
-      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-    }
-
     function inclusiveDateSpanDays(startIso, endIso) {
       const start = new Date(`${startIso}T00:00:00`);
       const end = new Date(`${endIso}T00:00:00`);
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
       return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-    }
-
-    function tomorrowIsoHK() {
-      const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Hong_Kong", year: "numeric", month: "2-digit", day: "2-digit" });
-      const p = fmt.formatToParts(new Date());
-      const y = p.find((x) => x.type === "year").value;
-      const m = p.find((x) => x.type === "month").value;
-      const d = p.find((x) => x.type === "day").value;
-      return datePlusDaysIso(`${y}-${m}-${d}`, 1);
     }
 
     function nextMonthDayIso(baseIso, day) {
@@ -107,7 +87,7 @@
       const start = document.getElementById("shop_start");
       const end = document.getElementById("shop_end");
       if (!start || !end || !start.value) return;
-      const suggested = datePlusDaysIso(start.value, 6);
+      const suggested = isoAddDays(start.value, 6);
       if (!suggested) return;
       if (shoppingEndWasAuto || !end.value) {
         end.value = suggested;
@@ -123,7 +103,7 @@
       if (!start || !end || !days.length) return;
       const minDate = String(days[0].date || "");
       const maxDate = String(days[days.length - 1].date || "");
-      const defaultStart = tomorrowIsoHK();
+      const defaultStart = isoFromYmd(ymdAddDays(ymdNow(), 1));
       const maxSelectable = maxIsoDate(maxDate, nextMonthDayIso(todayIsoHK(), 7));
       if (shoppingStartWasAuto || !start.value) {
         start.value = defaultStart || minDate;
@@ -228,7 +208,7 @@
               <td data-shop-col-key="shop_name">Name</td>
               <td data-shop-col-key="shop_total_g" class="c-right">Total g</td>
             </tr>
-            ${rows.map((x) => `<tr class="shop-data-row" title="${escAttr(sourceTitle(x.sources))}"><td>${esc(x.category)}</td><td>${esc(x.display_name || x.name)}</td><td class="c-right">${esc(x.grams.toFixed(1))}</td></tr>`).join("")}
+            ${rows.map((x) => `<tr class="shop-data-row" title="${esc(sourceTitle(x.sources))}"><td>${esc(x.category)}</td><td>${esc(x.display_name || x.name)}</td><td class="c-right">${esc(x.grams.toFixed(1))}</td></tr>`).join("")}
             <tr class="sum"><td></td><td>Total</td><td class="c-right">${esc(totalItems.toFixed(1))}</td></tr>
           </tbody></table>`
         : `<div class="hint">No gram-based items in selected range.</div>`;

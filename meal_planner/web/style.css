@@ -2238,7 +2238,6 @@
     .typhoon-stats .duty-stat-value { font-size: 13px; line-height: 1.2; }
     .typhoon-stats .duty-stat-label,
     .typhoon-stats .duty-stat-sub { line-height: 1.2; }
-    .typhoon-apply { padding: 0; margin-top: 0; }
     /* Apply 擺喺啲卡右邊、同一行；提示收咗做 tooltip。 */
     .typhoon-apply-slot { display: flex; align-items: center; margin-left: 12px; }
     .typhoon-apply-btn { height: 26px; padding: 2px 18px; }
@@ -2252,7 +2251,6 @@
     .duty-stat-card.typhoon-dayoff { background: #fff7ed; border-color: #f0c9a0; }
     .typhoon-field-off { opacity: 0.45; }
     .typhoon-dayoff-live { color: #b45309; font-weight: 700; }
-    .typhoon-maybe-off { color: #b45309; }
     /* 兩粒掣同 Target 幾行平排擺喺張表右邊；block 闊度 = 表 + 呢忽。 */
     .typhoon-meal-wrap { display: flex; align-items: flex-start; gap: 6px; padding-right: 8px; }
     /* 張餐單表唔可以俾 flex 壓縮——一縮，入面 .panel-bottom 就會自己出橫向捲軸。
@@ -2272,9 +2270,6 @@
     }
     .typhoon-meal-actions .duty-btn { width: 100%; padding: 2px 4px; }
     .typhoon-meal-hint { line-height: 1.25; }
-    tr.typhoon-row-off td { color: #9aa1a9; }
-    tr.typhoon-row-off td:first-child,
-    tr.typhoon-row-off td:nth-child(2) { text-decoration: line-through; }
     /* 闊度由 applyFormColumnWidths 設（＝各欄總和），所以唔好喺度寫 width。 */
     table.typhoon-table {
       margin: 0;
@@ -2321,14 +2316,6 @@
     .duty-status-bad { color: #b91c1c; }
     .duty-status-due { color: #0b3ea8; font-weight: 700; }
     .duty-status-muted { color: #9aa1a9; }
-    .duty-card {
-      flex: 1;
-      min-width: 240px;
-      background: #fff;
-      border: 1px solid var(--grid);
-      border-radius: 4px;
-      padding: 5px 8px;
-    }
     .duty-card-sub { color: var(--muted); margin-bottom: 6px; }
     .duty-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; }
     .duty-events { line-height: 1.7; font-variant-numeric: tabular-nums; }

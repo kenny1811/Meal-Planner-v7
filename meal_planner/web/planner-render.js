@@ -114,7 +114,6 @@
       const resolved = mp.meal_times_resolved || {};
       const nCol = (headers && headers.length) || 10;
       const nk = Array.isArray(nutrientKeys) && nutrientKeys.length ? nutrientKeys : DEFAULT_NUTRIENT_KEYS;
-      const headStyle = "background:#99CCFF;color:#000;";
 
       let body = "";
       let shownMealCount = 0;
@@ -327,9 +326,9 @@
       const today = todayIsoHK();
       if (!lastRenderedTodayIso || lastRenderedTodayIso === today) return;
       const panel = document.querySelector(".panel-bottom");
-      // 正喺度打緊字就唔好夾硬重畫，下一格 tick 再算。
+      // 正喺度打緊字就唔好夾硬重畫，下一格 tick 再算（餐格係 td[contenteditable]，唔係 input）。
       const editing = panel && panel.contains(document.activeElement)
-        && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName || "");
+        && (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName || "") || document.activeElement.isContentEditable);
       if (editing) return;
       const anchor = captureViewportAnchor();
       renderFromMemory(null);

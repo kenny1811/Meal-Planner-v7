@@ -86,8 +86,8 @@
               const dy = mv.clientY - startY;
               // 同單個 block 一樣落 10px 格（成組一齊郁都要對齊）。
               starts.forEach((item) => {
-                formColumnWidths[`duty_block_${item.key}_x`] = dutyBlockSnap(item.x + dx);
-                formColumnWidths[`duty_block_${item.key}_y`] = Math.max(0, dutyBlockSnap(item.y + dy));
+                formColumnWidths[`duty_block_${item.key}_x`] = snapBlockPx(item.x + dx);
+                formColumnWidths[`duty_block_${item.key}_y`] = Math.max(0, snapBlockPx(item.y + dy));
               });
               applyDutyBlockLayout();
             },
@@ -96,14 +96,6 @@
         },
         true
       );
-    }
-
-    function typhoonEsc(text) {
-      return String(text == null ? "" : text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
     }
 
     function typhoonShowError(message) {
@@ -147,15 +139,6 @@
       }
     }
 
-    // 30 小時制：凌晨 00:00–05:59 寫成 24:00–29:59（落波時間唔收 00:xx 嗰個寫法）。
-    function typhoonNowHHMM() {
-      const now = new Intl.DateTimeFormat("en-GB", {
-        timeZone: HK_TZ, hour: "2-digit", minute: "2-digit", hour12: false,
-      }).format(new Date());
-      const hour = parseInt(now.slice(0, 2), 10);
-      return hour < 6 ? `${hour + 24}:${now.slice(3)}` : now;
-    }
-
     // 記住上次嘅輸入（日期／落波／個名／確實／更碼），存喺 ui-state。
     function persistTyphoonState() {
       typhoonSavedState = {
@@ -166,7 +149,7 @@
         day_off: typhoonDayOff,
         code: typhoonCode,
       };
-      persistUiState({ typhoon_state: typhoonSavedState }).catch(() => {});
+      persistUiState({ typhoon_state: typhoonSavedState });
     }
 
     // 離開 Typhoon 畫面（撳去第二個 menu）就即刻存一次——
@@ -190,7 +173,8 @@
       typhoonName = String(saved.name || "");
       typhoonConfirmed = !!saved.confirmed;
       typhoonDayOff = !!saved.day_off;
-      typhoonSignal = String(saved.signal_time || "") || typhoonNowHHMM();
+      // 30 小時制：凌晨 00:00–05:59 寫成 24:00–29:59（落波時間唔收 00:xx 嗰個寫法）。
+      typhoonSignal = String(saved.signal_time || "") || clockFromMinutes(currentMinutesHK());
       typhoonSignalTyping = false;
       typhoonRefocusSignal = true;
       typhoonSignalCaret = null;
@@ -223,22 +207,10 @@
     async function typhoonShiftDate(deltaDays) {
       const base = typhoonPlan ? (typhoonPlan.signal_date_iso || typhoonPlan.date_iso) : "";
       if (!base || typhoonLoading) return;
-      const [y, m, d] = base.split("-").map(Number);
-      const dt = new Date(Date.UTC(y, m - 1, d + deltaDays, 12, 0, 0));
-      const iso = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+      const iso = isoAddDays(base, deltaDays);
       typhoonDate = iso === typhoonPlan.today_iso ? "" : iso;
       typhoonCode = "";  // 換日 = 換更碼，手動揀嗰個唔再作準
       await refreshTyphoon();
-    }
-
-    // 30 小時制顯示：凌晨 00:00–05:59 屬前一日嘅 24:00–29:59。
-    // sheet 入面照樣存 00:xx（其他頁、電話、日曆都係咁讀），呢度淨係顯示層轉。
-    // 唔似時間嘅字（例如備註「颱風Kajiki」）原封不動。
-    function typhoon30(text) {
-      const m = /^(\d{1,2}):(\d{2})$/.exec(String(text == null ? "" : text).trim());
-      if (!m) return text;
-      const hour = parseInt(m[1], 10);
-      return hour < 6 ? `${hour + 24}:${m[2]}` : text;
     }
 
     // 同一張表入面會撈埋唔同日嘅時間（開工過咗 30:00 就冚落第二日朝早），
@@ -255,37 +227,30 @@
       return { iso: `${dt.getUTCFullYear()}-${mm}-${dd}`, dm: `${dd}/${mm}` };
     }
 
-    // minutes 有就用（最準）；冇就由 HH:MM 反推 30 小時制分鐘。
+    // minutes 有就用（最準）；冇就由 HH:MM 反推 30 小時制分鐘（timeMinutes）。
     // 報開工同 plan.start 個 string 一樣，所以撞正就借返佢個分鐘數。
+    // 顯示層一律 30 小時制（clockFromMinutes）：sheet 入面照樣存 00:xx，呢度淨係顯示轉。
+    // 唔似時間嘅字（例如備註「颱風Kajiki」）原封不動。
     // bareOn：呢個 block 本身已經寫住嗰日（例如加班表有「日期」一行）——
     // 同嗰日一樣就唔使再喺時間前面插多次日期，唔同日先插。
     function typhoonWhen(text, minutes, bareOn) {
       const raw = String(text == null ? "" : text).trim();
-      const m = /^(\d{1,2}):(\d{2})$/.exec(raw);
-      if (!m) return text;
+      if (!/^\d{1,2}:\d{2}$/.test(raw)) return text;
       let mins = minutes;
       if (mins == null) {
         const plan = typhoonPlan || {};
         if (plan.start && raw === plan.start && plan.start_minutes != null) mins = plan.start_minutes;
-        else {
-          const hour = parseInt(m[1], 10);
-          mins = (hour < 6 ? hour + 24 : hour) * 60 + parseInt(m[2], 10);
-        }
+        else mins = timeMinutes(raw);
       }
+      if (mins == null) return text;
       const when = typhoonDateFor(mins);
-      const clock = typhoon30(_hhmmFrom(mins));
+      const clock = clockFromMinutes(mins);
       return bareOn && when.iso === bareOn ? clock : `${when.dm} ${clock}`;
     }
 
-    function _hhmmFrom(minutes) {
-      const within = ((minutes % 1440) + 1440) % 1440;
-      const hour = minutes >= 1440 && minutes < 1800 ? Math.floor(minutes / 60) : Math.floor(within / 60);
-      return `${String(hour).padStart(2, "0")}:${String(within % 60).padStart(2, "0")}`;
-    }
-
     function typhoonArrow(before, after, bareOn) {
-      const a = typhoonEsc(typhoonWhen(before, null, bareOn) || "—");
-      const b = typhoonEsc(typhoonWhen(after, null, bareOn) || "—");
+      const a = esc(typhoonWhen(before, null, bareOn) || "—");
+      const b = esc(typhoonWhen(after, null, bareOn) || "—");
       if (!before || before === after) return `<span class="typhoon-same">${b}</span>`;
       return `<span class="typhoon-was">${a}</span> → <span class="typhoon-now">${b}</span>`;
     }
@@ -303,10 +268,6 @@
     }
 
     function typhoonSummary(plan, applyBtn = "") {
-      const delay = plan.delay_minutes
-        ? `${Math.floor(plan.delay_minutes / 60)}h${String(plan.delay_minutes % 60).padStart(2, "0")} late`
-        : "on time";
-      const offsetText = plan.offset_minutes ? `+${plan.offset_minutes} min` : "start at once";
       if (plan.day_off_possible && !plan.day_off) {
         // 有可能唔使返但未宣佈：照出正常模擬，提示併入下面 Apply 嗰行，唔另佔一行。
         return typhoonSummaryCards(plan, applyBtn);
@@ -316,17 +277,17 @@
         return `<div class="duty-stats typhoon-stats">
           <div class="duty-stat-card typhoon-dayoff">
             <div class="duty-stat-label">Signal down</div>
-            <div class="duty-stat-value">${typhoonEsc(plan.signal_time)}</div>
+            <div class="duty-stat-value">${esc(plan.signal_time)}</div>
             <div class="duty-stat-sub">${plan.confirmed ? "confirmed" : "estimated"}</div>
           </div>
           <div class="duty-stat-card typhoon-dayoff">
             <div class="duty-stat-label">Off duty</div>
-            <div class="duty-stat-value">${typhoonEsc(typhoonWhen(plan.end, plan.end_minutes) || "—")}</div>
+            <div class="duty-stat-value">${esc(typhoonWhen(plan.end, plan.end_minutes) || "—")}</div>
             <div class="duty-stat-sub">less than 4h away</div>
           </div>
           <div class="duty-stat-card typhoon-dayoff">
             <div class="duty-stat-label">Day off</div>
-            <div class="duty-stat-value">${typhoonEsc(plan.day_off_code || "—")}</div>
+            <div class="duty-stat-value">${esc(plan.day_off_code || "—")}</div>
             <div class="duty-stat-sub">全日唔使返</div>
           </div>
           ${applyBtn ? `<div class="typhoon-apply-slot">${applyBtn}</div>` : ""}
@@ -350,9 +311,9 @@
       return `<div class="duty-stats typhoon-stats">${cards
         .map(
           (c) => `<div class="duty-stat-card">
-            <div class="duty-stat-label">${typhoonEsc(c.label)}</div>
-            <div class="duty-stat-value">${typhoonEsc(c.value || "—")}</div>
-            <div class="duty-stat-sub">${typhoonEsc(c.sub)}</div>
+            <div class="duty-stat-label">${esc(c.label)}</div>
+            <div class="duty-stat-value">${esc(c.value || "—")}</div>
+            <div class="duty-stat-sub">${esc(c.sub)}</div>
           </div>`
         )
         .join("")}${applyBtn ? `<div class="typhoon-apply-slot">${applyBtn}</div>` : ""}</div>`;
@@ -365,7 +326,7 @@
         .map((c) => `<col data-form-col-key="typhoon_${prefix}_${c.key}" data-form-col-default="${c.width}" />`)
         .join("");
       const heads = columns
-        .map((c) => `<th data-form-col-key="typhoon_${prefix}_${c.key}">${typhoonEsc(c.label)}</th>`)
+        .map((c) => `<th data-form-col-key="typhoon_${prefix}_${c.key}">${esc(c.label)}</th>`)
         .join("");
       return `<table class="typhoon-table" data-form-table>
         <colgroup>${cols}</colgroup>
@@ -374,7 +335,7 @@
     }
 
     function typhoonSectionNote(note) {
-      return note ? `<div class="duty-status-muted typhoon-note">${typhoonEsc(note)}</div>` : "";
+      return note ? `<div class="duty-status-muted typhoon-note">${esc(note)}</div>` : "";
     }
 
     function typhoonGridTable(section) {
@@ -383,8 +344,8 @@
         .map((row) => {
           const cls = row.inserted ? "typhoon-row-new" : row.unreachable ? "duty-row-muted" : "";
           const timeCell = row.inserted
-            ? `<span class="typhoon-now">${typhoonEsc(typhoonWhen(row.time, row.minutes))}</span>`
-            : typhoonEsc(typhoonWhen(row.time, row.minutes));
+            ? `<span class="typhoon-now">${esc(typhoonWhen(row.time, row.minutes))}</span>`
+            : esc(typhoonWhen(row.time, row.minutes));
           const state = row.inserted
             ? (row.is_start ? "on duty (typhoon)" : "typhoon report")
             : row.unreachable
@@ -392,9 +353,9 @@
               : "";
           return `<tr class="${cls}">
             <td class="duty-td-time">${timeCell}</td>
-            <td>${typhoonEsc(row.content)}</td>
-            <td class="typhoon-td-len">${row.duration_min == null ? "" : typhoonEsc(row.duration_min)}</td>
-            <td class="typhoon-state">${typhoonEsc(state)}</td>
+            <td>${esc(row.content)}</td>
+            <td class="typhoon-td-len">${row.duration_min == null ? "" : esc(row.duration_min)}</td>
+            <td class="typhoon-state">${esc(state)}</td>
           </tr>`;
         })
         .join("");
@@ -413,10 +374,10 @@
       const body = section.rows
         .map(
           // Item 出返真正會 send 出去嗰句（唔係行位表個標籤）——所見即所發。
-          (row) => `<tr class="${row.skipped ? "duty-row-muted" : ""}" title="${typhoonEsc(row.content)}">
-            <td class="duty-td-time">${typhoonEsc(typhoonWhen(row.time, row.minutes))}</td>
-            <td>${typhoonEsc(row.message)}</td>
-            <td>${typhoonEsc(row.group || "—")}</td>
+          (row) => `<tr class="${row.skipped ? "duty-row-muted" : ""}" title="${esc(row.content)}">
+            <td class="duty-td-time">${esc(typhoonWhen(row.time, row.minutes))}</td>
+            <td>${esc(row.message)}</td>
+            <td>${esc(row.group || "—")}</td>
             <td class="typhoon-state">${row.skipped ? "skipped" : ""}</td>
           </tr>`
         )
@@ -430,7 +391,7 @@
       const h = section.interval_hours;
       const cadence =
         section.mode === "typhoon"
-          ? `<div class="duty-status-muted typhoon-note">Every ${h}h from the on-duty time; the last one uses the finish time when it lands under ${h}h.${planned ? ` · Before the typhoon: ${typhoonEsc(planned)}` : ""}</div>`
+          ? `<div class="duty-status-muted typhoon-note">Every ${h}h from the on-duty time; the last one uses the finish time when it lands under ${h}h.${planned ? ` · Before the typhoon: ${esc(planned)}` : ""}</div>`
           : "";
       return typhoonSectionNote(section.note) + cadence + typhoonTable("report", [
         { key: "time", label: "Time", width: 116 },
@@ -477,7 +438,7 @@
           ${busy ? "…" : "Generate"}</button>
         <button type="button" class="duty-btn" data-typhoon-action="recalc" ${busy ? "disabled" : ""}>
           ${busy ? "…" : "Recalculate"}</button>
-        <div class="duty-status-muted typhoon-meal-hint">${typhoonEsc(
+        <div class="duty-status-muted typhoon-meal-hint">${esc(
           busy
             ? "running the solver…"
             : stale
@@ -503,7 +464,7 @@
       const body = section.rows
         .map(
           (row) => `<tr>
-            <td>${typhoonEsc(row.field)}</td>
+            <td>${esc(row.field)}</td>
             <td class="duty-td-time">${typhoonArrow(row.before, row.after, bareOn)}</td>
           </tr>`
         )
@@ -519,8 +480,8 @@
       const body = section.rows
         .map(
           (row) => `<tr>
-            <td title="${typhoonEsc(row.calendar_id || "")}">${typhoonEsc(row.calendar)}</td>
-            <td>${typhoonEsc(row.event)}</td>
+            <td title="${esc(row.calendar_id || "")}">${esc(row.calendar)}</td>
+            <td>${esc(row.event)}</td>
             <td class="duty-td-time">${typhoonArrow(row.before, row.after)}</td>
           </tr>`
         )
@@ -540,14 +501,14 @@
         .map((row) => {
           const held = row.kind === "start" ? applied.hold_start : applied.hold_end;
           return `<div class="duty-stat-card onoff-card">
-            <div class="duty-stat-label">${typhoonEsc(row.label)}</div>
+            <div class="duty-stat-label">${esc(row.label)}</div>
             <div class="duty-stat-value">${typhoonArrow(row.before, row.after)}</div>
             <div class="duty-stat-sub">${held ? "⏸ holding — press Send now when it really happens" : "auto-submits at this time"}</div>
           </div>`;
         })
         .join("");
       const meta = [section.form_label, section.post].filter(Boolean).join(" · ");
-      return `${typhoonSectionNote(section.note)}<div class="onoff-meta">${typhoonEsc(meta)}</div>
+      return `${typhoonSectionNote(section.note)}<div class="onoff-meta">${esc(meta)}</div>
         <div class="duty-stats onoff-stats">${cards}</div>`;
     }
 
@@ -557,7 +518,7 @@
       const hasTable = inner.includes("<table");
       const cls = hasTable ? "duty-block duty-block-card typhoon-block-table" : "duty-block duty-block-card";
       return `<div class="${cls}" data-duty-block="typhoon_${key}">
-        <div class="duty-block-title" title="Drag to move · double-click to reset · Ctrl+A select all · Ctrl+click to pick blocks, then drag any one to move them together">${typhoonEsc(title)}</div>
+        <div class="duty-block-title" title="Drag to move · double-click to reset · Ctrl+A select all · Ctrl+click to pick blocks, then drag any one to move them together">${esc(title)}</div>
         <div class="typhoon-block-body">${inner}</div>
       </div>`;
     }
@@ -576,33 +537,33 @@
         list
           .map(
             (code) =>
-              `<option value="${typhoonEsc(code)}"${code === current ? " selected" : ""}>${typhoonEsc(code)}</option>`
+              `<option value="${esc(code)}"${code === current ? " selected" : ""}>${esc(code)}</option>`
           )
           .join("");
 
       const applied = (plan.applied || {});
       const appliedChip = applied.overtime_matches
-        ? `<span class="duty-chip duty-chip-ok">Applied · Overtime start ${typhoonEsc(applied.overtime_start)}</span>`
+        ? `<span class="duty-chip duty-chip-ok">Applied · Overtime start ${esc(applied.overtime_start)}</span>`
         : applied.overtime_start
-          ? `<span class="duty-chip">Overtime already has start ${typhoonEsc(applied.overtime_start)}</span>`
+          ? `<span class="duty-chip">Overtime already has start ${esc(applied.overtime_start)}</span>`
           : "";
 
       // 撳走／撳 Enter 之後先重畫，所以呢度一律出後端讀到嗰個 HH:MM。
       const signalValue = plan.signal_time || typhoonSignal;
       const toolbar = `<div class="duty-toolbar typhoon-toolbar">
         <button type="button" class="duty-btn" data-typhoon-action="date-prev">◀</button>
-        <input type="date" id="typhoon-date" class="typhoon-date-input" value="${typhoonEsc(plan.signal_date_iso || plan.date_iso)}" title="落波日期（同落波時間一 pair）" />
+        <input type="date" id="typhoon-date" class="typhoon-date-input" value="${esc(plan.signal_date_iso || plan.date_iso)}" title="落波日期（同落波時間一 pair）" />
         <button type="button" class="duty-btn" data-typhoon-action="date-next">▶</button>
         <span class="duty-date">${relationLabel}</span>
         ${plan.relation !== "today" ? '<button type="button" class="duty-btn" data-typhoon-action="date-today">Today</button>' : ""}
         <label class="typhoon-field">Signal down
-          <input type="text" id="typhoon-signal" class="typhoon-time" value="${typhoonEsc(signalValue)}" maxlength="5" placeholder="11:40" title="11:40 / 1140 / 2416 all accepted" />
+          <input type="text" id="typhoon-signal" class="typhoon-time" value="${esc(signalValue)}" maxlength="5" placeholder="11:40" title="11:40 / 1140 / 2416 all accepted" />
         </label>
         <label class="typhoon-field"><input type="checkbox" id="typhoon-confirmed" ${typhoonConfirmed ? "checked" : ""} />Confirmed</label>
         <label class="typhoon-field">Name
-          <input type="text" id="typhoon-name" class="typhoon-name" value="${typhoonEsc(typhoonName)}" placeholder="韋帕" title="${typhoonEsc(typhoonNameNote || "加班表備註會寫「颱風」+ 呢個名（預設由天文台帶出）")}" />
+          <input type="text" id="typhoon-name" class="typhoon-name" value="${esc(typhoonName)}" placeholder="韋帕" title="${esc(typhoonNameNote || "加班表備註會寫「颱風」+ 呢個名（預設由天文台帶出）")}" />
         </label>
-        <label class="typhoon-field ${plan.day_off_possible ? "typhoon-dayoff-live" : "typhoon-field-off"}" title="${typhoonEsc(
+        <label class="typhoon-field ${plan.day_off_possible ? "typhoon-dayoff-live" : "typhoon-field-off"}" title="${esc(
           plan.day_off_possible
             ? "舖頭宣佈全日唔使返先剔——唔夠 4 個鐘唔代表自動放假"
             : "落波距離收工夠 4 個鐘，唔會全日唔使返"
@@ -618,7 +579,7 @@
         out.innerHTML = `<div class="duty-layout" id="typhoon-layout">${typhoonBlock(
           "main",
           "Typhoon",
-          `${toolbar}<div class="duty-status-muted typhoon-note">${typhoonEsc(plan.note || "Fill in the form above.")}</div>`
+          `${toolbar}<div class="duty-status-muted typhoon-note">${esc(plan.note || "Fill in the form above.")}</div>`
         )}</div>`;
         attachTyphoonInputs();
         return;
@@ -629,7 +590,7 @@
         || "Writes the on-duty time into Overtime and reshapes ReportNormal — the Schedule Grid is never touched";
       const applyBtn = `<button type="button" class="duty-btn duty-btn-primary typhoon-apply-btn"
         data-typhoon-action="apply" ${plan.can_apply ? "" : "disabled"}
-        title="${typhoonEsc(applyHint)}">Apply</button>${appliedChip}`;
+        title="${esc(applyHint)}">Apply</button>${appliedChip}`;
 
       out.innerHTML = `<div class="duty-layout" id="typhoon-layout">
         ${typhoonBlock("main", "Typhoon", `${toolbar}${typhoonSummary(plan, applyBtn)}`)}

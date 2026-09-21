@@ -495,22 +495,13 @@
       return String(target.value ?? "") === String(target.dataset.maintSavedValue ?? "");
     }
 
-    document.addEventListener("input", (ev) => {
+    function markEditableAreaDirty(ev) {
       const area = editableAreaName(ev.target);
-      if (area) {
-        if (isCleanMaintBaselineEvent(ev.target)) return;
-        if (ev.target && ev.target.dataset) ev.target.dataset.autosaveDirty = "1";
-        setUnsavedChanges(area);
-      }
-    });
-    document.addEventListener("change", (ev) => {
-      const area = editableAreaName(ev.target);
-      if (area) {
-        if (isCleanMaintBaselineEvent(ev.target)) return;
-        if (ev.target && ev.target.dataset) ev.target.dataset.autosaveDirty = "1";
-        setUnsavedChanges(area);
-      }
-    });
+      if (!area || isCleanMaintBaselineEvent(ev.target)) return;
+      setUnsavedChanges(area);
+    }
+    document.addEventListener("input", markEditableAreaDirty);
+    document.addEventListener("change", markEditableAreaDirty);
     window.addEventListener("beforeunload", (ev) => {
       if (!unsavedChanges) return;
       ev.preventDefault();
@@ -532,15 +523,15 @@
       const tree = document.getElementById("config-menu-tree");
       const wasOpen = !!(tree && tree.classList.contains("is-open"));
       if (wasOpen) {
-        setConfigMenuTreeOpen(false);
+        setCustomMenuTreeOpen("config", false);
         activeMenuPath = ["top", "config"];
-        persistActiveMenuPathState();
+        persistUiState({ active_menu_path: activeMenuPath });
         setActivePanel("config");
         return;
       }
-      setConfigMenuTreeOpen(true);
+      setCustomMenuTreeOpen("config", true);
       activeMenuPath = ["top", "config"];
-      persistActiveMenuPathState();
+      persistUiState({ active_menu_path: activeMenuPath });
       setActivePanel("config");
       await applyActiveConfigView(true);
     });
@@ -552,13 +543,13 @@
       const tree = document.getElementById("maint-menu-tree");
       const wasOpen = !!(tree && tree.classList.contains("is-open"));
       if (wasOpen) {
-        setMaintMenuTreeOpen(false);
+        setCustomMenuTreeOpen("maint", false);
         activeMenuPath = ["top", "maint"];
-        persistActiveMenuPathState();
+        persistUiState({ active_menu_path: activeMenuPath });
         setActivePanel("maint");
         return;
       }
-      setMaintMenuTreeOpen(true);
+      setCustomMenuTreeOpen("maint", true);
       if (activeMaintSheetKey) {
         openMaintSheet(activeMaintSheetKey);
       } else if (maintSheets.length) {
@@ -572,9 +563,9 @@
       const tree = document.getElementById("reports-menu-tree");
       const wasOpen = !!(tree && tree.classList.contains("is-open"));
       if (wasOpen) {
-        setReportsMenuTreeOpen(false);
+        setCustomMenuTreeOpen("reports", false);
         activeMenuPath = ["top", "reports"];
-        persistActiveMenuPathState();
+        persistUiState({ active_menu_path: activeMenuPath });
         setActivePanel("reports");
         return;
       }
@@ -590,10 +581,10 @@
       await openOnOffDutyPanel();
     });
     // 撳任何 menu 離開 Typhoon 畫面之前，先存低嗰版嘢。
-    document.querySelectorAll(".menu-item").forEach((item) => {
-      item.addEventListener("mousedown", () => {
-        if (typeof leaveTyphoonPanel === "function") leaveTyphoonPanel();
-      });
+    // document 級 delegation：Maint sheet 掣／custom menu 係之後先生出嚟，逐個綁會漏。
+    document.addEventListener("mousedown", (ev) => {
+      if (!ev.target || !ev.target.closest || !ev.target.closest(".menu-item")) return;
+      if (typeof leaveTyphoonPanel === "function") leaveTyphoonPanel();
     });
     document.getElementById("menu-typhoon").addEventListener("click", async () => {
       if (!(await resolveUnsavedBeforeLeaving())) return;
@@ -619,45 +610,8 @@
     document.getElementById("catalog-save").addEventListener("click", saveNutritionCatalog);
     document.getElementById("detail-save").addEventListener("click", saveDetailSettings);
     document.getElementById("maint-save").addEventListener("click", saveMaintEditor);
-    document.getElementById("detail-code-definitions").addEventListener("contextmenu", (ev) => {
-      const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-detail-code-row]") : null;
-      const idx = row ? Number(row.getAttribute("data-detail-code-row")) : -1;
-      showDetailRowMenu(ev, Number.isInteger(idx) ? idx : -1);
-    });
-    document.getElementById("detail-row-menu").addEventListener("click", (ev) => {
-      const action = ev.target && ev.target.closest ? ev.target.closest("[data-detail-row-action]") : null;
-      const menu = document.getElementById("detail-row-menu");
-      if (!action || !menu) return;
-      const idx = Number(menu.getAttribute("data-detail-row-index"));
-      hideDetailRowMenu();
-      applyDetailRowAction(action.getAttribute("data-detail-row-action"), Number.isInteger(idx) ? idx : -1);
-    });
-    document.getElementById("detail-post-mapping").addEventListener("contextmenu", (ev) => {
-      const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-detail-post-row]") : null;
-      const idx = row ? Number(row.getAttribute("data-detail-post-row")) : -1;
-      showDetailPostRowMenu(ev, Number.isInteger(idx) ? idx : -1);
-    });
-    document.getElementById("detail-post-row-menu").addEventListener("click", (ev) => {
-      const action = ev.target && ev.target.closest ? ev.target.closest("[data-detail-post-row-action]") : null;
-      const menu = document.getElementById("detail-post-row-menu");
-      if (!action || !menu) return;
-      const idx = Number(menu.getAttribute("data-detail-post-row-index"));
-      hideDetailPostRowMenu();
-      applyDetailPostRowAction(action.getAttribute("data-detail-post-row-action"), Number.isInteger(idx) ? idx : -1);
-    });
-    document.getElementById("detail-rice-conversions").addEventListener("contextmenu", (ev) => {
-      const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-detail-rice-row]") : null;
-      const idx = row ? Number(row.getAttribute("data-detail-rice-row")) : -1;
-      showDetailRiceRowMenu(ev, Number.isInteger(idx) ? idx : -1);
-    });
-    document.getElementById("detail-rice-row-menu").addEventListener("click", (ev) => {
-      const action = ev.target && ev.target.closest ? ev.target.closest("[data-detail-rice-row-action]") : null;
-      const menu = document.getElementById("detail-rice-row-menu");
-      if (!action || !menu) return;
-      const idx = Number(menu.getAttribute("data-detail-rice-row-index"));
-      hideDetailRiceRowMenu();
-      applyDetailRiceRowAction(action.getAttribute("data-detail-rice-row-action"), Number.isInteger(idx) ? idx : -1);
-    });
+    // 系統參數三張細表嘅 right-click row menu（planner-config.js makeDetailRowMenu）。
+    DETAIL_ROW_MENUS.forEach((menu) => menu.bind());
     document.getElementById("maint-row-menu").addEventListener("click", (ev) => {
       const action = ev.target && ev.target.closest ? ev.target.closest("[data-maint-row-action]") : null;
       const menu = document.getElementById("maint-row-menu");
@@ -701,7 +655,6 @@
           const next = ev.key === "Enter"
             ? catalogCellInputFrom(input, 0, 1)
             : (ev.key === "ArrowUp" || ev.key === "ArrowDown" ? catalogCellInputFrom(input, ev.key === "ArrowUp" ? -1 : 1, 0) : null);
-          if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
           endCatalogCellEdit(input, { cancel: ev.key === "Escape" });
           focusCatalogCell(next || input);
         }
@@ -731,16 +684,7 @@
     document.getElementById("catalog-editor").addEventListener("compositionstart", (ev) => {
       const input = ev.target && ev.target.matches && ev.target.matches("input.catalog-cell-input") ? ev.target : null;
       if (!input) return;
-      if (input && input.readOnly) {
-        beginCatalogCellEdit(input, true);
-      }
-      const timer = catalogDirectKeyTimers.get(input);
-      if (timer) {
-        clearTimeout(timer);
-        catalogDirectKeyTimers.delete(input);
-      }
-      delete input.dataset.catalogPendingDirectKey;
-      delete input.dataset.catalogReplaceOnComposition;
+      if (input.readOnly) beginCatalogCellEdit(input, true);
     });
     document.getElementById("catalog-editor").addEventListener("copy", (ev) => {
       const input = ev.target && ev.target.matches && ev.target.matches("#catalog-editor td input") ? ev.target : null;
@@ -774,25 +718,27 @@
         removeNutritionCatalogRow(idx);
       }
     });
+    // 所有 row menu：撳出面／Escape 就收埋。
+    const ROW_MENU_HIDERS = [
+      ["#catalog-row-menu", hideCatalogRowMenu],
+      ["#maint-row-menu", hideMaintRowMenu],
+      ...DETAIL_ROW_MENUS.map((menu) => [`#${menu.menuId}`, menu.hide]),
+    ];
     document.addEventListener("mousedown", (ev) => {
-      if (!ev.target || !ev.target.closest || !ev.target.closest("#catalog-row-menu")) hideCatalogRowMenu();
-      if (!ev.target || !ev.target.closest || !ev.target.closest("#maint-row-menu")) hideMaintRowMenu();
-      if (!ev.target || !ev.target.closest || !ev.target.closest("#detail-row-menu")) hideDetailRowMenu();
-      if (!ev.target || !ev.target.closest || !ev.target.closest("#detail-post-row-menu")) hideDetailPostRowMenu();
-      if (!ev.target || !ev.target.closest || !ev.target.closest("#detail-rice-row-menu")) hideDetailRiceRowMenu();
+      const canClosest = !!(ev.target && ev.target.closest);
+      ROW_MENU_HIDERS.forEach(([selector, hide]) => {
+        if (!canClosest || !ev.target.closest(selector)) hide();
+      });
     });
     document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape") hideCatalogRowMenu();
-      if (ev.key === "Escape") hideMaintRowMenu();
-      if (ev.key === "Escape") hideDetailRowMenu();
-      if (ev.key === "Escape") hideDetailPostRowMenu();
-      if (ev.key === "Escape") hideDetailRiceRowMenu();
+      if (ev.key !== "Escape") return;
+      ROW_MENU_HIDERS.forEach(([, hide]) => hide());
     });
     document.getElementById("catalog-editor").addEventListener("scroll", hideCatalogRowMenu);
     // capture=true：scroll event 唔 bubble，資料而家喺 .maint-sheet-body 內捲，要用 capture 先截到。
     document.getElementById("maint-editor").addEventListener("scroll", hideMaintRowMenu, true);
-    document.querySelector(".detail-editor")?.addEventListener("scroll", hideDetailRowMenu);
-    document.querySelector(".detail-editor")?.addEventListener("scroll", hideDetailRiceRowMenu);
+    document.querySelector(".detail-editor")?.addEventListener("scroll", detailCodeRowMenu.hide);
+    document.querySelector(".detail-editor")?.addEventListener("scroll", detailRiceRowMenu.hide);
     document.addEventListener("keydown", async (ev) => {
       if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && String(ev.key).toLowerCase() === "s") {
         ev.preventDefault();
@@ -828,7 +774,7 @@
       return option ? option.textContent : "";
     }
 
-    function positionPickupMenu(wrapper, button, menu) {
+    function positionPickupMenu(button, menu) {
       const rect = button.getBoundingClientRect();
       const width = Math.max(rect.width, 120);
       menu.style.minWidth = `${width}px`;
@@ -871,7 +817,7 @@
       syncPickupList(select);
       menu.hidden = false;
       button.setAttribute("aria-expanded", "true");
-      positionPickupMenu(wrapper, button, menu);
+      positionPickupMenu(button, menu);
       const items = pickupFocusableItems(menu);
       const selectedPos = pickupSelectedItemPosition(select, items);
       focusPickupItem(items[selectedPos] || items[0]);
@@ -882,7 +828,7 @@
         const wrapper = menu.closest(".pickup-select");
         const button = wrapper && wrapper.querySelector(".pickup-select-button");
         if (!wrapper || !button) return;
-        positionPickupMenu(wrapper, button, menu);
+        positionPickupMenu(button, menu);
       });
     }
 
@@ -1083,11 +1029,10 @@
       config: () => applyActiveConfigView(false),
       maint: async () => {
         if (!activeMaintSheetKey) return;
-        try {
-          await openMaintSheet(activeMaintSheetKey, false);
-        } catch (_) {
-          // 嗰張表冇咗（改過名／刪咗）就開返第一張，唔好卡喺度乜都冇。
-          if (maintSheets.length) await openMaintSheet(maintSheets[0].sheet_key, false);
+        const ok = await openMaintSheet(activeMaintSheetKey, false);
+        // 嗰張表冇咗（改過名／刪咗）就開返第一張，唔好卡喺度乜都冇。
+        if (!ok && maintSheets.length && maintSheets[0].sheet_key !== activeMaintSheetKey) {
+          await openMaintSheet(maintSheets[0].sheet_key, false);
         }
       },
       reports: () => openShiftCodeAnalysisReport(),
@@ -1125,9 +1070,6 @@
       attachTableDragHandles();
       applyFormColumnWidths();
       attachFormColumnResizers();
-      applyMenuOrder();
-      applyMenuTreeOpen();
-      attachMenuDragHandles();
       applySidebarWidth();
       attachSidebarResizer();
       enhancePickupLists(document);
@@ -1135,9 +1077,3 @@
       window.addEventListener("resize", syncPanelGutter);
       startTopRightClock();
     })();
-
-    document.addEventListener("focusout", (ev) => {
-      const el = ev.target;
-      if (!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA" && el.tagName !== "SELECT")) return;
-      if (el.dataset) delete el.dataset.skipAutosaveOnce;
-    });

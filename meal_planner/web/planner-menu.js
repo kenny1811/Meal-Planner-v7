@@ -21,26 +21,16 @@
       return menuButtonForKey(key);
     }
 
-    function menuAttr(value) {
-      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
-      }[ch]));
-    }
-
     function createCustomMenuTree(key) {
       const oldButton = menuButtonForKey(key);
       if (oldButton) oldButton.remove();
       const tree = document.createElement("div");
       tree.className = "menu-tree menu-custom-tree is-open";
       tree.setAttribute("data-menu-tree-key", key);
-      tree.innerHTML = `<button type="button" class="menu-item menu-tree-toggle" data-menu-group="top" data-menu-key="${menuAttr(key)}" aria-expanded="true">
-        <span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label"></span><span class="menu-tree-mark" aria-hidden="true"></span>
+      tree.innerHTML = `<button type="button" class="menu-item menu-tree-toggle" data-menu-group="top" data-menu-key="${esc(key)}" aria-expanded="true">
+        <span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label"></span><span class="menu-tree-mark" aria-hidden="true"></span>
       </button>
-      <div class="menu-tree-children" data-menu-drop-group="${menuAttr(key)}"></div>`;
+      <div class="menu-tree-children" data-menu-drop-group="${esc(key)}"></div>`;
       return tree;
     }
     function createCustomMenuButton(key) {
@@ -49,7 +39,7 @@
       btn.className = "menu-item menu-custom-item";
       btn.setAttribute("data-menu-key", key);
       btn.setAttribute("data-menu-custom", "1");
-      btn.innerHTML = `<span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label"></span>`;
+      btn.innerHTML = `<span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label"></span>`;
       return btn;
     }
 
@@ -370,7 +360,6 @@
         if (!btn) return;
         const action = btn.getAttribute("data-menu-context-action");
         const key = menu.getAttribute("data-menu-key");
-        const group = menu.getAttribute("data-menu-group") || menuGroupForKey(key);
         hideMenuContextMenu();
         if (action === "rename") renameMenuItem(key);
         if (action === "delete") deleteMenuItem(key);
@@ -398,6 +387,7 @@
       ghost.style.transform = `translate(${ev.clientX + 14}px, ${ev.clientY + 12}px)`;
     }
 
+    // config / maint / reports 三棵 static tree（index.html 有 data-menu-tree-key）同 custom tree 共用。
     function setCustomMenuTreeOpen(key, open, persist = true) {
       const tree = document.querySelector(`.menu-tree[data-menu-tree-key="${CSS.escape(key)}"]`);
       const toggle = tree ? tree.querySelector(".menu-tree-toggle") : null;
@@ -406,14 +396,7 @@
       if (!tree || !toggle) return;
       tree.classList.toggle("is-open", isOpen);
       toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-      if (persist) persistMenuTreeOpen();
-    }
-
-    function setAnyMenuTreeOpen(key, open, persist = true) {
-      if (key === "config") return setConfigMenuTreeOpen(open, persist);
-      if (key === "maint") return setMaintMenuTreeOpen(open, persist);
-      if (key === "reports") return setReportsMenuTreeOpen(open, persist);
-      return setCustomMenuTreeOpen(key, open, persist);
+      if (persist) persistUiState({ menu_tree_open: menuTreeOpen });
     }
 
     function createMenuItem() {
@@ -428,7 +411,7 @@
       menuOrder[key] = [];
       menuTreeOpen[key] = true;
       applyMenuOrder();
-      setAnyMenuTreeOpen(key, true, false);
+      setCustomMenuTreeOpen(key, true, false);
       persistMenuLayout();
     }
 
@@ -498,40 +481,11 @@
       });
     }
 
-    function attachMenuDropContainers(root = document) {
-      root.querySelectorAll("[data-menu-drop-group]").forEach((container) => {
-        if (container.dataset.menuContainerDropBound === "1") return;
-        container.dataset.menuContainerDropBound = "1";
-        container.addEventListener("dragover", (ev) => {
-          const fromKey = menuDragState && menuDragState.key;
-          if (!fromKey) return;
-          ev.preventDefault();
-          ev.stopPropagation();
-          if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
-          markMenuDropContainer(container);
-        });
-        container.addEventListener("dragleave", (ev) => {
-          if (container.contains(ev.relatedTarget)) return;
-          container.classList.remove("is-menu-drop-zone-active");
-        });
-        container.addEventListener("drop", (ev) => {
-          const fromKey = (menuDragState && menuDragState.key) || (ev.dataTransfer && ev.dataTransfer.getData("application/x-menu-key"));
-          const toGroup = container.getAttribute("data-menu-drop-group") || "top";
-          if (!fromKey || !toGroup) return;
-          ev.preventDefault();
-          ev.stopPropagation();
-          container.classList.remove("is-menu-drop-zone-active");
-          menuDragState = null;
-          document.body.classList.remove("is-dnd-dragging");
-          moveMenuItem(fromKey, toGroup, null, "before");
-        });
-      });
-    }
-
+    // 拖放全靠 startPointerMenuDrag（mousedown + window mousemove/mouseup）；
+    // right-click menu 由 planner-events.js 嘅 document capture contextmenu 統一處理。
     function attachMenuDragHandles(root = document) {
       attachMenuContextMenuActions();
       attachMenuAddButton();
-      attachMenuDropContainers(root);
       root.querySelectorAll(".menu-drag-handle").forEach((handle) => {
         if (handle.dataset.menuDragBound === "1") return;
         handle.dataset.menuDragBound = "1";
@@ -541,25 +495,6 @@
         });
         handle.addEventListener("mousedown", (ev) => {
           startPointerMenuDrag(handle, ev);
-        });
-        handle.addEventListener("dragstart", (ev) => {
-          const item = handle.closest(".menu-item[data-menu-group][data-menu-key]");
-          if (!item || !ev.dataTransfer) return;
-          ev.stopPropagation();
-          document.body.classList.add("is-dnd-dragging");
-          menuDragState = {
-            group: item.getAttribute("data-menu-group"),
-            key: item.getAttribute("data-menu-key"),
-          };
-          ev.dataTransfer.effectAllowed = "move";
-          ev.dataTransfer.setData("application/x-menu-group", menuDragState.group);
-          ev.dataTransfer.setData("application/x-menu-key", menuDragState.key);
-        });
-        handle.addEventListener("dragend", () => {
-          menuDragState = null;
-          document.body.classList.remove("is-dnd-dragging");
-          document.querySelectorAll(".menu-item.is-menu-drag-over,.menu-item.is-menu-drop-after,.menu-item.is-menu-drop-inside").forEach((el) => el.classList.remove("is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside"));
-          document.querySelectorAll(".is-menu-drop-zone-active").forEach((el) => el.classList.remove("is-menu-drop-zone-active"));
         });
       });
       root.querySelectorAll(".menu-item[data-menu-group][data-menu-key]").forEach((item) => {
@@ -571,40 +506,7 @@
           ev.preventDefault();
           ev.stopPropagation();
           const tree = item.closest(".menu-tree");
-          setAnyMenuTreeOpen(key, !(tree && tree.classList.contains("is-open")));
-        });
-        item.addEventListener("dragover", (ev) => {
-          const fromKey = menuDragState && menuDragState.key;
-          if (fromKey) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            const position = menuDropPosition(item, ev.clientY, fromKey);
-            if (position === "none") {
-              if (ev.dataTransfer) ev.dataTransfer.dropEffect = "none";
-              markMenuDropTarget(null, position);
-              return;
-            }
-            if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
-            if (position === "inside") openMenuTreeForGroup(item.getAttribute("data-menu-key"), false);
-            markMenuDropTarget(item, position);
-          }
-        });
-        item.addEventListener("dragleave", () => {
-          item.classList.remove("is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside");
-        });
-        item.addEventListener("drop", (ev) => {
-          const fromKey = (menuDragState && menuDragState.key) || (ev.dataTransfer && ev.dataTransfer.getData("application/x-menu-key"));
-          const toGroup = item.getAttribute("data-menu-group");
-          const position = menuDropPosition(item, ev.clientY, fromKey);
-          item.classList.remove("is-menu-drag-over", "is-menu-drop-after", "is-menu-drop-inside");
-          menuDragState = null;
-          if (!fromKey || !toGroup || position === "none") return;
-          ev.preventDefault();
-          ev.stopPropagation();
-          moveMenuItem(fromKey, toGroup, item.getAttribute("data-menu-key"), position);
-        });
-        item.addEventListener("contextmenu", (ev) => {
-          showMenuContextMenu(ev, item);
+          setCustomMenuTreeOpen(key, !(tree && tree.classList.contains("is-open")));
         });
       });
     }
@@ -619,7 +521,7 @@
       try {
         window.localStorage.setItem("mealplanner_active_config_view", activeConfigView);
       } catch (_) {}
-      persistActiveConfigViewState();
+      persistUiState({ active_config_view: activeConfigView });
     }
 
     function leafKeyForConfigView(viewName) {
@@ -637,7 +539,7 @@
 
     function openMenuTreeForGroup(group, persist = true) {
       if (!group || group === "top") return;
-      setAnyMenuTreeOpen(group, true, persist);
+      setCustomMenuTreeOpen(group, true, persist);
     }
 
     function setActiveMenuPathForKey(key) {
@@ -646,7 +548,7 @@
       try {
         window.localStorage.setItem("mealplanner_active_menu_path", activeMenuPath.join("/"));
       } catch (_) {}
-      persistActiveMenuPathState();
+      persistUiState({ active_menu_path: activeMenuPath });
     }
 
     function applyActiveMenuPathToState() {
@@ -736,7 +638,7 @@
           btn = document.createElement("button");
           btn.type = "button";
           btn.className = "menu-item";
-          btn.innerHTML = `<span class="menu-drag-handle" draggable="true" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label"></span>`;
+          btn.innerHTML = `<span class="menu-drag-handle" title="Drag to reorder" aria-hidden="true"></span><span class="menu-item-label"></span>`;
           box.appendChild(btn);
         }
         btn.classList.remove("menu-custom-item");
@@ -757,7 +659,6 @@
         btn.addEventListener("click", () => openMaintSheet(btn.getAttribute("data-maint-sheet-key")));
       });
       applyMenuOrder();
-      attachMenuDragHandles();
       setActivePanel(activePanel, false);
     }
 
@@ -896,7 +797,6 @@
               formColumnWidths[key] = Math.max(0, startW + (mv.clientX - startX));
               applyFormColumnWidths(root);
               if (typeof applyDetailBlockLayout === "function") applyDetailBlockLayout(root);
-              if (typeof applyShiftCodeAnalysisBlockLayout === "function") applyShiftCodeAnalysisBlockLayout(root);
               if (typeof applyDutyBlockLayout === "function") applyDutyBlockLayout();
               autoResizeTextareas(root);
             },

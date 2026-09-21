@@ -12,7 +12,6 @@
     let shoppingCatalogByName = {};
     let targetPayload = { headers: [], indicator_rows: {}, nutrient_keys: [], profile: {} };
     let nutritionCatalogPayload = { nutrient_keys: [], rows: [] };
-    let targetEditorWidth = null;
     let targetColumnWidths = {};
     let catalogColumnWidths = {};
     let formColumnWidths = {};
@@ -34,7 +33,7 @@
     let activeMaintSheetKey = null;
     let maintSheetPayload = { sheet_key: null, display_name: "", rows: [] };
     let rosterReportSources = { payroll_times: [], overtime: [], wake_alarms: [], public_holidays: [], medical_appointments: [] };
-    let googleCalendarSync = { enabled: false, write: false, client_secret_file: "", token_file: "", service_account_file: "", nonwork_calendar_id: "", work_calendar_id: "", alarm_calendar_id: "", wake_offset_hours: 3 };
+    let googleCalendarSync = { enabled: false, write: false, client_secret_file: "", token_file: "", nonwork_calendar_id: "", work_calendar_id: "", alarm_calendar_id: "", wake_offset_hours: 3 };
     let googleCalendarAuth = { authenticated: false, status: "" };
     // Typhoon panel 上次嘅輸入，離開畫面即存，下次開返同一個畫面
     let typhoonSavedState = { date_iso: "", signal_time: "", name: "", confirmed: false, day_off: false, code: "" };
@@ -96,6 +95,42 @@
     }
     function isoFromYmd(ymd) {
       return `${ymd.y}-${String(ymd.m).padStart(2, "0")}-${String(ymd.d).padStart(2, "0")}`;
+    }
+    // ISO 日期 ±N 日（shopping / duty / onoffduty / typhoon 共用）；唔似日期就回空字串。
+    function isoAddDays(iso, days) {
+      const [y, m, d] = String(iso || "").split("-").map(Number);
+      if (!y || !m || !d) return "";
+      return isoFromYmd(ymdAddDays({ y, m, d }, days));
+    }
+    // 30 小時制：凌晨 00:00–05:59 一律寫成 24:00–29:59（唔會有兩個寫法指同一個鐘點）。
+    function normalTime(value) {
+      const s = String(value || "").trim();
+      const compact = s.match(/^(\d{1,2})(\d{2})$/);
+      const m = compact || s.match(/(\d{1,2}):(\d{2})/);
+      if (!m) return "";
+      let hour = Number(m[1]);
+      if (hour > 29) return "";
+      if (hour < 6) hour += 24;
+      return `${String(hour).padStart(2, "0")}:${m[2]}`;
+    }
+    // HH:MM（或 HHMM）→ 30 小時制分鐘數；唔似時間就 null。
+    function timeMinutes(value) {
+      const t = normalTime(value);
+      if (!t) return null;
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m;
+    }
+    // 分鐘數 → 30 小時制 HH:MM（凌晨嗰段屬前一日嘅 24:00–29:59）。
+    function clockFromMinutes(minutes) {
+      if (!Number.isFinite(minutes)) return "";
+      const n = ((Math.round(minutes) % 1440) + 1440) % 1440;
+      const hour = Math.floor(n / 60);
+      return `${String(hour < 6 ? hour + 24 : hour).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+    }
+    // 拖 block 一律 snap 到 10px 格：唔係嘅話兩個 block 差一兩 px，肉眼對唔到齊。
+    const BLOCK_SNAP_PX = 10;
+    function snapBlockPx(value) {
+      return Math.round(value / BLOCK_SNAP_PX) * BLOCK_SNAP_PX;
     }
     function daysInMonth(year, month) {
       return new Date(Date.UTC(year, month, 0, 12, 0, 0)).getUTCDate();
@@ -183,14 +218,6 @@
       const days = Array.isArray(memoryPayload.days) ? memoryPayload.days : [];
       return days.find((day) => day && String(day.date || "") === iso) || null;
     }
-    function mealTimeMinutes(raw) {
-      const match = String(raw || "").match(/\b(\d{1,2}):(\d{2})\b/);
-      if (!match) return null;
-      const hour = Number(match[1]);
-      const minute = Number(match[2]);
-      if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour > 23 || minute > 59) return null;
-      return hour * 60 + minute;
-    }
     function firstMealMinutesForDay(day) {
       const mealPlan = day && typeof day.meal_plan === "object" ? day.meal_plan : null;
       if (!mealPlan) return null;
@@ -198,8 +225,8 @@
       const primary = mealPlan.primary_rule && typeof mealPlan.primary_rule === "object" ? mealPlan.primary_rule : {};
       const values = [];
       for (const meal of MEALS) {
-        let minutes = mealTimeMinutes(resolved[meal]);
-        if (minutes == null) minutes = mealTimeMinutes(primary[meal]);
+        let minutes = timeMinutes(resolved[meal]);
+        if (minutes == null) minutes = timeMinutes(primary[meal]);
         if (minutes != null) values.push(minutes);
       }
       return values.length ? Math.min(...values) : null;
@@ -396,9 +423,10 @@
       }, 30000);
     })();
 
+    // 全 web 唯一一個 HTML escape（連 " 都 escape，所以 attribute 同 text 都用得）。
     function esc(s) {
       if (s == null) return "";
-      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
     function br(s) {
@@ -704,51 +732,24 @@
     }
 
     function setActivePanel(panel, persist = true) {
-      const planner = document.getElementById("planner-panel");
-      const config = document.getElementById("config-panel");
-      const maint = document.getElementById("maint-panel");
-      const reports = document.getElementById("reports-panel");
-      const shopping = document.getElementById("shopping-panel");
-      const duty = document.getElementById("duty-report-panel");
-      const onoff = document.getElementById("onoffduty-panel");
-      const typhoon = document.getElementById("typhoon-panel");
-      const mPlanner = document.getElementById("menu-planner");
-      const mConfig = document.getElementById("menu-config");
-      const mConfigTarget = document.getElementById("menu-config-target");
-      const mConfigCatalog = document.getElementById("menu-config-catalog");
-      const mConfigDetails = document.getElementById("menu-config-details");
-      const mMaint = document.getElementById("menu-maint");
-      const mReports = document.getElementById("menu-reports");
-      const mShiftCodeAnalysis = document.getElementById("menu-report-shift-code-analysis");
-      const mShopping = document.getElementById("menu-shopping");
-      const mDuty = document.getElementById("menu-duty-report");
-      const mOnOff = document.getElementById("menu-onoffduty");
-      const mTyphoon = document.getElementById("menu-typhoon");
       const target = panel || "planner";
       activePanel = PANEL_KEYS.includes(target) ? target : "planner";
-      planner.style.display = activePanel === "planner" ? "" : "none";
-      config.style.display = activePanel === "config" ? "" : "none";
-      maint.style.display = activePanel === "maint" ? "" : "none";
-      reports.style.display = activePanel === "reports" ? "" : "none";
-      shopping.style.display = activePanel === "shopping" ? "" : "none";
-      if (duty) duty.style.display = activePanel === "duty_report" ? "" : "none";
-      if (onoff) onoff.style.display = activePanel === "onoffduty" ? "" : "none";
-      if (typhoon) typhoon.style.display = activePanel === "typhoon" ? "" : "none";
-      mPlanner.classList.toggle("active", activePanel === "planner");
-      mConfig.classList.toggle("active", activePanel === "config");
-      mConfigTarget.classList.remove("active");
-      mConfigCatalog.classList.remove("active");
-      mConfigDetails.classList.remove("active");
-      mMaint.classList.toggle("active", activePanel === "maint");
+      // 每個 panel <section> 同佢個 menu 掣都標住 data-panel：一個 loop 開關晒。
+      document.querySelectorAll("section[data-panel]").forEach((el) => {
+        el.style.display = el.dataset.panel === activePanel ? "" : "none";
+      });
+      document.querySelectorAll(".menu-item[data-panel]").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.panel === activePanel);
+      });
+      ["menu-config-target", "menu-config-catalog", "menu-config-details"].forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.remove("active");
+      });
       document.querySelectorAll("[data-maint-sheet-key]").forEach((btn) => {
         btn.classList.toggle("active", activePanel === "maint" && btn.dataset.maintSheetKey === activeMaintSheetKey);
       });
-      mReports.classList.toggle("active", activePanel === "reports");
-      mShiftCodeAnalysis.classList.toggle("active", activePanel === "reports");
-      mShopping.classList.toggle("active", activePanel === "shopping");
-      if (mDuty) mDuty.classList.toggle("active", activePanel === "duty_report");
-      if (mOnOff) mOnOff.classList.toggle("active", activePanel === "onoffduty");
-      if (mTyphoon) mTyphoon.classList.toggle("active", activePanel === "typhoon");
+      const mShiftCodeAnalysis = document.getElementById("menu-report-shift-code-analysis");
+      if (mShiftCodeAnalysis) mShiftCodeAnalysis.classList.toggle("active", activePanel === "reports");
       if (persist) persistColumnWidths();
       // 揀返餐單：如果期間過咗 24:00，趁而家補返個 re-render。
       if (activePanel === "planner" && typeof rollOverIfDateChanged === "function") {
@@ -757,47 +758,13 @@
       return true;
     }
 
-    function setConfigMenuTreeOpen(open, persist = true) {
-      const tree = document.getElementById("config-menu-tree");
-      const toggle = document.getElementById("menu-config");
-      const isOpen = !!open;
-      menuTreeOpen.config = isOpen;
-      if (!tree || !toggle) return;
-      tree.classList.toggle("is-open", isOpen);
-      toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-      if (persist) persistMenuTreeOpen();
-    }
-
-    function setMaintMenuTreeOpen(open, persist = true) {
-      const tree = document.getElementById("maint-menu-tree");
-      const toggle = document.getElementById("menu-maint");
-      const isOpen = !!open;
-      menuTreeOpen.maint = isOpen;
-      if (!tree || !toggle) return;
-      tree.classList.toggle("is-open", isOpen);
-      toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-      if (persist) persistMenuTreeOpen();
-    }
-
-    function setReportsMenuTreeOpen(open, persist = true) {
-      const tree = document.getElementById("reports-menu-tree");
-      const toggle = document.getElementById("menu-reports");
-      const isOpen = !!open;
-      menuTreeOpen.reports = isOpen;
-      if (!tree || !toggle) return;
-      tree.classList.toggle("is-open", isOpen);
-      toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-      if (persist) persistMenuTreeOpen();
-    }
-
+    // config / maint / reports 三棵 static tree 同 custom tree 一樣用 setCustomMenuTreeOpen（planner-menu.js）。
     function applyMenuTreeOpen() {
-      setConfigMenuTreeOpen(menuTreeOpen.config !== false, false);
-      setMaintMenuTreeOpen(!!menuTreeOpen.maint, false);
-      setReportsMenuTreeOpen(!!menuTreeOpen.reports, false);
+      setCustomMenuTreeOpen("config", menuTreeOpen.config !== false, false);
+      setCustomMenuTreeOpen("maint", !!menuTreeOpen.maint, false);
+      setCustomMenuTreeOpen("reports", !!menuTreeOpen.reports, false);
       Object.keys(menuTreeOpen || {}).forEach((key) => {
-        if (!MENU_TREE_KEYS.includes(key) && typeof setCustomMenuTreeOpen === "function") {
-          setCustomMenuTreeOpen(key, !!menuTreeOpen[key], false);
-        }
+        if (!MENU_TREE_KEYS.includes(key)) setCustomMenuTreeOpen(key, !!menuTreeOpen[key], false);
       });
     }
 

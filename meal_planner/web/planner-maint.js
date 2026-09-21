@@ -3,9 +3,7 @@
     let scheduleGridNewShiftStartIndex = -1;
     let scheduleGridNewShiftCount = 0;
     let scheduleGridSkipNextRenderSort = false;
-    let shiftAnalysisSuppressNextClickClear = false;
     let shiftCodeAnalysisRows = [];
-    const maintDirectKeyTimers = new WeakMap();
 
     function emptyMaintRow(rows = null) {
       if (activeMaintSheetKey === "roster") return [""];
@@ -265,13 +263,6 @@
           } else if (input.dataset.maintKeyboardSelected === "1" && input.dataset.maintEditing !== "1") {
             beginMaintCellEdit(input, true);
           }
-          const timer = maintDirectKeyTimers.get(input);
-          if (timer) {
-            clearTimeout(timer);
-            maintDirectKeyTimers.delete(input);
-          }
-          delete input.dataset.maintPendingDirectKey;
-          delete input.dataset.maintReplaceOnComposition;
         });
         input.addEventListener("beforeinput", (ev) => {
           if (input.dataset.maintKeyboardSelected !== "1" || input.dataset.maintEditing === "1") return;
@@ -300,8 +291,6 @@
       if (!input) return;
       if (maintTrapBlocks(input)) return;
       delete input.dataset.maintEditing;
-      delete input.dataset.maintReplaceOnComposition;
-      delete input.dataset.maintPendingDirectKey;
       if (fromKeyboard) {
         input.readOnly = false;
         input.dataset.maintKeyboardSelected = "1";
@@ -410,7 +399,6 @@
       }
       input.readOnly = false;
       input.dataset.maintEditing = "1";
-      input.dataset.maintReplaceOnComposition = replaceValue ? "1" : "";
       input.focus();
       if (replaceValue) input.value = "";
       if (typeof input.setSelectionRange === "function") {
@@ -435,11 +423,6 @@
         delete input.dataset.maintOriginalEffective;
         delete input.dataset.maintOriginalGroupCode;
         delete input.dataset.maintOriginalGroupEffective;
-        delete input.dataset.maintReplaceOnComposition;
-        delete input.dataset.maintPendingDirectKey;
-        const timer = maintDirectKeyTimers.get(input);
-        if (timer) clearTimeout(timer);
-        maintDirectKeyTimers.delete(input);
         if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
         return;
       }
@@ -453,11 +436,6 @@
       delete input.dataset.maintOriginalEffective;
       delete input.dataset.maintOriginalGroupCode;
       delete input.dataset.maintOriginalGroupEffective;
-      delete input.dataset.maintReplaceOnComposition;
-      delete input.dataset.maintPendingDirectKey;
-      const timer = maintDirectKeyTimers.get(input);
-      if (timer) clearTimeout(timer);
-      maintDirectKeyTimers.delete(input);
       if (input.tagName.toLowerCase() === "textarea") autoResizeTextarea(input);
     }
 
@@ -471,7 +449,6 @@
       if (!delta) return false;
       const next = maintCellInputFrom(input, delta[0], delta[1]);
       if (!next) return false;
-      if (input.dataset) input.dataset.skipAutosaveOnce = "1";
       focusMaintCell(next, true);
       return true;
     }
@@ -484,7 +461,6 @@
           ev.preventDefault();
           if (!guardMaintCellLeave(input)) return;
           const next = maintCellInputFrom(input, 1, 0);
-          if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
           endMaintCellEdit(input);
           focusMaintCell(next || input, true);
         } else if (ev.key === "Escape") {
@@ -495,7 +471,6 @@
           ev.preventDefault();
           if (!guardMaintCellLeave(input)) return;
           const next = maintCellInputFrom(input, 0, ev.shiftKey ? -1 : 1) || maintCellInputFrom(input, ev.shiftKey ? -1 : 1, 0);
-          if (input.dataset) input.dataset.skipAutosaveOnce = "1";
           endMaintCellEdit(input);
           focusMaintCell(next || input, true);
         } else if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
@@ -503,7 +478,6 @@
           ev.preventDefault();
           if (!guardMaintCellLeave(input)) return;
           const next = maintCellInputFrom(input, ev.key === "ArrowUp" ? -1 : 1, 0);
-          if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
           endMaintCellEdit(input);
           focusMaintCell(next || input, true);
         }
@@ -512,7 +486,6 @@
       if (ev.key === "Tab") {
         ev.preventDefault();
         const next = maintCellInputFrom(input, 0, ev.shiftKey ? -1 : 1) || maintCellInputFrom(input, ev.shiftKey ? -1 : 1, 0);
-        if (input.dataset) input.dataset.skipAutosaveOnce = "1";
         focusMaintCell(next || input, true);
         return;
       }
@@ -536,7 +509,6 @@
       if (ev.key === "Enter") {
         ev.preventDefault();
         const next = maintCellInputFrom(input, 1, 0);
-        if (next && input.dataset) input.dataset.skipAutosaveOnce = "1";
         if (next) focusMaintCell(next, true);
         return;
       }
@@ -623,7 +595,14 @@
         content: header.indexOf("內容"),
         duration: header.indexOf("時長"),
         effective: header.findIndex((cell) => cell === "生效日期" || cell === "生效" || cell === "Effective From"),
+        // 「停用」係 logical field（right-click 切換，唔 render 做一欄）。
+        off: header.indexOf("停用"),
       };
+    }
+
+    function isScheduleGridOffRow(row, cols) {
+      if (!Array.isArray(row) || !cols || cols.off < 0) return false;
+      return String(row[cols.off] || "").trim() !== "";
     }
 
     function scheduleGridInput(rowIndex, colIndex) {
@@ -670,7 +649,7 @@
       return m ? Number(m[1]) : null;
     }
 
-    // clockFromMinutes（30 小時制版）定義喺下面 defaultWakeTimeForStart 附近，星號行同起身時間共用。
+    // clockFromMinutes（30 小時制版）喺 planner.js，星號行、起身時間、Typhoon 都共用。
 
     function applyScheduleGridStarRows(rows, cols, onlyGroupKey = "") {
       if (cols.code < 0 || cols.time < 0 || cols.content < 0) return rows;
@@ -707,6 +686,12 @@
       return `${code}\u0000${effective}`;
     }
 
+    /**
+     * 唯一一套時長重算引擎（載入、改格、停用／啟用都用佢）：
+     * 一格嘅時長 ＝ 去下一個「佔時間」行嘅距離；`-` 開頭嘅 marker 行同停用行都唔佔時間，
+     * 前一格跨過佢哋，佢哋自己時長留空；最後一格留空；逐個（更碼 + 生效日期）版本各自計。
+     * 時間一律經 timeMinutes（30 小時制）睇，02:00 同 26:00 係同一個鐘點。
+     */
     function recalculateScheduleGridDurations(rows, onlyGroupKey = "") {
       const cols = scheduleGridColumnIndexes(rows);
       if (cols.code < 0 || cols.time < 0 || cols.duration < 0) return rows;
@@ -719,14 +704,15 @@
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push({ row, idx });
       });
+      const skipsTime = (row) => isScheduleGridMarkerRow(row, cols) || isScheduleGridOffRow(row, cols);
       groups.forEach((group) => {
         group.forEach((item, pos) => {
-          const isMarker = isScheduleGridMarkerRow(item.row, cols);
-          const next = group.slice(pos + 1).find((candidate) => !isScheduleGridMarkerRow(candidate.row, cols));
+          const isMarker = skipsTime(item.row);
+          const next = group.slice(pos + 1).find((candidate) => !skipsTime(candidate.row));
           const starMinutes = scheduleGridStarMinutes(item.row[cols.content]);
-          const duration = starMinutes != null
-            ? starMinutes
-            : (!isMarker && next ? minutesBetween(item.row[cols.time], next.row[cols.time]) : null);
+          const duration = isMarker
+            ? null
+            : (starMinutes != null ? starMinutes : (next ? minutesBetween(item.row[cols.time], next.row[cols.time]) : null));
           const durationText = duration == null ? "" : String(Math.round(duration));
           item.row[cols.duration] = durationText;
           setScheduleGridCellValue(item.idx, cols.duration, durationText);
@@ -759,7 +745,7 @@
     function normaliseEffectiveDateInput(value) {
       const parsed = parseYmd(value);
       if (!parsed) return "";
-      return dateKey(parsed.year, parsed.month, parsed.day);
+      return isoFromYmd({ y: parsed.year, m: parsed.month, d: parsed.day });
     }
 
     function normaliseScheduleGridEffectiveValue(value) {
@@ -1095,42 +1081,15 @@
       return null;
     }
 
-    function dateKey(year, month, day) {
-      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    }
-
     function dateDmy(year, month, day) {
       return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
     }
 
     function dateDmyDow(year, month, day) {
-      return `${dateDmy(year, month, day)} ${weekdayLabel(year, month, day)}`;
+      return `${dateDmy(year, month, day)} ${dowZh(isoFromYmd({ y: year, m: month, d: day }))}`;
     }
 
-    function weekdayLabel(year, month, day) {
-      const d = new Date(year, month - 1, day);
-      return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] || "";
-    }
-
-    // 30 小時制：凌晨 00:00–05:59 一律寫成 24:00–29:59（唔會有兩個寫法指同一個鐘點）。
-    function normalTime(value) {
-      const s = String(value || "").trim();
-      const compact = s.match(/^(\d{1,2})(\d{2})$/);
-      const m = compact || s.match(/(\d{1,2}):(\d{2})/);
-      if (!m) return "";
-      let hour = Number(m[1]);
-      if (hour > 29) return "";
-      if (hour < 6) hour += 24;
-      return `${String(hour).padStart(2, "0")}:${m[2]}`;
-    }
-
-    function timeMinutes(value) {
-      const t = normalTime(value);
-      if (!t) return null;
-      const [h, m] = t.split(":").map(Number);
-      return h * 60 + m;
-    }
-
+    // normalTime / timeMinutes / clockFromMinutes（30 小時制）喺 planner.js。
     function minutesBetween(start, end) {
       const a = timeMinutes(start);
       let b = timeMinutes(end);
@@ -1177,7 +1136,7 @@
         if (!Array.isArray(row)) return;
         const d = parseYmd(row[0]);
         if (!d) return;
-        out.set(dateKey(d.year, d.month, d.day), {
+        out.set(isoFromYmd({ y: d.year, m: d.month, d: d.day }), {
           start: normalTime(row[1]),
           end: normalTime(row[2]),
           note: String(row[3] || "").trim(),
@@ -1201,7 +1160,7 @@
         const d = parseYmd(row[cDate]);
         const wake = normalTime(row[cWake]);
         if (!d || !wake) return;
-        out.set(dateKey(d.year, d.month, d.day), wake);
+        out.set(isoFromYmd({ y: d.year, m: d.month, d: d.day }), wake);
       });
       return out;
     }
@@ -1222,17 +1181,9 @@
         const d = parseYmd(row[cDate]);
         const note = String(row[cNote] || "").trim();
         if (!d || !note) return;
-        out.set(dateKey(d.year, d.month, d.day), note);
+        out.set(isoFromYmd({ y: d.year, m: d.month, d: d.day }), note);
       });
       return out;
-    }
-
-    function clockFromMinutes(minutes) {
-      if (!Number.isFinite(minutes)) return "";
-      const n = ((Math.round(minutes) % 1440) + 1440) % 1440;
-      // 30 小時制顯示：凌晨嗰段屬前一日嘅 24:00–29:59。
-      const hour = Math.floor(n / 60);
-      return `${String(hour < 6 ? hour + 24 : hour).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
     }
 
     function wakeOffsetMinutes() {
@@ -1252,7 +1203,7 @@
         const d = parseYmd(row[0]);
         const name = String(row[1] || "").trim();
         if (!d || !name) return;
-        out.set(dateKey(d.year, d.month, d.day), name);
+        out.set(isoFromYmd({ y: d.year, m: d.month, d: d.day }), name);
       });
       return out;
     }
@@ -1265,7 +1216,7 @@
         if (dateIdx < 0) return;
         const d = parseYmd(row[dateIdx]);
         if (!d) return;
-        const key = dateKey(d.year, d.month, d.day);
+        const key = isoFromYmd({ y: d.year, m: d.month, d: d.day });
         const timeIdx = row.findIndex((cell, idx) => idx !== dateIdx && !!normalTime(cell));
         const time = timeIdx >= 0 ? normalTime(row[timeIdx]) : "";
         const details = row
@@ -1303,7 +1254,7 @@
         const parsed = parseRosterMaintLine(Array.isArray(row) ? row[0] : "");
         if (!parsed) return;
         parsed.days.forEach((item) => {
-          const key = dateKey(parsed.year, parsed.month, item.day);
+          const key = isoFromYmd({ y: parsed.year, m: parsed.month, d: item.day });
           const ot = overtimeByDate.get(key) || {};
           const shift = shiftForCode(item.code) || {};
           const plannedStart = shift.start || "";
@@ -1326,7 +1277,7 @@
           if (holiday) autoNoteParts.push(`<span class="report-red">${esc(holiday)}</span>`);
           medical.forEach((text) => autoNoteParts.push(esc(text)));
           if (ot.note) autoNoteParts.push(esc(ot.note));
-          const weekday = weekdayLabel(parsed.year, parsed.month, item.day);
+          const weekday = dowZh(key);
           const isToday = key === todayKey;
           const isSunday = weekday === "Sun";
           const dateClasses = ["report-date-cell", isToday ? "report-today-cell" : "", (isSunday || holiday) ? "report-red" : ""].filter(Boolean).join(" ");
@@ -1540,56 +1491,10 @@
       }
     }
 
-    function shiftAnalysisBlockOffsetPx(blockKey, axis, fallback) {
-      const saved = Number(formColumnWidths[`shift_analysis_block_${blockKey}_${axis}`]);
-      const value = Number.isFinite(saved) ? saved : fallback;
-      return axis === "y" ? Math.max(0, value) : value;
-    }
-
-    function shiftAnalysisBlockWidth(block) {
-      const table = block && block.querySelector ? block.querySelector("table[data-form-table]") : null;
-      if (!table) return block ? block.getBoundingClientRect().width : 0;
-      const colWidth = Array.from(table.querySelectorAll("col[data-form-col-key]")).reduce((total, col) => {
-        const key = col.getAttribute("data-form-col-key");
-        const fallback = Number(col.getAttribute("data-form-col-default")) || 120;
-        return total + formColumnWidthPx(key, fallback);
-      }, 0);
-      const style = getComputedStyle(block);
-      const borderX = parseFloat(style.borderLeftWidth || "0") + parseFloat(style.borderRightWidth || "0");
-      return colWidth + borderX;
-    }
-
-    function applyShiftCodeAnalysisBlockLayout(root = document) {
-      const container = document.querySelector(".shift-code-analysis-layout");
-      if (!container) return;
-      if (root !== document && !root.contains(container) && container !== root && !container.contains(root)) return;
-      applyFormColumnWidths(container);
-      const blocks = Array.from(container.querySelectorAll(".shift-analysis-block[data-shift-analysis-block]"));
-      let defaultY = 0;
-      let maxRight = 0;
-      let maxBottom = 0;
-      blocks.forEach((block) => {
-        const blockKey = block.getAttribute("data-shift-analysis-block");
-        const defaultX = 0;
-        const x = shiftAnalysisBlockOffsetPx(blockKey, "x", defaultX);
-        const y = shiftAnalysisBlockOffsetPx(blockKey, "y", defaultY);
-        const width = shiftAnalysisBlockWidth(block);
-        block.style.left = `${x}px`;
-        block.style.top = `${y}px`;
-        if (width > 0) block.style.width = `${width}px`;
-        const height = block.getBoundingClientRect().height;
-        maxRight = Math.max(maxRight, x + Math.max(width, block.getBoundingClientRect().width));
-        maxBottom = Math.max(maxBottom, y + height);
-        defaultY += height + 10;
-      });
-      container.style.width = `${Math.max(280, maxRight)}px`;
-      container.style.height = `${Math.max(260, maxBottom)}px`;
-    }
-
     async function openShiftCodeAnalysisReport() {
       if (!(await resolveUnsavedBeforeLeaving())) return;
       setActiveMenuPathForKey("shift_code_analysis");
-      setReportsMenuTreeOpen(true);
+      setCustomMenuTreeOpen("reports", true);
       setActivePanel("reports");
       const status = document.getElementById("shift-code-analysis-status");
       const out = document.getElementById("shift-code-analysis-out");
@@ -1615,7 +1520,23 @@
       }
     }
 
+    // 更表 textarea 打字：等 150ms 冇再打先砌一次報表（以前每個 keystroke 砌一次）；blur 即刻 flush。
+    let rosterReportRefreshTimer = null;
+
+    function scheduleRosterReportRefresh() {
+      if (rosterReportRefreshTimer) clearTimeout(rosterReportRefreshTimer);
+      rosterReportRefreshTimer = setTimeout(refreshRosterMaintReport, 150);
+    }
+
+    function flushRosterReportRefresh() {
+      if (rosterReportRefreshTimer) refreshRosterMaintReport();
+    }
+
     function refreshRosterMaintReport() {
+      if (rosterReportRefreshTimer) {
+        clearTimeout(rosterReportRefreshTimer);
+        rosterReportRefreshTimer = null;
+      }
       const report = document.getElementById("maint-roster-report");
       if (!report) return;
       report.innerHTML = renderRosterMaintReport(collectMaintRows());
@@ -1987,7 +1908,7 @@
       existing.slice(1).forEach((row) => {
         if (!Array.isArray(row)) return;
         const d = parseYmd(row[0]);
-        const rowKey = d ? dateKey(d.year, d.month, d.day) : "";
+        const rowKey = d ? isoFromYmd({ y: d.year, m: d.month, d: d.day }) : "";
         if (!rowKey) return;
         const entry = { key: rowKey, wake: normalTime(row[1]) || "", note: String(row[2] || "").trim() };
         if (rowKey === key) {
