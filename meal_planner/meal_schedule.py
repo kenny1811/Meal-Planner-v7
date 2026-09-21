@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any
@@ -176,8 +177,8 @@ def build_meal_planning_cache(settings: AppSettings) -> MealPlanningCache:
 
         overtime_sheet = load_sheet_rows("overtime", settings)
         overtime_overrides = load_overtime_overrides_from_rows(overtime_sheet.get("rows", []))
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 - 冇加班表照出餐單，但要有紀錄，唔可以靜靜哋用錯開工／收工時間
+        logging.getLogger(__name__).warning("加班表讀唔到，餐單當冇 override", exc_info=True)
 
     return MealPlanningCache(
         meal_time_rules=rules,

@@ -13,7 +13,6 @@ from typing import Any
 from meal_planner.settings import get_settings
 
 # The UI has no restore picker, so per-day history should not grow invisibly.
-MAX_VERSIONS_PER_DATE = 1
 _STORE_LOCK = RLock()
 # 起身表 no longer has its own menu leaf; it is edited via the roster report.
 _REMOVED_MENU_KEYS = {"runtime_import", "diagnostics", "wake_alarms"}
@@ -369,7 +368,8 @@ KEEP_PLAN_VERSIONS = 12
 
 
 def save_plan_versions(days: list[dict[str, Any]]) -> dict[str, Any]:
-    ts = datetime.now().isoformat(timespec="seconds")
+    # 微秒：一秒內生成兩次都要各自留一版（以前只到秒，第二次會 REPLACE 走上一版）。
+    ts = datetime.now().isoformat(timespec="microseconds")
     saved_dates: list[str] = []
     with _plan_db() as conn:
         for day in days:
@@ -575,7 +575,8 @@ def save_target_editor_layout(
     catalog_column_widths: dict[str, float] | None = None,
 ) -> None:
     def mutate(ui: dict[str, Any]) -> None:
-        ui["target_editor_width"] = float(width) if width is not None else None
+        if width is not None:
+            ui["target_editor_width"] = float(width)
         if column_widths is not None:
             current = ui.get("target_column_widths") if isinstance(ui.get("target_column_widths"), dict) else {}
             current = {str(k): float(v) for k, v in current.items()}

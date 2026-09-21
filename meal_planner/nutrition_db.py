@@ -461,6 +461,14 @@ def save_target_settings(
     return load_target_settings(settings)
 
 
+# 前端只顯示最近呢幾多條體重記錄；save 嗰陣亦只換走呢個窗口，更舊嘅記錄唔會郁。
+WEIGHT_HISTORY_WINDOW = 30
+
+
+# 前端只顯示最近呢幾多條體重記錄；save 嗰陣亦只換走呢個窗口，更舊嘅記錄唔會郁。
+WEIGHT_HISTORY_WINDOW = 30
+
+
 def load_nutrition_profile(settings: AppSettings | None = None) -> dict[str, Any]:
     settings = settings or get_settings()
     with closing(_connect(settings)) as conn:
@@ -479,10 +487,11 @@ def load_nutrition_profile(settings: AppSettings | None = None) -> dict[str, Any
                 SELECT rowid, recorded_at, weight_kg
                 FROM nutrition_weight_history
                 ORDER BY recorded_at DESC, rowid DESC
-                LIMIT 30
+                LIMIT ?
             )
             ORDER BY recorded_at ASC, rowid ASC
-            """
+            """,
+            (WEIGHT_HISTORY_WINDOW,),
         ).fetchall()
     history = [
         {"recorded_at": str(item["recorded_at"]), "weight_kg": float(item["weight_kg"])}
@@ -619,7 +628,20 @@ def save_nutrition_profile(
             (dob, age, gender, height_cm, weight_kg, monthly_weight_change_kg, last_updated),
         )
         if history:
-            conn.execute("DELETE FROM nutrition_weight_history")
+            # 前端只見到最近 WEIGHT_HISTORY_WINDOW 條，所以只換走嗰個窗口；
+            # 以前係 DELETE 全表再插返 30 條，第 31 條起嘅舊記錄一儲存就永久冇咗。
+            window_ids = [
+                (int(row["rowid"]),)
+                for row in conn.execute(
+                    """
+                    SELECT rowid FROM nutrition_weight_history
+                    ORDER BY recorded_at DESC, rowid DESC
+                    LIMIT ?
+                    """,
+                    (WEIGHT_HISTORY_WINDOW,),
+                ).fetchall()
+            ]
+            conn.executemany("DELETE FROM nutrition_weight_history WHERE rowid = ?", window_ids)
             conn.executemany(
                 """
                 INSERT INTO nutrition_weight_history(recorded_at, weight_kg)

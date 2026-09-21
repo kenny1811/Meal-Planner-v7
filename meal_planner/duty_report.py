@@ -42,10 +42,22 @@ from meal_planner.settings import AppSettings, get_settings
 from meal_planner.timeparse import (
     business_date,
     hhmm30,
+    minutes_30h,
     normalize_hhmm,
     slot_datetime as _slot_datetime,
-    to_minutes as _parse_hhmm,
 )
+
+
+def _parse_hhmm(text: Any) -> int:
+    """HH:MM → 30 小時制分鐘（24:00–29:59 排喺 23:59 之後）；無效回 -1。
+
+    以前用 24 小時分鐘，凌晨嘅報平安更（例如 25:30）會被當成 01:30，
+    跌出 06:00 起計嘅 segment 窗口，成個 slot 消失。
+    """
+    try:
+        return minutes_30h(text)
+    except ValueError:
+        return -1
 
 SAFE_KEYWORD = "報平安更"
 DEFAULT_MESSAGE_TEMPLATE = "{code} SAPP1801 報平安更正常"
@@ -374,6 +386,9 @@ def compute_slots(
     overlay 嘅 extra_slots 係行位表以外加開嘅更（id 用 `code@+HH:MM` 分開），
     訊息／群組同一般 slot 一模一樣——收訊息嗰邊睇唔出分別。
     """
+    # 一律先 normalize：舊資料／typhoon fallback 會直接傳 "00:00" 做「全日」，
+    # 30 小時制之下 00:00 係 24:00，唔轉做 06:00 成日嘅 slot 會全部跌出窗口。
+    segments = normalize_segments(segments)
     ot_start, ot_end = overtime
     slots: list[dict[str, Any]] = []
     for i, seg in enumerate(segments):
@@ -695,8 +710,13 @@ def send_slot(
     manual: bool,
     source: str = "web",
     date_iso: str | None = None,
+    skip_if_sent: bool = False,
 ) -> dict[str, Any]:
-    """即時發送一個 slot（手動或排程）。只限今日；成功／失敗都記入 log。"""
+    """即時發送一個 slot（手動或排程）。只限今日；成功／失敗都記入 log。
+
+    skip_if_sent：喺鎖入面再睇一次，已經 sent 就唔再發——俾 OnOff_Duty 嘅 hold-send 用，
+    因為佢寫 override 嗰下已經叫醒咗 scheduler，兩邊可以撞正同一秒。
+    """
     from meal_planner.whatsapp_send import WhatsAppSendError, send_group_message
 
     with _ACTION_LOCK:
@@ -708,6 +728,8 @@ def send_slot(
         if slot is None:
             raise ValueError(f"slot not found: {slot_id}")
         if not manual and slot["status"] != "due":
+            return plan
+        if skip_if_sent and slot["status"] == "sent":
             return plan
         if not slot["group"]:
             record_log(

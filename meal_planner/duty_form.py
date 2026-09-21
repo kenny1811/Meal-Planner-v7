@@ -707,7 +707,7 @@ def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[s
             whatsapp = "already sent"
         else:
             try:
-                send_slot(settings, str(slot["id"]), manual=True, source="onoffduty-holdsend")
+                send_slot(settings, str(slot["id"]), manual=True, source="onoffduty-holdsend", skip_if_sent=True)
                 whatsapp = "sent"
             except Exception as e:  # noqa: BLE001 - form 交咗就唔好冧，WhatsApp 可以去 ReportNormal 度 retry
                 whatsapp = f"failed: {e}"
@@ -808,8 +808,13 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
         due_seen = True
         if status == "failed" and retry_backoff_active(entry.get("recorded_at"), now):
             continue  # 之前失敗過：等最少 RETRY_SECONDS 先重試，唔好每 tick 狂試
-        hhmm = time_text.split(":")
-        value = time(int(hhmm[0]), int(hhmm[1]))
+        value = _time_from_hhmm30(time_text)  # 30 小時制 "25:30" → 01:30；以前 time(25, 30) 會 raise 冧成個 tick
+        if value is None:
+            record_onoff_log(
+                settings, biz_date, kind, "failed",
+                time_text=time_text, source="scheduler", detail=f"bad time: {time_text}",
+            )
+            continue
         try:
             submit_form(
                 form, post, biz_date,

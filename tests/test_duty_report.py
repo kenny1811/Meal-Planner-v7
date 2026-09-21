@@ -140,6 +140,12 @@ class TestSegments(unittest.TestCase):
         )
         self.assertEqual(slots[1]["group"], "半島報更群組")
 
+    def test_after_midnight_slot_survives_the_30_hour_window(self):
+        # 30 小時制：凌晨 01:30 嘅報平安更係 25:30，要留喺由 06:00 起計嘅全日 segment 入面。
+        rows = [_row("TSB", "10:45", "報平安更"), _row("TSB", "01:30", "報收工, 報平安更")]
+        slots = compute_slots(rows, [{"from": "00:00", "code": "TSB"}], date(2026, 7, 12), {"TSB": "時代廣場"}, TEMPLATE, {})
+        self.assertEqual([s["time"] for s in slots], ["10:45", "25:30"])
+
     def test_overtime_overrides_on_off_slots_only(self):
         """加班表：開工 override 套「報開工」slot、收工 override 套「報收工」slot，中間 slot 唔郁。"""
         slots = compute_slots(

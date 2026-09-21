@@ -84,6 +84,7 @@ from meal_planner.phone_push import (
 )
 from meal_planner.shift_time import payroll_coverage_issues
 from meal_planner.timeparse import business_date
+from meal_planner.storage import _STORE_LOCK
 from meal_planner.storage import (
     batch_ui_updates,
     load_ui_snapshot,
@@ -344,12 +345,13 @@ class RiceConversionRow(BaseModel):
 
 
 class DetailSettingsRequest(BaseModel):
-    rice_conversions: list[RiceConversionRow] = Field(default_factory=list)
+    # 全部 optional：冇帶嘅欄唔碰（以前 default [] 會將更碼定義／Post mapping／米換算清空）。
+    rice_conversions: list[RiceConversionRow] | None = None
     system_folder: str | None = None
     data_folder: str | None = None
     google_calendar_sync: dict[str, Any] | None = None
-    roster_code_definitions: list[dict[str, Any]] = Field(default_factory=list)
-    roster_post_mapping: list[dict[str, Any]] = Field(default_factory=list)
+    roster_code_definitions: list[dict[str, Any]] | None = None
+    roster_post_mapping: list[dict[str, Any]] | None = None
 
 
 class MaintenanceSheetRequest(BaseModel):
@@ -447,8 +449,12 @@ def _meal_time_minutes(raw: Any) -> int | None:
         return None
     hour = int(match.group(1))
     minute = int(match.group(2))
-    if hour > 23 or minute > 59:
+    if hour > 29 or minute > 59:
         return None
+    # 30 小時制：餐時可以係 24:xx–29:xx（resolve_meal_times_display 出嘅就係咁），
+    # 00:00–05:59 亦當翌日凌晨計，兩種寫法都要收。
+    if hour < 6:
+        hour += 24
     return hour * 60 + minute
 
 
@@ -473,14 +479,14 @@ def _can_regenerate_existing_today(day_payload: dict[str, Any], now: datetime) -
     first_meal = _first_meal_minutes(day_payload)
     if first_meal is None:
         return False
-    now_minutes = now.hour * 60 + now.minute
+    now_minutes = now.hour * 60 + now.minute + (1440 if now.hour < 6 else 0)  # 30 小時制
     return now_minutes < first_meal
 
 
 def _preview_regeneration_blocked_dates(dates: list[date]) -> list[date]:
     settings = get_settings()
     now = datetime.now(ZoneInfo(settings.dates.timezone))
-    today = now.date()
+    today = business_date(now)  # 30 小時制：00:00–05:59 仍係前一日
     requested = sorted(set(dates))
     stored_payloads = _stored_meal_plan_payloads({d.isoformat() for d in requested if d == today})
     blocked: list[date] = []
@@ -949,7 +955,7 @@ def api_oos_resolve(body: OutOfStockResolveRequest, request: Request) -> dict[st
     from meal_planner.storage import log_resolve_event
 
     settings = get_settings()
-    today_iso = datetime.now(ZoneInfo(settings.dates.timezone)).date().isoformat()
+    today_iso = business_date(datetime.now(ZoneInfo(settings.dates.timezone))).isoformat()
     client = request.client.host if request.client else None
     action = "swap" if body.swaps else ("out_of_stock" if body.row_index is not None else "regenerate")
 
@@ -1024,14 +1030,16 @@ def api_item_candidates() -> dict[str, Any]:
 @app.get("/api/memory-list")
 def api_memory_list_get() -> dict[str, Any]:
     try:
-        payload = load_memory_payload()
-        if isinstance(payload.get("days"), list):
-            # refresh 會 in-place 郁 meal_plan，所以要喺 refresh 前影低原樣先比較得準。
-            before = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            payload = refresh_payload_with_latest_indicators(payload)
-            after = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            if after != before:
-                save_memory_payload(payload)
+        # 讀→改→寫要鎖住，否則兩個 tab 同時 GET/POST 會 lost update。
+        with _STORE_LOCK:
+            payload = load_memory_payload()
+            if isinstance(payload.get("days"), list):
+                # refresh 會 in-place 郁 meal_plan，所以要喺 refresh 前影低原樣先比較得準。
+                before = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                payload = refresh_payload_with_latest_indicators(payload)
+                after = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                if after != before:
+                    save_memory_payload(payload)
         return {"payload": payload}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1042,8 +1050,9 @@ def api_memory_list_get() -> dict[str, Any]:
 @app.post("/api/memory-list")
 def api_memory_list_set(body: MemoryPayloadRequest) -> dict[str, Any]:
     try:
-        payload = merge_memory_payload(load_memory_payload(), body.payload)
-        save_memory_payload(payload)
+        with _STORE_LOCK:
+            payload = merge_memory_payload(load_memory_payload(), body.payload)
+            save_memory_payload(payload)
         return {"ok": True}
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Save memory list failed: {e}") from e
@@ -1097,9 +1106,10 @@ def api_get_detail_settings() -> dict[str, Any]:
 @app.post("/api/detail-settings")
 def api_set_detail_settings(body: DetailSettingsRequest) -> dict[str, Any]:
     try:
-        save_rice_detail_settings(
-            conversions=[(row.name_contains, row.ratio) for row in body.rice_conversions],
-        )
+        if body.rice_conversions is not None:
+            save_rice_detail_settings(
+                conversions=[(row.name_contains, row.ratio) for row in body.rice_conversions],
+            )
         if body.system_folder is not None or body.data_folder is not None:
             current = get_settings()
             save_folder_settings(
@@ -1108,8 +1118,10 @@ def api_set_detail_settings(body: DetailSettingsRequest) -> dict[str, Any]:
             )
         if body.google_calendar_sync is not None:
             save_google_calendar_sync_settings(body.google_calendar_sync)
-        save_roster_code_definitions(body.roster_code_definitions, get_settings())
-        save_roster_post_mapping(body.roster_post_mapping, get_settings())
+        if body.roster_code_definitions is not None:
+            save_roster_code_definitions(body.roster_code_definitions, get_settings())
+        if body.roster_post_mapping is not None:
+            save_roster_post_mapping(body.roster_post_mapping, get_settings())
         return {"ok": True, **_detail_settings_payload()}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

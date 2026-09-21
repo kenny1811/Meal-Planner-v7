@@ -32,13 +32,13 @@ class StorageTests(unittest.TestCase):
         return Path(self.tmp.name) / "meal_planner.sqlite3"
 
     def test_save_plan_versions_caps_versions_and_writes_schema(self):
-        for idx in range(storage.MAX_VERSIONS_PER_DATE + 3):
+        for idx in range(storage.KEEP_PLAN_VERSIONS + 3):
             storage.save_plan_versions([{"date": "2026-05-20", "meal_plan": {"idx": idx}}])
 
         result = storage.load_latest_versions(["2026-05-20"])
 
-        self.assertEqual(len(result["versions"]["2026-05-20"]), storage.MAX_VERSIONS_PER_DATE)
-        self.assertEqual(result["days"][0]["meal_plan"]["idx"], storage.MAX_VERSIONS_PER_DATE + 2)
+        self.assertEqual(len(result["versions"]["2026-05-20"]), storage.KEEP_PLAN_VERSIONS)
+        self.assertEqual(result["days"][0]["meal_plan"]["idx"], storage.KEEP_PLAN_VERSIONS + 2)
 
     def test_ui_state_round_trips_through_sqlite_without_json_store(self):
         storage.save_column_widths({"date": 120})

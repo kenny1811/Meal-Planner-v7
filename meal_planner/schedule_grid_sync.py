@@ -22,7 +22,7 @@ from meal_planner.schedule_grid import (
     rows_for_roster,
 )
 from meal_planner.settings import get_settings
-from meal_planner.timeparse import hhmm30
+from meal_planner.timeparse import business_date, hhmm30, minutes_30h
 
 
 class ScheduleGridDataError(ValueError):
@@ -153,7 +153,7 @@ def _schedule_day_minutes(rows: list[Any]) -> tuple[int, int]:
         t = getattr(row, "t", None)
         if t is None:
             continue
-        mins.append(int(t.hour) * 60 + int(t.minute))
+        mins.append(minutes_30h(t))  # 30 小時制：收工 25:30 係 1530 分鐘，唔係 90
     if not mins:
         return -1, -1
     return min(mins), max(mins)
@@ -211,7 +211,8 @@ def _choose_schedule_grid_export_target(
     roster_rows: list[Any],
 ) -> tuple[str, str, str, list[Any]] | None:
     now = datetime.now(ZoneInfo(timezone))
-    now_minutes = now.hour * 60 + now.minute
+    now_minutes = now.hour * 60 + now.minute + (1440 if now.hour < 6 else 0)  # 30 小時制
+    today = business_date(now)  # 00:00–05:59 仍係前一日：凌晨仲返緊嗰更就要出嗰日嘅行位表
     parsed_rows = load_schedule_rows_from_rows(rows)
     if not parsed_rows:
         return None
@@ -223,10 +224,10 @@ def _choose_schedule_grid_export_target(
     # 唔可以跳過「有更但行位表冇對應更碼」嗰日：寧願俾上層報「搵唔到 X 行位表」，
     # 都好過靜靜雞攞咗第二日嘅行位表落手機。所以呢度淨係按更表揀日子，
     # 行位表配唔到就照返個空 rows 上去。
-    candidate_date, code = _next_workday_from(now.date(), roster_map)
+    candidate_date, code = _next_workday_from(today, roster_map)
     if candidate_date is None or not code:
         candidate_date, code, candidate_rows = _latest_workday_schedule_before(
-            now.date() - timedelta(days=1),
+            today - timedelta(days=1),
             roster_map,
             parsed_rows,
         )
@@ -235,7 +236,7 @@ def _choose_schedule_grid_export_target(
         return candidate_date.isoformat(), str(code), _schedule_grid_effective_iso(candidate_rows), candidate_rows
 
     candidate_rows = rows_for_roster(parsed_rows, code, candidate_date)
-    if candidate_date == now.date() and candidate_rows:
+    if candidate_date == today and candidate_rows:
         _, max_time = _schedule_day_minutes(candidate_rows)
         if max_time >= 0 and now_minutes > max_time:
             next_date, next_code = _next_workday_from(candidate_date + timedelta(days=1), roster_map)

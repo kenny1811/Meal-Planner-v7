@@ -4,6 +4,16 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.11.27 — 21/09/2026 12:50
+- Weight history: saving the profile no longer wipes records older than the 30 shown on screen.
+- Meal-plan version history keeps every generation, even two within the same second.
+- 30-hour clock fixes: "today" for generate / out-of-stock re-solve, first-meal time,
+  ReportNormal slots and OnOff_Duty auto-submit after 24:00, and which day's schedule the
+  phone receives between 00:00 and 05:59.
+- Detail Settings save only touches the sections it was given (no more accidental clearing).
+- Typhoon panel calendar preview now uses the same schedule-grid times as the real sync.
+- OnOff_Duty hold-send cannot double-send the same ReportNormal message.
+
 ## 7.11.26 — 21/09/2026 04:10
 - Phone app 7.4: the phone's own HTTP port (schedule-grid push, watch capture) now requires a
   per-phone token. The phone hands the token to the PC on every request; anyone else on the

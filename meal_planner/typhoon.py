@@ -143,7 +143,7 @@ def _grid_section(
         if row.t is None or not weekday_allows(row.content, biz_date):
             continue
         text = row.content.strip()
-        row_hhmm = row.t.strftime("%H:%M")
+        row_hhmm = hhmm30(row.t)  # 同正常 export 一樣出 30 小時制文字；電話靠 hour>=24 判翌日
         minutes = minutes_30h(row_hhmm)
         out.append(
             {
@@ -494,13 +494,18 @@ def _gc_section(
 ) -> dict[str, Any]:
     """Google Calendar：更表 event 同「起身」鬧鐘會變成幾點。
 
-    日曆用嘅係**更時表**（計糧官方時間）+ 加班表 override，唔係行位表——
-    所以呢度特登用返 resolve_shift_time，唔好攞 panel 頂嗰個開工當佢一樣。
+    真正 sync（google_calendar_sync.build_roster_calendar_plan）用嘅係**行位表**
+    「報開工／報收工」+ 加班表 override，唔係更時表——呢度預覽要同佢一個來源，
+    否則 Apply 之後日曆時間同預覽對唔上。
     """
 
     from meal_planner.google_calendar_sync import config_from_env
-    from meal_planner.schedule_grid import load_wake_alarm_overrides_from_rows
-    from meal_planner.shift_time import holiday_dates_from_rows, resolve_shift_time
+    from meal_planner.schedule_grid import (
+        load_schedule_rows_from_rows,
+        load_wake_alarm_overrides_from_rows,
+        report_start_end,
+        rows_for_roster,
+    )
 
     def sheet(key: str) -> list[Any]:
         try:
@@ -508,12 +513,20 @@ def _gc_section(
         except Exception:  # noqa: BLE001
             return []
 
-    payroll_rows = sheet("payroll_times")
-    holidays = holiday_dates_from_rows(sheet("public_holidays"))
-    before = resolve_shift_time(payroll_rows, roster_code, biz_date, holidays, overtime_all)
-    after = resolve_shift_time(payroll_rows, roster_code, biz_date, holidays, typhoon_overtime)
+    grid_rows = load_schedule_rows_from_rows(sheet("schedule_grid"))
+    grid_start, grid_end = report_start_end(rows_for_roster(grid_rows, roster_code, biz_date), biz_date)
+
+    def with_overtime(overrides: dict[date, tuple[time | None, time | None]]) -> tuple[time | None, time | None]:
+        ot_start, ot_end = overrides.get(biz_date, (None, None))
+        return (
+            ot_start if ot_start is not None else grid_start,
+            ot_end if ot_end is not None else grid_end,
+        )
+
+    before = with_overtime(overtime_all)
+    after = with_overtime(typhoon_overtime)
     if before[0] is None and after[0] is None:
-        return {"rows": [], "note": f"更時表 has no times for {roster_code} — nothing lands on the calendar."}
+        return {"rows": [], "note": f"行位表 has no 報開工／報收工 for {roster_code} — nothing lands on the calendar."}
 
     config = config_from_env(settings)
     offset = config.wake_offset_hours
