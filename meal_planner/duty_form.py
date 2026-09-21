@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from urllib.parse import quote_plus
+from zoneinfo import ZoneInfo
 
 from meal_planner.duty_common import (
     GRACE_DETAIL,
@@ -49,6 +50,7 @@ from meal_planner.timeparse import (
     minutes_30h as _minutes_30h,
     hhmm30,
     normalize_hhmm,
+    parse_time,
     slot_datetime as _slot_datetime,
 )
 
@@ -143,8 +145,6 @@ def record_onoff_log(
     onoffduty_log 同一 (日, action) 最新覆蓋（＝而家個狀態）；同時 append 一行落
     onoffduty_history，永遠唔會俾之後嘅改動洗走。
     """
-    from zoneinfo import ZoneInfo
-
     now_iso = datetime.now(ZoneInfo(settings.dates.timezone)).isoformat()
     with _DB_LOCK:
         conn = _connect(settings)
@@ -194,8 +194,6 @@ def record_onoff_open(
 
     **唔會**掂 onoffduty_log 個狀態——夠鐘照自動交，個卡亦唔會扮咗「已交」。
     """
-    from zoneinfo import ZoneInfo
-
     now_iso = datetime.now(ZoneInfo(settings.dates.timezone)).isoformat()
     with _DB_LOCK:
         conn = _connect(settings)
@@ -300,8 +298,6 @@ def clear_onoff_log_entry(
 
     交過就係交過 —— 之前嗰個 sent 永遠留喺 history，唔會因為改時間而消失。
     """
-    from zoneinfo import ZoneInfo
-
     now_iso = datetime.now(ZoneInfo(settings.dates.timezone)).isoformat()
     with _DB_LOCK:
         conn = _connect(settings)
@@ -395,8 +391,6 @@ def _rearm_missed_actions(settings: AppSettings, biz_date: date) -> None:
     亦包括 hold（改到實際時間就當 resume，連 ReportNormal 對應 slot 一齊放返）。
     只郁時間真係變咗嘅 action——log 記低嗰個時間仲啱嘅就唔掂。
     """
-    from zoneinfo import ZoneInfo
-
     tz = ZoneInfo(settings.dates.timezone)
     now = datetime.now(tz)
     log = load_onoff_log(settings, biz_date)
@@ -582,8 +576,6 @@ def _find_report_slot(settings: AppSettings, kind: str) -> dict[str, Any] | None
 
 
 def _today_action(settings: AppSettings, kind: str) -> tuple[date, dict[str, Any], dict[str, Any]]:
-    from zoneinfo import ZoneInfo
-
     if kind not in ACTION_LABEL:
         raise ValueError(f"唔認得嘅 action：{kind}")
     biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
@@ -666,8 +658,6 @@ def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[s
     3) ReportNormal 對應 slot 由我哋自己發（hold 期間 slot 仲係 skip，scheduler 唔會插隊），
        發完先放返 skip。
     """
-    from zoneinfo import ZoneInfo
-
     now = datetime.now(ZoneInfo(settings.dates.timezone))
     biz_date, plan, action = _today_action(settings, kind)
     if not plan.get("form") or not plan.get("post"):
@@ -763,8 +753,6 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
     冇半自動模式——開唔開過預填連結都唔影響，照交。
     回傳下一個會自動交嘅時刻（scheduler 瞓到啱啱嗰刻醒，準時交）；冇就 None。
     """
-    from zoneinfo import ZoneInfo
-
     settings = settings or get_settings()
     tz = ZoneInfo(settings.dates.timezone)
     now = datetime.now(tz)
@@ -808,7 +796,7 @@ def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
         due_seen = True
         if status == "failed" and retry_backoff_active(entry.get("recorded_at"), now):
             continue  # 之前失敗過：等最少 RETRY_SECONDS 先重試，唔好每 tick 狂試
-        value = _time_from_hhmm30(time_text)  # 30 小時制 "25:30" → 01:30；以前 time(25, 30) 會 raise 冧成個 tick
+        value = parse_time(time_text)  # 30 小時制 "25:30" → 01:30；以前 time(25, 30) 會 raise 冧成個 tick
         if value is None:
             record_onoff_log(
                 settings, biz_date, kind, "failed",
@@ -843,20 +831,10 @@ def roster_code_for(settings: AppSettings, biz_date: date) -> str:
     return str(code_for_date(month_map, biz_date) or "") if month_map else ""
 
 
-def _time_from_hhmm30(text: str) -> time | None:
-    """30 小時制 "25:30" → time(1, 30)；"21:50" → time(21, 50)。睇唔明回 None。"""
-    parts = str(text or "").split(":")
-    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
-        return None
-    return time(int(parts[0]) % 24, int(parts[1]))
-
-
 def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None = None) -> dict[str, Any]:
     """指定日（預設今日 30 小時制）嘅報開工／報收工計劃 + 兩條預填連結。"""
 
     settings = settings or get_settings()
-    from zoneinfo import ZoneInfo
-
     now = datetime.now(ZoneInfo(settings.dates.timezone))
     today = business_date(now)
     biz_date = biz_date or today
@@ -931,7 +909,7 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
         # Send now 用「而家」交咗＝呢個 action 就係喺嗰刻做咗，實際時間直接取代排程時間
         # （唔關加班表事——加班表淨係話俾其他嘢知當日個時間軸點變）。
         sent_text = str(entry.get("time_text") or "") if action["status"] == "sent" else ""
-        sent_time = _time_from_hhmm30(sent_text) if sent_text else None
+        sent_time = parse_time(sent_text) if sent_text else None  # 30 小時制 "25:30" → time(1, 30)
         if sent_time is not None:
             action["time"] = sent_text
             action["url"] = build_prefill_url(

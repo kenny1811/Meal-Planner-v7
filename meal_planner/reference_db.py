@@ -13,10 +13,8 @@ class ReferenceDatabaseError(RuntimeError):
 
 def load_planning_references(
     settings: AppSettings | None = None,
-    wb: Any | None = None,
 ) -> tuple[list[Any], dict[str, str | None], list[dict[str, Any]], list[Any]]:
     """Load planning inputs from SQLite maintenance sheets only."""
-    del wb
     settings = settings or get_settings()
     from meal_planner.maintenance_db import MaintenanceDatabaseError, load_sheet_rows
     from meal_planner.meal_schedule import (

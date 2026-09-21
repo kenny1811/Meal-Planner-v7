@@ -21,8 +21,9 @@ RETRY_SECONDS = 60
 def load_kv_config(lock, connect: Callable[[], Any], table: str) -> dict[str, Any]:
     """key/value JSON 設定表 → dict（壞 JSON 嘅 row 跳過）。
 
-    Report_Normal 同 OnOff_Duty 兩張 config 表結構一樣，讀法收埋喺呢度。
-    `table` 係模組常數，唔會來自用戶輸入。
+    而家只有 Report_Normal 嘅 `duty_report_config` 行呢條（OnOff_Duty 冇 config 表；
+    DB 入面舊嘅 `onoffduty_config` 表 code 已經零引用）。`table` 係模組常數，
+    唔會來自用戶輸入。
     """
     with lock:
         conn = connect()

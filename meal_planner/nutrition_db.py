@@ -200,25 +200,6 @@ def _has_rows(conn: sqlite3.Connection, table_name: str) -> bool:
     return row is not None
 
 
-def _seed_catalog(conn: sqlite3.Connection, entries: list[NutritionEntry]) -> None:
-    conn.executemany(
-        _CATALOG_INSERT_SQL,
-        [
-            {
-                "row_index": entry.row_index,
-                "paused": int(entry.paused),
-                "category": entry.category,
-                "name": entry.name,
-                "min_g": entry.min_g,
-                "max_g": entry.max_g,
-                "daymax_g": entry.daymax_g,
-                **{key: float(entry.nutrients.get(key, 0.0)) for key in NUTRIENT_KEYS},
-            }
-            for entry in entries
-        ],
-    )
-
-
 def _seed_targets(
     conn: sqlite3.Connection,
     headers: list[Any],

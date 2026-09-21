@@ -45,3 +45,6 @@ Thumbs.db
 
 # Google Calendar sync backups (auto-generated, pruned to last 20 by the app)
 google_calendar_backups/
+
+# restart_server.bat 嘅輸出
+server_restart_*.log*

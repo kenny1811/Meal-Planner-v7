@@ -8,7 +8,6 @@ from meal_planner.schedule_grid_sync import (
     build_schedule_grid_all_variants_export,
     merge_schedule_grid_rows_for_import,
     parse_schedule_grid_push_payload,
-    rows_for_dates,
     split_content_duration,
 )
 from meal_planner.maintenance_db import save_sheet_rows
@@ -108,7 +107,7 @@ class ScheduleGridTests(unittest.TestCase):
             ["PenBM", "10:20", "現場改", "10", "2026-06-17"],
         ]
 
-        merged = merge_schedule_grid_rows_for_import(
+        merged, replaced = merge_schedule_grid_rows_for_import(
             existing,
             imported,
             {"2026-06-17"},
@@ -119,7 +118,7 @@ class ScheduleGridTests(unittest.TestCase):
         self.assertIn(existing[2], merged)
         self.assertNotIn(existing[3], merged)
         self.assertIn(imported[1], merged)
-        self.assertEqual(len(rows_for_dates(existing, {"2026-06-17"}, {"PenBM"})), 1)
+        self.assertEqual(replaced, 1)
 
     def test_phone_import_without_codes_does_not_replace_entire_effective_date(self):
         existing = [
@@ -132,7 +131,7 @@ class ScheduleGridTests(unittest.TestCase):
             ["", "10:20", "現場改", "10", "2026-06-17"],
         ]
 
-        merged = merge_schedule_grid_rows_for_import(
+        merged, replaced = merge_schedule_grid_rows_for_import(
             existing,
             imported,
             {"2026-06-17"},
@@ -142,7 +141,7 @@ class ScheduleGridTests(unittest.TestCase):
         self.assertIn(existing[1], merged)
         self.assertIn(existing[2], merged)
         self.assertIn(imported[1], merged)
-        self.assertEqual(rows_for_dates(existing, {"2026-06-17"}, set()), [])
+        self.assertEqual(replaced, 0)
 
     def test_phone_push_payload_splits_duration_and_stamps_code_and_version(self):
         rows, dates = parse_schedule_grid_push_payload(

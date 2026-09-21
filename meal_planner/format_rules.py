@@ -7,12 +7,6 @@
 
 from __future__ import annotations
 
-from typing import Final
-
-# Excel ARGB（無 #）
-FONT_RED_ARGB: Final[str] = "FFFF0000"
-FONT_BLACK_ARGB: Final[str] = "FF000000"
-
 
 def _nutrition_format():
     from meal_planner.settings import get_settings
@@ -53,25 +47,9 @@ def total_row_font_red_fat_pct(fat_g: float, daily_kcal: float, pct_of_kcal: flo
     return fat_g > cap + eps
 
 
-def error_cell_range(total: float, lo: float, hi: float) -> float:
-    """卡路里／蛋白／碳水誤差：範圍內 0；偏低 total-lo；偏高 total-hi。"""
-    if lo <= total <= hi:
-        return 0.0
-    if total < lo:
-        return total - lo
-    return total - hi
-
-
 def error_font_red_range(total: float, lo: float, hi: float) -> bool:
     eps = 1e-9
     return (total - hi > eps) or (total - lo < -eps)
-
-
-def error_cell_upper_only(total: float, hi: float) -> float:
-    """天然糖／膽固醇／鈉誤差。"""
-    if total <= hi:
-        return 0.0
-    return total - hi
 
 
 def error_font_red_upper_only(total: float, hi: float) -> bool:
@@ -79,22 +57,9 @@ def error_font_red_upper_only(total: float, hi: float) -> bool:
     return total - hi > eps
 
 
-def error_cell_calcium(total: float, lo: float) -> float:
-    if total >= lo:
-        return 0.0
-    return total - lo
-
-
 def error_font_red_calcium(total: float, lo: float) -> bool:
     eps = 1e-9
     return total < lo - eps
-
-
-def error_cell_fat_pct(fat_g: float, daily_kcal: float, pct_of_kcal: float) -> float:
-    cap = fat_cap_grams(daily_kcal, pct_of_kcal)
-    if fat_g <= cap:
-        return 0.0
-    return fat_g - cap
 
 
 def error_font_red_fat_pct(fat_g: float, daily_kcal: float, pct_of_kcal: float) -> bool:

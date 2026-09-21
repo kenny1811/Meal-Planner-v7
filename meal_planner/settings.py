@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping
@@ -31,7 +31,6 @@ class SheetsConfig:
 
 @dataclass(frozen=True)
 class NutritionFormatConfig:
-    tolerance: float
     kcal_per_fat_g: float
 
 
@@ -102,7 +101,6 @@ class OptimizerFatCapWeights:
 
 @dataclass(frozen=True)
 class OptimizerConfig:
-    band_delta_default: float
     weights: OptimizerWeights
     fat_cap_weights: OptimizerFatCapWeights
     replacement_search_enabled: bool = False
@@ -176,7 +174,6 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
 
     nf = data.get("nutrition_format", {}) or {}
     nutrition_format = NutritionFormatConfig(
-        tolerance=float(nf.get("tolerance", 5)),
         kcal_per_fat_g=float(nf.get("kcal_per_fat_g", 9)),
     )
     np = data.get("nutrition_portion", {}) or {}
@@ -236,7 +233,6 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
     ow = oc.get("weights", {}) or {}
     ofw = oc.get("fat_cap_weights", {}) or {}
     optimizer = OptimizerConfig(
-        band_delta_default=float(oc.get("band_delta_default", 50)),
         weights=OptimizerWeights(
             kcal=float(ow.get("kcal", 1.0)),
             protein=float(ow.get("protein", 1.0)),
@@ -289,20 +285,7 @@ def get_settings() -> AppSettings:
     if db_override:
         db_path = Path(db_override)
         database_path = db_path if db_path.is_absolute() else (project_root / db_path).resolve()
-        return AppSettings(
-            project_root=settings.project_root,
-            system_folder=settings.system_folder,
-            data_folder=settings.data_folder,
-            database_path=database_path,
-            sheets=settings.sheets,
-            nutrition_format=settings.nutrition_format,
-            nutrition_portion=settings.nutrition_portion,
-            rice=settings.rice,
-            dates=settings.dates,
-            pattern=settings.pattern,
-            meal_business_rules=settings.meal_business_rules,
-            optimizer=settings.optimizer,
-        )
+        return replace(settings, database_path=database_path)
     return settings
 
 

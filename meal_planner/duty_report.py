@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 import threading
 from datetime import date, datetime, time, timedelta
@@ -489,7 +488,6 @@ def _slot_runtime_status(
 def build_plan(
     settings: AppSettings | None = None,
     *,
-    now: datetime | None = None,
     biz_date: date | None = None,
 ) -> dict[str, Any]:
     """指定日（預設今日，30 小時制）報更計劃 + 每 slot 狀態。
@@ -499,7 +497,7 @@ def build_plan(
     """
     settings = settings or get_settings()
     tz = ZoneInfo(settings.dates.timezone)
-    now = now or datetime.now(tz)
+    now = datetime.now(tz)
     today = business_date(now)
     biz_date = biz_date or today
     relation = "today" if biz_date == today else ("past" if biz_date < today else "future")

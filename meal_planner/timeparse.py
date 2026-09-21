@@ -56,7 +56,11 @@ def to_minutes(value: Any) -> int:
 
 
 def minutes_30h(value: Any) -> int:
-    """時間值 → 30 小時制分鐘（00:00–05:59 當 24:00–29:59）。無效即 raise。"""
+    """時間值 → 30 小時制分鐘（00:00–05:59 當 24:00–29:59）。無效即 raise。
+
+    傳 datetime 亦得（`minutes_30h(now)`＝而家係 30 小時制嘅第幾分鐘），
+    唔使喺 caller 自己寫 `hour * 60 + minute + 1440`。
+    """
     t = parse_time(value)
     if t is None:
         raise ValueError(f"invalid time: {value!r}")
@@ -91,13 +95,32 @@ def hhmm30(value: Any) -> str:
     return f"{t.hour + 24 if t.hour < 6 else t.hour:02d}:{t.minute:02d}"
 
 
+def hhmm_from_minutes_30h(minutes: int) -> str:
+    """30 小時制分鐘 → HH:MM 文字（1530 → 25:30）。
+
+    24:00–29:59 照寫 24+（同全 project 一致）。夠鐘過咗 30:00 就已經係第二個
+    business day 嘅朝早——冚返落去（30:00 → 06:00、31:20 → 07:20），
+    唔會出個 30:00 咁嘅無效時間。負數＝前一日（個波尋日落、今日先返工），
+    冚返落 0–1439；係邊一日由 caller 嗰邊表達。
+    """
+    while minutes >= 1800:
+        minutes -= 1440
+    while minutes < 0:
+        minutes += 1440
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
 def business_date(now: datetime) -> date:
     """00:00–05:59 當前一日（30 小時制）。"""
     return (now - timedelta(hours=6)).date()
 
 
-def slot_datetime(biz_date: date, hhmm: str, tz: ZoneInfo) -> datetime:
-    """slot 實際時刻：06:00 前嘅時間屬 30 小時制「翌日凌晨」。"""
+def slot_datetime(biz_date: date, hhmm: Any, tz: ZoneInfo) -> datetime:
+    """slot 實際時刻：06:00 前嘅時間屬 30 小時制「翌日凌晨」。
+
+    `hhmm` 收 "HH:MM"（含 24:00–29:59 寫法）或 time 物件；更嘅開工／收工鐘點
+    要變真正時刻都係行呢條（起身鬧鐘唔行——05:30 起身係當日朝早）。
+    """
     minutes = to_minutes(hhmm)
     if minutes < 0:
         minutes = 0

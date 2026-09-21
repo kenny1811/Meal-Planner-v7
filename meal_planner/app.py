@@ -23,6 +23,7 @@ from meal_planner.dates_input import DateValidationError, parse_date_expression
 from meal_planner.free_port import free_tcp_port
 from meal_planner.google_calendar_sync import authorize_google_calendar, google_calendar_auth_status, sync_roster_to_google_calendar
 from meal_planner.indicators import NUTRIENT_KEYS
+from meal_planner.meal_schedule import MEAL_LABELS, restaurant_lunch_label, visible_meals_from_resolved
 from meal_planner.maintenance_db import (
     MAINTENANCE_SHEETS,
     MaintenanceDatabaseError,
@@ -35,7 +36,6 @@ from meal_planner.maintenance_db import (
     save_sheet_rows,
 )
 from meal_planner.nutrition_db import (
-    NutritionDatabaseError,
     load_catalog_entries,
     load_nutrition_profile,
     load_target_settings,
@@ -56,23 +56,14 @@ from meal_planner.settings import (
     save_folder_settings,
     save_rice_detail_settings,
 )
-from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
-from meal_planner.schedule_grid import (
-    grid_row_matches_roster,
-    load_schedule_rows_from_rows,
-    rows_for_roster,
-)
 from meal_planner.schedule_grid_sync import (
     ScheduleGridDataError,
     ScheduleGridNotFound,
     build_schedule_grid_all_variants_export,
     check_roster_codes_against_schedule_grid,
     collect_schedule_grid_import_codes,
-    extract_schedule_grid_effective_dates,
     merge_schedule_grid_rows_for_import,
-    normalize_schedule_grid_effective_date,
     parse_schedule_grid_push_payload,
-    rows_for_dates,
 )
 from meal_planner.phone_push import (
     CLIENT_HEADER,
@@ -83,9 +74,9 @@ from meal_planner.phone_push import (
     remember_phone_host,
 )
 from meal_planner.shift_time import payroll_coverage_issues
-from meal_planner.timeparse import business_date
-from meal_planner.storage import _STORE_LOCK
+from meal_planner.timeparse import business_date, minutes_30h
 from meal_planner.storage import (
+    _STORE_LOCK,
     batch_ui_updates,
     load_ui_snapshot,
     load_active_panel,
@@ -134,8 +125,6 @@ _DEBUG_STATS: dict[str, Any] = {
     "by_status": {},
     "last_error": None,
 }
-_DESKTOP_LAN_HOST = "192.168.15.125"
-_DESKTOP_LAN_SERVER = f"http://{_DESKTOP_LAN_HOST}:8765"
 
 
 def _error_payload(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -307,7 +296,6 @@ class OutOfStockResolveRequest(BaseModel):
 class UiStateRequest(BaseModel):
     column_widths: dict[str, float] | None = None
     sidebar_width: float | None = None
-    target_editor_width: float | None = None
     target_column_widths: dict[str, float] | None = None
     catalog_column_widths: dict[str, float] | None = None
     form_column_widths: dict[str, float] | None = None
@@ -444,18 +432,18 @@ def _stored_meal_plan_payloads(
 
 
 def _meal_time_minutes(raw: Any) -> int | None:
+    """餐時文字（可以夾住其他字）→ 30 小時制分鐘；冇時間或時間無效回 None。
+
+    餐時可以係 24:xx–29:xx（resolve_meal_times_display 出嘅就係咁），00:00–05:59
+    亦當翌日凌晨計——換算交畀 timeparse.minutes_30h，唔喺呢度自己 +24。
+    """
     match = re.search(r"\b(\d{1,2}):(\d{2})\b", str(raw or ""))
     if not match:
         return None
-    hour = int(match.group(1))
-    minute = int(match.group(2))
-    if hour > 29 or minute > 59:
+    try:
+        return minutes_30h(match.group(0))
+    except ValueError:
         return None
-    # 30 小時制：餐時可以係 24:xx–29:xx（resolve_meal_times_display 出嘅就係咁），
-    # 00:00–05:59 亦當翌日凌晨計，兩種寫法都要收。
-    if hour < 6:
-        hour += 24
-    return hour * 60 + minute
 
 
 def _first_meal_minutes(day_payload: dict[str, Any]) -> int | None:
@@ -479,8 +467,7 @@ def _can_regenerate_existing_today(day_payload: dict[str, Any], now: datetime) -
     first_meal = _first_meal_minutes(day_payload)
     if first_meal is None:
         return False
-    now_minutes = now.hour * 60 + now.minute + (1440 if now.hour < 6 else 0)  # 30 小時制
-    return now_minutes < first_meal
+    return minutes_30h(now) < first_meal  # 30 小時制
 
 
 def _preview_regeneration_blocked_dates(dates: list[date]) -> list[date]:
@@ -530,6 +517,7 @@ def health() -> dict[str, Any]:
 
 @app.get("/api/debug/stats")
 def api_debug_stats() -> dict[str, Any]:
+    """Request 計數／最後一個 error（前端唔會叫；手動 curl 用嚟睇 server 有冇事）。"""
     return {
         "ok": True,
         "uptime_seconds": round(time.time() - _STARTED_AT, 1),
@@ -569,7 +557,8 @@ def phone_apk() -> FileResponse:
 
 @app.get("/apkdl")
 def phone_apk_chunked_page() -> Response:
-    # 斬件下載頁：meshnet 條線每 ~30 秒閃一次，成個 26MB 一炮過拉極都斷尾；
+    # 斬件下載頁（冇 link 指過嚟——電話瀏覽器人手打 URL 用）：
+    # meshnet 條線每 ~30 秒閃一次，成個 26MB 一炮過拉極都斷尾；
     # 呢頁用 JS 每次 Range 拉 1MB、逐塊重試，齊件先喺電話本地砌返個 APK 儲存。
     html = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -903,15 +892,7 @@ def _with_mobile_restaurant_lunch_label(day_payload: dict[str, Any]) -> dict[str
     lunch_items = ingredients.get("午餐")
     if isinstance(lunch_items, list) and any(str(x).strip() for x in lunch_items):
         return out
-    choice = str(rest.get("choice") or "").strip()
-    store = str(rest.get("store") or "").strip()
-    if choice or store:
-        label = f'Lunch — "{choice}"'
-        if store:
-            label += f" ({store})"
-    else:
-        label = "Lunch — restaurant meal"
-    ingredients["午餐"] = [label]
+    ingredients["午餐"] = [restaurant_lunch_label(rest)]
     items = meal_plan.get("meal_items")
     if not isinstance(items, dict):
         items = {}
@@ -933,16 +914,13 @@ def api_recalc(body: RecalcRequest) -> dict[str, Any]:
 
 def _is_yesterday_last_meal(body: "OutOfStockResolveRequest", today_iso: str) -> bool:
     """前一日 + 撳緊嗰日最後一餐（通常係晚餐）＝仲未食，照准重算。"""
-    from meal_planner.meal_schedule import MEAL_LABELS
-    from meal_planner.preview import _visible_meals_from_resolved
-
     try:
         yesterday = (date.fromisoformat(today_iso) - timedelta(days=1)).isoformat()
     except ValueError:
         return False
     if str(body.date or "") != yesterday or not body.meal:
         return False
-    visible = _visible_meals_from_resolved(body.meal_plan if isinstance(body.meal_plan, dict) else {})
+    visible = visible_meals_from_resolved(body.meal_plan if isinstance(body.meal_plan, dict) else {})
     ordered = [m for m in MEAL_LABELS if m in visible]
     return bool(ordered) and str(body.meal) == ordered[-1]
 
@@ -1001,17 +979,6 @@ def api_oos_resolve(body: OutOfStockResolveRequest, request: Request) -> dict[st
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Out-of-stock resolve failed: {e}") from e
-
-
-@app.get("/api/resolve-log")
-def api_resolve_log(limit: int = 100) -> dict[str, Any]:
-    """右 click 重算嘅歷史（邊日／邊餐／做過乜／邊部機）。"""
-    from meal_planner.storage import load_resolve_log
-
-    try:
-        return {"entries": load_resolve_log(limit)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Load resolve log failed: {e}") from e
 
 
 @app.get("/api/item-candidates")
@@ -1233,11 +1200,9 @@ def _import_normalized_schedule_grid_rows(
 
     existing_rows = sheet.get("rows", [])
     imported_codes = collect_schedule_grid_import_codes(rows)
-    effective_versions = (
-        imported_dates
-        if imported_dates
-        else extract_schedule_grid_effective_dates(rows)
-    )
+    # rows 由 parse_schedule_grid_push_payload 砌，每行生效日期同 imported_dates 一樣，
+    # 所以唔使再由 rows 度抽多次。
+    effective_versions = imported_dates
     if not effective_versions:
         has_existing_rows = isinstance(existing_rows, list) and len(existing_rows) > 1
         if has_existing_rows:
@@ -1247,8 +1212,7 @@ def _import_normalized_schedule_grid_rows(
                        "請重新從電腦匯出再更新 seed。",
             )
     imported_row_count = max(0, len(rows) - 1)
-    replaced_row_count = len(rows_for_dates(existing_rows, effective_versions, imported_codes))
-    merged_rows = merge_schedule_grid_rows_for_import(
+    merged_rows, replaced_row_count = merge_schedule_grid_rows_for_import(
         existing_rows,
         rows,
         effective_versions,
@@ -1388,11 +1352,10 @@ def api_set_nutrition_catalog(body: CatalogRowsRequest) -> dict[str, Any]:
 @app.get("/api/ui-state")
 def api_get_ui_state() -> dict[str, Any]:
     ui = load_ui_snapshot()  # 讀一次，13 個 loader 共用，唔使開 13 次 db
-    target_editor_width, target_column_widths, catalog_column_widths = load_target_editor_layout(ui)
+    target_column_widths, catalog_column_widths = load_target_editor_layout(ui)
     return {
         "column_widths": load_column_widths(ui),
         "sidebar_width": load_sidebar_width(ui),
-        "target_editor_width": target_editor_width,
         "target_column_widths": target_column_widths,
         "catalog_column_widths": catalog_column_widths,
         "form_column_widths": load_form_column_widths(ui),
@@ -1422,16 +1385,8 @@ def api_set_ui_state(body: UiStateRequest) -> dict[str, Any]:
 def _apply_ui_state_patch(body: UiStateRequest) -> None:
     if body.column_widths is not None:
         save_column_widths(body.column_widths)
-    if (
-        body.target_editor_width is not None
-        or body.target_column_widths is not None
-        or body.catalog_column_widths is not None
-    ):
-        save_target_editor_layout(
-            body.target_editor_width,
-            body.target_column_widths or {},
-            body.catalog_column_widths,
-        )
+    if body.target_column_widths is not None or body.catalog_column_widths is not None:
+        save_target_editor_layout(body.target_column_widths or {}, body.catalog_column_widths)
     if body.form_column_widths is not None:
         save_form_column_widths(body.form_column_widths)
     if body.menu_order is not None:
@@ -1596,8 +1551,6 @@ def api_onoffduty_log(body: OnOffDutyLogRequest) -> dict[str, Any]:
         if body.date_iso:
             biz_date = date.fromisoformat(body.date_iso)
         else:
-            from zoneinfo import ZoneInfo
-
             biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
         plan = build_day_plan(settings, biz_date=biz_date)
         action = next((a for a in plan.get("actions", []) if a.get("kind") == body.kind), None)
@@ -1632,8 +1585,6 @@ def api_onoffduty_override(body: OnOffDutyOverrideRequest) -> dict[str, Any]:
         if body.date_iso:
             biz_date = date.fromisoformat(body.date_iso)
         else:
-            from zoneinfo import ZoneInfo
-
             biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
         set_time_override(settings, biz_date, start=body.start, end=body.end, note=body.note)
         return build_day_plan(settings, biz_date=biz_date)
@@ -1652,8 +1603,6 @@ def api_onoffduty_roster_code(body: OnOffDutyRosterCodeRequest) -> dict[str, Any
         if body.date_iso:
             biz_date = date.fromisoformat(body.date_iso)
         else:
-            from zoneinfo import ZoneInfo
-
             biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
         set_roster_code(settings, biz_date, body.code)
         return build_day_plan(settings, biz_date=biz_date)
@@ -1768,19 +1717,22 @@ def api_typhoon_meal_plan(body: TyphoonMealPlanRequest) -> dict[str, Any]:
 
 @app.get("/api/phone/endpoint")
 def api_phone_endpoint() -> dict[str, Any]:
-    """電腦最後一次見到電話嘅位置（電話每次打上嚟會報上名）。"""
+    """電腦最後一次見到電話嘅位置（電話每次打上嚟會報上名）。前端唔叫；手動 curl 排錯用。"""
     return phone_endpoint()
 
 
 @app.post("/api/phone/push-schedule-grid")
 def api_phone_push_schedule_grid() -> dict[str, Any]:
-    """叫電話即刻重新匯入行位表（電話跟住會排鬧鐘 + 通知手錶）。"""
+    """叫電話即刻重新匯入行位表（電話跟住會排鬧鐘 + 通知手錶）。
+
+    前端唔叫（打風 Apply 係 typhoon.apply_typhoon 直接 call push_schedule_grid）；手動 curl 用。
+    """
     return push_schedule_grid()
 
 
 @app.get("/api/phone/capture-watch")
 def api_phone_capture_watch() -> Response:
-    """經電話攞手錶截圖（電腦帶 token 去打電話 8765，唔使自己知 token）。"""
+    """經電話攞手錶截圖（電腦帶 token 去打電話 8765，唔使自己知 token）。前端唔叫；手動 curl 用。"""
     status, body, content_type = capture_watch()
     return Response(content=body, status_code=status, media_type=content_type)
 

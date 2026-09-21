@@ -2,7 +2,7 @@
 
 ## 專案概覽
 - `meal_planner/`：Python FastAPI 後端 + 網頁前端（`meal_planner/web/`）。根據更表/飯時/行位表/加班表生成每日餐單，用 LP（pulp）配食材命中營養目標；有餐廳午餐、米類備註、購物清單、Google Calendar 同步。
-- `android_alarm_app/`：手機 + Wear OS 鬧鐘（由餐單網頁經 `oneshotalarm://` 收每日班次鬧鐘）。手機同手錶各自本地排程，只在 dismiss 時互相通知（慳電）。
+- `android_alarm_app/`：手機 + Wear OS 鬧鐘。手機每日 05:00／05:30 自己向電腦 pull 行位表（`/api/maint/sheets/schedule_grid/export-all`）排鬧鐘，電腦要即時推就打電話 8765（要 token）。手機同手錶各自本地排程，只在 dismiss 時互相通知（慳電）。
 - `android_watchface_app/`：自訂 Wear OS 錶面。
 - Live 資料庫：專案根目錄 `meal_planner.sqlite3`（`.gitignore` 已排除，備份亦然）。
 

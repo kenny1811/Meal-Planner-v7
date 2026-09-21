@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, time
 from typing import Any
 
 
@@ -12,7 +12,9 @@ from meal_planner.indicators import DayIndicatorProfile, NUTRIENT_HEADERS, NUTRI
 from meal_planner.nutrition_catalog import candidate_entries_from_alternatives
 from meal_planner.nutrition_db import load_catalog_entries
 from meal_planner.optimizer import solve_day_meal_plan
+from meal_planner.optimizer_constants import MEAL_ROTATION_OFFSET
 from meal_planner.patterns import parse_meal_patterns
+from meal_planner.schedule_grid import MEAL_LABELS, resolve_meal_times_display
 from meal_planner.settings import AppSettings
 from meal_planner.timeparse import cell_text
 
@@ -116,8 +118,28 @@ def first_matching_meal_rule(rules: list[MealTimeRule], roster_code: str) -> Mea
     return None
 
 
-MEAL_LABELS = ("早餐", "午餐", "小食", "晚餐")
-MEAL_ROTATION_OFFSET = {"早餐": 0, "午餐": 1, "小食": 2, "晚餐": 3}
+def visible_meals_from_resolved(meal_plan: dict[str, Any]) -> set[str]:
+    """由 meal_times_resolved 決定邊幾餐可見（非空時間字串）。"""
+    resolved = meal_plan.get("meal_times_resolved", {}) if isinstance(meal_plan, dict) else {}
+    if not isinstance(resolved, dict):
+        return set()
+    return {
+        meal
+        for meal in MEAL_LABELS
+        if resolved.get(meal) is not None and str(resolved.get(meal)).strip() != ""
+    }
+
+
+def restaurant_lunch_label(rest: dict[str, Any]) -> str:
+    """餐廳午餐喺 meal_ingredients 入面嗰一行字（生成、手機餐單都係呢個寫法）。"""
+    choice = str(rest.get("choice") or "").strip()
+    store = str(rest.get("store") or "").strip()
+    if not (choice or store):
+        return "Lunch — restaurant meal"
+    label = f'Lunch — "{choice}"'
+    if store:
+        label += f" ({store})"
+    return label
 
 
 def load_restaurant_rows_from_rows(raw_rows: list[list[Any]]) -> list[dict[str, Any]]:
@@ -491,8 +513,6 @@ def build_day_meal_plan(
 
     meal_times_resolved: dict[str, Any] = {}
     if day is not None and primary_dict:
-        from meal_planner.schedule_grid import resolve_meal_times_display
-
         meal_times_resolved = resolve_meal_times_display(
             settings,
             day=day,
@@ -504,14 +524,7 @@ def build_day_meal_plan(
             overtime_overrides=cache.overtime_overrides,
         )
     if meal_times_resolved:
-        visible_meals = {
-            meal
-            for meal in MEAL_LABELS
-            if (
-                meal_times_resolved.get(meal) is not None
-                and str(meal_times_resolved.get(meal)).strip() != ""
-            )
-        }
+        visible_meals = visible_meals_from_resolved({"meal_times_resolved": meal_times_resolved})
     else:
         # 無 day/無 resolved 時，退回 A:E 命中行本身嘅時間欄判斷可見餐次
         visible_meals = set()
@@ -583,7 +596,7 @@ def build_day_meal_plan(
         fixed_nutrients=fixed_nutrients,
         fixed_meals=fixed_meals,
         reroll_nonce=reroll_nonce,
-        nutrition_entries=cache.nutrition_entries if cache is not None else None,
+        nutrition_entries=cache.nutrition_entries,
         bound_overrides=bound_overrides,
         forced_rice_row=forced_rice_row,
         forced_item_rows=forced_item_rows,
@@ -594,15 +607,7 @@ def build_day_meal_plan(
         }
         # 餐廳午餐由餐廳固定營養值提供；唔應再用求解器午餐食材去計米類熟重。
         meal_items["午餐"] = []
-        choice = str(rest.get("choice") or "").strip()
-        store = str(rest.get("store") or "").strip()
-        if choice or store:
-            label = f'Lunch — "{choice}"'
-            if store:
-                label += f" ({store})"
-            meal_ingredients["午餐"] = [label]
-        else:
-            meal_ingredients["午餐"] = ["Lunch — restaurant meal"]
+        meal_ingredients["午餐"] = [restaurant_lunch_label(rest)]
 
     # locked 餐內容以傳入為準（放喺餐廳覆寫之後，locked 贏）。
     for meal, data in locked.items():
@@ -624,7 +629,6 @@ def build_day_meal_plan(
         "restaurant_lunch": rest,
         "meal_times_resolved": meal_times_resolved,
         "optimization": optimization_meta,
-        "peninsula_stack_applied": False,
         # 開工遲過行位表食位嗰啲餐次唔會出，要喺呢度講明點解（唔好靜靜哋消失）。
         "note": "；".join(
             f"{meal}：{why}" for meal, why in (meal_times_resolved.get("_skipped") or {}).items()

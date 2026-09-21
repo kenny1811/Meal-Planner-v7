@@ -107,13 +107,9 @@ def _build_relaxation_plan(
                     "headroom": headroom,
                 }
             )
-        # 優先揀「當前解有用到」的高鈣低脂食材，避免建議落在未選中的行。
+        # 上面已經淨係收「當前解有用到」的行，所以齋按鈣／脂比排就得。
         ca_rows.sort(
-            key=lambda x: (
-                1 if int(x["row"]) in selected_by_row else 0,
-                x["ca"] / max(x["fat"], 0.1),
-                x["ca"],
-            ),
+            key=lambda x: (x["ca"] / max(x["fat"], 0.1), x["ca"]),
             reverse=True,
         )
         target = next((x for x in ca_rows if x["daymax"] is not None), ca_rows[0] if ca_rows else None)
@@ -177,15 +173,8 @@ def _build_relaxation_plan(
                     "score": kcal / max(fat, 0.2),
                 }
             )
-        k_rows.sort(
-            key=lambda x: (
-                1 if int(x["row"]) in selected_by_row else 0,
-                x["score"],
-                x["kcal"],
-            ),
-            reverse=True,
-        )
-        target_k = next((x for x in k_rows if int(x["row"]) in selected_by_row), None) or (k_rows[0] if k_rows else None)
+        k_rows.sort(key=lambda x: (x["score"], x["kcal"]), reverse=True)
+        target_k = k_rows[0] if k_rows else None
         if target_k is not None:
             need_g = kcal_gap * 100.0 / max(target_k["kcal"], 1e-6)
             row = int(target_k["row"])

@@ -23,17 +23,25 @@ from zoneinfo import ZoneInfo
 from meal_planner.maintenance_db import load_sheet_rows, roster_code_defs, roster_post_for_code
 from meal_planner.roster_codes import form_key_for_code, is_work_day, typhoon_offset_minutes
 from meal_planner.schedule_grid import (
-    MEAL_KEYS,
+    MEAL_LABELS,
     ScheduleRow,
     load_overtime_overrides_from_rows,
     load_schedule_rows_from_rows,
+    load_wake_alarm_overrides_from_rows,
     report_start_end,
     resolve_meal_times_display,
     rows_for_roster,
     weekday_allows,
 )
 from meal_planner.settings import AppSettings, get_settings
-from meal_planner.timeparse import business_date, hhmm30, minutes_30h, normalize_hhmm, parse_time
+from meal_planner.timeparse import (
+    business_date,
+    hhmm30,
+    hhmm_from_minutes_30h,
+    minutes_30h,
+    normalize_hhmm,
+    parse_time,
+)
 
 BRAND_LABEL = {"vca": "VCA", "other": "Other"}
 
@@ -79,22 +87,6 @@ def current_typhoon_names(*, force: bool = False) -> dict[str, Any]:
     return result
 
 
-def _hhmm(minutes: int) -> str:
-    """30 小時制分鐘 → HH:MM。
-
-    24:00–29:59 照寫 24+（同全 project 一致）。夠鐘過咗 30:00 就已經係第二個
-    business day 嘅朝早——冚返落去（30:00 → 06:00、31:20 → 07:20），
-    唔會出個 30:00 咁嘅無效時間。
-    """
-    while minutes >= 1800:
-        minutes -= 1440
-    # 負數 ＝ 前一日（個波尋日落、今日先返工）。冚返落 0–1439，
-    # 唔冚就會出「-14:40」咁嘅廢時間；係邊一日由 `*_minutes` 嗰邊表達。
-    while minutes < 0:
-        minutes += 1440
-    return f"{minutes // 60:02d}:{minutes % 60:02d}"
-
-
 def _as_time(hhmm: str) -> time | None:
     """30 小時制文字 → 真正鐘點（27:56 → 03:56）；「屬前一日」由 business date 表達。"""
     return parse_time(hhmm)
@@ -108,6 +100,8 @@ def _fmt(value: time | None) -> str:
 # 本身唔使報平安更嘅更（例如 PenBM）唔會因為打風就多咗要報，所以個名分開兩個。
 TYPHOON_START_CONTENT = "報開工, 報平安更"
 TYPHOON_START_ONLY_CONTENT = "報開工"
+TYPHOON_END_CONTENT = "報收工, 報平安更"
+TYPHOON_SAFE_ONLY_CONTENT = "報平安更"
 # `-` 開頭跟返行位表 marker 慣例：報平安更唔佔時間，前一格嘅時長跨過佢。
 TYPHOON_SAFE_CONTENT = "- 報平安更"
 
@@ -185,7 +179,7 @@ def _grid_section(
                 continue  # 原本行位表已經有呢個鐘點報更（多數係收工嗰行），唔使插多次
             out.append(
                 {
-                    "time": _hhmm(m),
+                    "time": hhmm_from_minutes_30h(m),
                     "minutes": m,
                     "content": TYPHOON_SAFE_CONTENT,
                     "duration_min": None,
@@ -305,7 +299,7 @@ def _meal_section(
             "after": after.get(meal) or "",
             "skipped": skipped.get(meal, ""),
         }
-        for meal in MEAL_KEYS
+        for meal in MEAL_LABELS
         if primary.get(meal)
     ]
     return {
@@ -366,13 +360,13 @@ def _report_normal_section(
     if use_typhoon:
         for i, m in enumerate(report_minutes):
             if i == 0:
-                content = "報開工, 報平安更"
+                content = TYPHOON_START_CONTENT
             elif end_m is not None and m == end_m:
-                content = "報收工, 報平安更"
+                content = TYPHOON_END_CONTENT
             else:
-                content = "報平安更"
+                content = TYPHOON_SAFE_ONLY_CONTENT
             rows.append({
-                "time": _hhmm(m), "minutes": m, "content": content,
+                "time": hhmm_from_minutes_30h(m), "minutes": m, "content": content,
                 "group": group, "message": message, "skipped": False,
             })
 
@@ -392,7 +386,7 @@ def _report_normal_section(
                 covered.add(minutes)
             else:
                 skip_slot_ids.append(slot["id"])
-        extra_times = [_hhmm(m) for m in report_minutes if m not in covered]
+        extra_times = [hhmm_from_minutes_30h(m) for m in report_minutes if m not in covered]
     else:
         rows = [
             {
@@ -500,12 +494,6 @@ def _gc_section(
     """
 
     from meal_planner.google_calendar_sync import config_from_env
-    from meal_planner.schedule_grid import (
-        load_schedule_rows_from_rows,
-        load_wake_alarm_overrides_from_rows,
-        report_start_end,
-        rows_for_roster,
-    )
 
     def sheet(key: str) -> list[Any]:
         try:
@@ -726,7 +714,7 @@ def build_typhoon_plan(
     # 落波時間一律用 30 小時制讀：打 02:56 即係 26:56（同全 project 一致，
     # 唔會有「當日清晨定係通宵更嗰段」兩個讀法要人估）。
     signal_m = minutes_30h(signal_text)
-    signal_text = _hhmm(signal_m)
+    signal_text = hhmm_from_minutes_30h(signal_m)
     plan["signal_time"] = signal_text
 
     grid_rows = load_schedule_rows_from_rows(load_sheet_rows("schedule_grid", settings).get("rows") or [])
@@ -776,7 +764,7 @@ def build_typhoon_plan(
         end_m += 1440
     earliest_m = signal_m + offset
     start_m = max(earliest_m, planned_m)
-    actual_start = _hhmm(start_m)
+    actual_start = hhmm_from_minutes_30h(start_m)
     planned_text = _fmt(planned_start)
 
     typhoon_overtime = (_as_time(actual_start), ot_end)
@@ -801,7 +789,7 @@ def build_typhoon_plan(
             "ok": True,
             "brand": BRAND_LABEL[form_key_for_code(code)],
             "offset_minutes": offset,
-            "earliest_start": _hhmm(earliest_m),
+            "earliest_start": hhmm_from_minutes_30h(earliest_m),
             "earliest_minutes": earliest_m,
             "planned_start": planned_text,
             "planned_minutes": planned_m,
@@ -890,7 +878,6 @@ def build_typhoon_plan(
     )
     if day_off:
         # 全日唔使返：冇嘢要做，各段一律出空 + 講明點解（唔好留返一堆做唔到嘅嘢喺度）。
-        note = plan["day_off_note"]
         plan["grid"] = {"rows": [], "note": "全日唔使返 —— 冇行位要行。"}
         plan["report_normal"] = {
             "rows": [], "mode": "off", "interval_hours": REPORT_INTERVAL_MIN // 60,
@@ -1005,7 +992,7 @@ def typhoon_grid_rows(
         if safe_slots_for_code(grid_rows, roster_code, biz_date)
         else []
     )
-    section = _grid_section(my_rows, biz_date, start_m, planned_text, _hhmm(start_m), report_minutes)
+    section = _grid_section(my_rows, biz_date, start_m, planned_text, hhmm_from_minutes_30h(start_m), report_minutes)
     # 俾取代嗰啲喺 _grid_section 已經剷咗；返唔到嘅位就照推但 disabled——
     # 嗰啲係「錯過咗」，唔係「俾人取代」，見到先知原本幾點開工、遲咗幾多。
     return [
@@ -1060,7 +1047,7 @@ def build_typhoon_meal_plan(
     my_rows = rows_for_roster(grid_rows, code, biz_date)
 
     # 飯鐘食唔到先至要帶小食；搵開工後第一個長過 20 分鐘嘅 Break／Tea。
-    dropped = [meal for meal in MEAL_KEYS if meal in (plan["meals"].get("skipped_meals") or [])]
+    dropped = [meal for meal in MEAL_LABELS if meal in (plan["meals"].get("skipped_meals") or [])]
     overrides: dict[str, str] = {}
     snack_note = ""
     if day_off:

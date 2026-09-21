@@ -35,6 +35,30 @@ def _default_memory_payload() -> dict[str, Any]:
     return {"headers": [], "indicator_rows": {}, "nutrient_keys": [], "days": []}
 
 
+def _float_map(raw: Any) -> dict[str, float]:
+    """{k: v} → {str(k): float(v)}；唔係 dict 回 {}，轉唔到 float 嘅一律跳過。
+
+    UI 入面所有「欄闊度」表（column_widths／target／catalog／form）都行呢個——
+    _normalise_ui 讀寫都會過一次，所以 load_* 唔使再 coerce。
+    """
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, float] = {}
+    for k, v in raw.items():
+        try:
+            out[str(k)] = float(v)
+        except Exception:
+            continue
+    return out
+
+
+def _merge_widths(ui: dict[str, Any], key: str, widths: dict[str, float]) -> None:
+    """save_*_widths 共用：現有闊度表 + 新值（新值轉唔到 float 即 raise，同以前一樣）。"""
+    current = _float_map(ui.get(key))
+    current.update({str(k): float(v) for k, v in widths.items()})
+    ui[key] = current
+
+
 # 記得住嘅 panel 得呢一份名單（同 web/planner.js 嘅 PANEL_KEYS 對應）。
 # 唔喺名單入面嘅一律當 planner —— 加新 panel 唔加落嚟，refresh 之後就會彈返餐單。
 # alarm_sync 係舊 panel，留住等舊 ui_state 唔會突然跳走。
@@ -54,7 +78,6 @@ def _default_ui() -> dict[str, Any]:
         "active_panel": "planner",
         "active_config_view": "targets",
         "active_menu_path": ["top", "planner"],
-        "target_editor_width": None,
         "target_column_widths": {},
         "catalog_column_widths": {},
         "form_column_widths": {},
@@ -117,8 +140,7 @@ def _default_ui() -> dict[str, Any]:
 def _normalise_ui(raw: Any) -> dict[str, Any]:
     ui = _default_ui()
     if isinstance(raw, dict):
-        if isinstance(raw.get("column_widths"), dict):
-            ui["column_widths"] = raw["column_widths"]
+        ui["column_widths"] = _float_map(raw.get("column_widths"))
         if isinstance(raw.get("typhoon_state"), dict):
             ui["typhoon_state"] = dict(raw["typhoon_state"])
         if isinstance(raw.get("phone_endpoint"), dict):
@@ -149,35 +171,9 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
                         group = candidate
                         break
             ui["active_menu_path"] = [group, leaf]
-        try:
-            target_width = raw.get("target_editor_width")
-            ui["target_editor_width"] = float(target_width) if target_width is not None else None
-        except Exception:
-            pass
-        if isinstance(raw.get("target_column_widths"), dict):
-            widths: dict[str, float] = {}
-            for k, v in raw["target_column_widths"].items():
-                try:
-                    widths[str(k)] = float(v)
-                except Exception:
-                    continue
-            ui["target_column_widths"] = widths
-        if isinstance(raw.get("catalog_column_widths"), dict):
-            widths: dict[str, float] = {}
-            for k, v in raw["catalog_column_widths"].items():
-                try:
-                    widths[str(k)] = float(v)
-                except Exception:
-                    continue
-            ui["catalog_column_widths"] = widths
-        if isinstance(raw.get("form_column_widths"), dict):
-            widths: dict[str, float] = {}
-            for k, v in raw["form_column_widths"].items():
-                try:
-                    widths[str(k)] = float(v)
-                except Exception:
-                    continue
-            ui["form_column_widths"] = widths
+        ui["target_column_widths"] = _float_map(raw.get("target_column_widths"))
+        ui["catalog_column_widths"] = _float_map(raw.get("catalog_column_widths"))
+        ui["form_column_widths"] = _float_map(raw.get("form_column_widths"))
         if isinstance(raw.get("menu_order"), dict):
             order: dict[str, list[str]] = {}
             groups = list(dict.fromkeys([*ui["menu_order"].keys(), *[str(k) for k in raw["menu_order"].keys() if str(k)]]))
@@ -205,23 +201,25 @@ def _normalise_ui(raw: Any) -> dict[str, Any]:
                 if key_s and key_s not in ui["menu_tree_open"]:
                     ui["menu_tree_open"][key_s] = bool(value)
         if isinstance(raw.get("google_calendar_sync"), dict):
-            gc = raw["google_calendar_sync"]
-            ui["google_calendar_sync"] = {
-                "enabled": bool(gc.get("enabled", ui["google_calendar_sync"]["enabled"])),
-                "write": bool(gc.get("write", ui["google_calendar_sync"]["write"])),
-                "client_secret_file": str(gc.get("client_secret_file") or ""),
-                "token_file": str(gc.get("token_file") or ""),
-                "service_account_file": str(gc.get("service_account_file") or ""),
-                "nonwork_calendar_id": str(gc.get("nonwork_calendar_id") or ""),
-                "work_calendar_id": str(gc.get("work_calendar_id") or ""),
-                "alarm_calendar_id": str(gc.get("alarm_calendar_id") or ""),
-                "wake_offset_hours": _coerce_wake_offset_hours(
-                    gc.get("wake_offset_hours", ui["google_calendar_sync"]["wake_offset_hours"])
-                ),
-            }
+            ui["google_calendar_sync"] = _normalise_gc(raw["google_calendar_sync"])
     if ui["active_menu_path"] and ui["active_menu_path"][-1] in _REMOVED_MENU_KEYS:
         ui["active_menu_path"] = ["top", "planner"]
     return ui
+
+
+def _normalise_gc(gc: dict[str, Any]) -> dict[str, Any]:
+    """google_calendar_sync 設定 → 齊欄、型別啱嘅 dict（讀 UI state 同 save 都行呢個）。"""
+    return {
+        "enabled": bool(gc.get("enabled", False)),
+        "write": bool(gc.get("write", False)),
+        "client_secret_file": str(gc.get("client_secret_file") or ""),
+        "token_file": str(gc.get("token_file") or ""),
+        "service_account_file": str(gc.get("service_account_file") or ""),
+        "nonwork_calendar_id": str(gc.get("nonwork_calendar_id") or ""),
+        "work_calendar_id": str(gc.get("work_calendar_id") or ""),
+        "alarm_calendar_id": str(gc.get("alarm_calendar_id") or ""),
+        "wake_offset_hours": _coerce_wake_offset_hours(gc.get("wake_offset_hours", DEFAULT_WAKE_OFFSET_HOURS)),
+    }
 
 
 def _connect_plan_db() -> sqlite3.Connection:
@@ -438,39 +436,10 @@ def log_resolve_event(
         )
 
 
-def load_resolve_log(limit: int = 100) -> list[dict[str, Any]]:
-    with _plan_db() as conn:
-        rows = conn.execute(
-            """
-            SELECT ts, plan_date, meal, action, row_index, row_name,
-                   locked_meals, swaps_json, client, outcome
-            FROM resolve_log ORDER BY id DESC LIMIT ?
-            """,
-            (max(1, min(int(limit), 1000)),),
-        ).fetchall()
-    out: list[dict[str, Any]] = []
-    for r in rows:
-        out.append(
-            {
-                "ts": str(r["ts"]),
-                "date": str(r["plan_date"]),
-                "meal": r["meal"],
-                "action": r["action"],
-                "row_index": r["row_index"],
-                "row_name": r["row_name"],
-                "locked_meals": [x for x in str(r["locked_meals"] or "").split(",") if x],
-                "swaps": _sqlite_json_loads(str(r["swaps_json"] or "[]"), []),
-                "client": r["client"],
-                "outcome": r["outcome"],
-            }
-        )
-    return out
-
-
-def load_latest_versions(dates: list[str], versions: dict[str, str] | None = None) -> dict[str, Any]:
+def load_latest_versions(dates: list[str]) -> dict[str, Any]:
+    """每日最新一版餐單 + 該日所有版本嘅 timestamp 清單。"""
     out_days: list[dict[str, Any]] = []
     meta: dict[str, list[str]] = {}
-    sel = versions or {}
     with _plan_db() as conn:
         for d in dates:
             rows = conn.execute(
@@ -479,9 +448,7 @@ def load_latest_versions(dates: list[str], versions: dict[str, str] | None = Non
             ).fetchall()
             if not rows:
                 continue
-            want_ts = str(sel.get(d) or "")
-            pick = next((row for row in rows if str(row["timestamp"]) == want_ts), rows[-1])
-            day = _sqlite_json_loads(str(pick["day_json"]), {})
+            day = _sqlite_json_loads(str(rows[-1]["day_json"]), {})
             if isinstance(day, dict):
                 out_days.append(day)
             meta[str(d)] = [str(row["timestamp"]) for row in rows]
@@ -556,13 +523,7 @@ def load_memory_payload() -> dict[str, Any]:
 
 
 def save_column_widths(widths: dict[str, float]) -> None:
-    def mutate(ui: dict[str, Any]) -> None:
-        current = ui.get("column_widths") if isinstance(ui.get("column_widths"), dict) else {}
-        current = {str(k): float(v) for k, v in current.items()}
-        current.update({str(k): float(v) for k, v in widths.items()})
-        ui["column_widths"] = current
-
-    _update_ui(mutate)
+    _update_ui(lambda ui: _merge_widths(ui, "column_widths", widths))
 
 
 def save_sidebar_width(width: float) -> None:
@@ -570,39 +531,22 @@ def save_sidebar_width(width: float) -> None:
 
 
 def save_target_editor_layout(
-    width: float | None,
     column_widths: dict[str, float] | None,
     catalog_column_widths: dict[str, float] | None = None,
 ) -> None:
+    """營養指標／營養清單兩張表嘅欄闊度（None＝嗰張唔郁）。"""
     def mutate(ui: dict[str, Any]) -> None:
-        if width is not None:
-            ui["target_editor_width"] = float(width)
         if column_widths is not None:
-            current = ui.get("target_column_widths") if isinstance(ui.get("target_column_widths"), dict) else {}
-            current = {str(k): float(v) for k, v in current.items()}
-            current.update({str(k): float(v) for k, v in column_widths.items()})
-            ui["target_column_widths"] = current
+            _merge_widths(ui, "target_column_widths", column_widths)
         if catalog_column_widths is not None:
-            current = ui.get("catalog_column_widths") if isinstance(ui.get("catalog_column_widths"), dict) else {}
-            current = {str(k): float(v) for k, v in current.items()}
-            current.update({str(k): float(v) for k, v in catalog_column_widths.items()})
-            ui["catalog_column_widths"] = current
+            _merge_widths(ui, "catalog_column_widths", catalog_column_widths)
 
     _update_ui(mutate)
 
 
 def load_column_widths(ui: dict[str, Any] | None = None) -> dict[str, float]:
     ui = _load_ui() if ui is None else ui
-    raw = ui.get("column_widths", {})
-    if not isinstance(raw, dict):
-        return {}
-    out: dict[str, float] = {}
-    for k, v in raw.items():
-        try:
-            out[str(k)] = float(v)
-        except Exception:
-            continue
-    return out
+    return dict(ui.get("column_widths") or {})  # _normalise_ui 已 coerce 做 float
 
 
 def load_sidebar_width(ui: dict[str, Any] | None = None) -> float:
@@ -613,70 +557,28 @@ def load_sidebar_width(ui: dict[str, Any] | None = None) -> float:
         return 260.0
 
 
-def load_target_editor_layout(ui: dict[str, Any] | None = None) -> tuple[float | None, dict[str, float], dict[str, float]]:
+def load_target_editor_layout(ui: dict[str, Any] | None = None) -> tuple[dict[str, float], dict[str, float]]:
+    """(營養指標欄闊度, 營養清單欄闊度)；_normalise_ui 已 coerce 做 float。"""
     ui = _load_ui() if ui is None else ui
-    try:
-        width_raw = ui.get("target_editor_width")
-        width = float(width_raw) if width_raw is not None else None
-    except Exception:
-        width = None
-    raw = ui.get("target_column_widths", {})
-    out: dict[str, float] = {}
-    if isinstance(raw, dict):
-        for k, v in raw.items():
-            try:
-                out[str(k)] = float(v)
-            except Exception:
-                continue
-    catalog_raw = ui.get("catalog_column_widths", {})
-    catalog_out: dict[str, float] = {}
-    if isinstance(catalog_raw, dict):
-        for k, v in catalog_raw.items():
-            try:
-                catalog_out[str(k)] = float(v)
-            except Exception:
-                continue
-    return width, out, catalog_out
+    return dict(ui.get("target_column_widths") or {}), dict(ui.get("catalog_column_widths") or {})
 
 
 def save_form_column_widths(widths: dict[str, float]) -> None:
-    def mutate(ui: dict[str, Any]) -> None:
-        current = ui.get("form_column_widths") if isinstance(ui.get("form_column_widths"), dict) else {}
-        current = {str(k): float(v) for k, v in current.items()}
-        current.update({str(k): float(v) for k, v in widths.items()})
-        ui["form_column_widths"] = current
-
-    _update_ui(mutate)
+    _update_ui(lambda ui: _merge_widths(ui, "form_column_widths", widths))
 
 
 def load_form_column_widths(ui: dict[str, Any] | None = None) -> dict[str, float]:
     ui = _load_ui() if ui is None else ui
-    raw = ui.get("form_column_widths", {})
-    if not isinstance(raw, dict):
-        return {}
-    out: dict[str, float] = {}
-    for k, v in raw.items():
-        try:
-            out[str(k)] = float(v)
-        except Exception:
-            continue
-    return out
+    return dict(ui.get("form_column_widths") or {})  # _normalise_ui 已 coerce 做 float
 
 
 def save_google_calendar_sync_settings(settings: dict[str, Any]) -> None:
+    """Partial patch：只覆蓋有帶嘅欄，其餘保留現值。"""
+    incoming = settings if isinstance(settings, dict) else {}
+
     def mutate(ui: dict[str, Any]) -> None:
         current = ui.get("google_calendar_sync") if isinstance(ui.get("google_calendar_sync"), dict) else {}
-        ui["google_calendar_sync"] = {
-            "enabled": bool(settings.get("enabled")) if isinstance(settings, dict) and "enabled" in settings else bool(current.get("enabled")),
-            "write": bool(settings.get("write")) if isinstance(settings, dict) and "write" in settings else bool(current.get("write")),
-            "client_secret_file": str(settings.get("client_secret_file", current.get("client_secret_file", "")) or "") if isinstance(settings, dict) else str(current.get("client_secret_file", "") or ""),
-            "token_file": str(settings.get("token_file", current.get("token_file", "")) or "") if isinstance(settings, dict) else str(current.get("token_file", "") or ""),
-            "service_account_file": str(settings.get("service_account_file", current.get("service_account_file", "")) or "") if isinstance(settings, dict) else str(current.get("service_account_file", "") or ""),
-            "nonwork_calendar_id": str(settings.get("nonwork_calendar_id", current.get("nonwork_calendar_id", "")) or "") if isinstance(settings, dict) else str(current.get("nonwork_calendar_id", "") or ""),
-            "work_calendar_id": str(settings.get("work_calendar_id", current.get("work_calendar_id", "")) or "") if isinstance(settings, dict) else str(current.get("work_calendar_id", "") or ""),
-            "alarm_calendar_id": str(settings.get("alarm_calendar_id", current.get("alarm_calendar_id", "")) or "") if isinstance(settings, dict) else str(current.get("alarm_calendar_id", "") or ""),
-            "wake_offset_hours": _coerce_wake_offset_hours(settings.get("wake_offset_hours", current.get("wake_offset_hours", DEFAULT_WAKE_OFFSET_HOURS))) if isinstance(settings, dict) else _coerce_wake_offset_hours(current.get("wake_offset_hours", DEFAULT_WAKE_OFFSET_HOURS)),
-        }
+        ui["google_calendar_sync"] = _normalise_gc({**current, **incoming})
 
     _update_ui(mutate)
 

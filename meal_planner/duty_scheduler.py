@@ -23,7 +23,6 @@ MIN_SLEEP_SECONDS = 0.2
 
 _STARTED = False
 _START_LOCK = threading.Lock()
-_LAST_ERROR = ""
 _WAKE = threading.Event()
 
 
@@ -42,15 +41,9 @@ def start_scheduler() -> None:
     thread.start()
 
 
-def last_error() -> str:
-    return _LAST_ERROR
-
-
 def _loop() -> None:
-    global _LAST_ERROR
     while True:
         _WAKE.clear()
-        errors: list[str] = []
         wake_ats: list[datetime] = []
         try:
             from meal_planner.duty_report import process_due_slots  # Report_Normal
@@ -59,7 +52,7 @@ def _loop() -> None:
             if wake_at is not None:
                 wake_ats.append(wake_at)
         except Exception:  # noqa: BLE001 - scheduler must survive any tick error
-            errors.append(traceback.format_exc(limit=3))
+            traceback.print_exc(limit=3)
         try:
             from meal_planner.duty_form import process_due_actions  # OnOff_Duty
 
@@ -67,8 +60,7 @@ def _loop() -> None:
             if wake_at is not None:
                 wake_ats.append(wake_at)
         except Exception:  # noqa: BLE001 - 一邊死唔可以拖冧另一邊
-            errors.append(traceback.format_exc(limit=3))
-        _LAST_ERROR = "\n".join(errors)
+            traceback.print_exc(limit=3)
 
         timeout = float(IDLE_FALLBACK_SECONDS)
         if wake_ats:

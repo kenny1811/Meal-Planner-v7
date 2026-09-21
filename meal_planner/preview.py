@@ -19,7 +19,13 @@ from meal_planner.format_rules import (
     total_row_font_red_range,
     total_row_font_red_upper_only,
 )
-from meal_planner.meal_schedule import build_day_meal_plan, build_meal_planning_cache, build_rice_note
+from meal_planner.meal_schedule import (
+    MEAL_LABELS,
+    build_day_meal_plan,
+    build_meal_planning_cache,
+    build_rice_note,
+    visible_meals_from_resolved,
+)
 from meal_planner.indicators import (
     DayIndicatorProfile,
     IndicatorKind,
@@ -37,19 +43,25 @@ from meal_planner.settings import AppSettings, get_settings
 
 
 _FAT_PCT_KEYS = {"fat_total_g", "fat_sat_g", "fat_trans_g"}
-_MEAL_NAMES = ("早餐", "午餐", "小食", "晚餐")
+_RANGE_KEYS = {"kcal", "protein_g", "carb_g"}
+_UPPER_ONLY_KEYS = {"sugar_g", "cholesterol_mg", "sodium_mg"}
 
 
-def _visible_meals_from_resolved(meal_plan: dict[str, Any]) -> set[str]:
-    """由 meal_times_resolved 決定邊幾餐可見（非空時間字串）。"""
-    resolved = meal_plan.get("meal_times_resolved", {}) if isinstance(meal_plan, dict) else {}
-    if not isinstance(resolved, dict):
-        return set()
-    return {
-        meal
-        for meal in _MEAL_NAMES
-        if resolved.get(meal) is not None and str(resolved.get(meal)).strip() != ""
-    }
+def _indicator_band(key: str, p: Any) -> tuple[str, float | None, float | None] | None:
+    """某營養值嘅指標種類 + 上下限：("range", lo, hi)／("upper", None, hi)／("lower", lo, None)。
+
+    種類要同 key 夾（卡路里／蛋白／碳水先係 range…），唔夾或者冇上下限就 None——
+    誤差、總計列字色、顯示值達標判斷三處都係同一個判斷，唔好各自再寫一次。
+    """
+    if p is None:
+        return None
+    if key in _RANGE_KEYS and p.kind == IndicatorKind.RANGE and p.lo is not None and p.hi is not None:
+        return ("range", p.lo, p.hi)
+    if key in _UPPER_ONLY_KEYS and p.kind == IndicatorKind.UPPER_ONLY and p.hi is not None:
+        return ("upper", None, p.hi)
+    if key == "calcium_mg" and p.kind == IndicatorKind.LOWER_ONLY and p.lo is not None:
+        return ("lower", p.lo, None)
+    return None
 
 
 def _clear_restaurant_lunch_items(meal_plan: dict[str, Any]) -> None:
@@ -72,7 +84,7 @@ def _apply_rice_note_and_summary(
 ) -> None:
     """統一重算米類備註同全日 summary（清餐廳午餐後）。"""
     if visible_meals is None:
-        visible_meals = _visible_meals_from_resolved(meal_plan)
+        visible_meals = visible_meals_from_resolved(meal_plan)
     meal_items = meal_plan.get("meal_items", {}) if isinstance(meal_plan, dict) else {}
     meal_plan["rice_note"] = build_rice_note(meal_items, settings, visible_meals=visible_meals)
     meal_plan["summary"] = summary if summary is not None else _calc_day_summary(meal_plan, indicators, settings)
@@ -175,22 +187,24 @@ def _calc_day_summary(
         e = 0.0
         total_red = False
         err_red = False
-        if p is not None:
-            if k in ("kcal", "protein_g", "carb_g") and p.kind == IndicatorKind.RANGE and p.lo is not None and p.hi is not None:
-                if t < p.lo:
-                    e = t - p.lo
-                elif t > p.hi:
-                    e = t - p.hi
-                total_red = total_row_font_red_range(t, p.lo, p.hi)
-                err_red = error_font_red_range(t, p.lo, p.hi)
-            elif k in ("sugar_g", "cholesterol_mg", "sodium_mg") and p.kind == IndicatorKind.UPPER_ONLY and p.hi is not None:
-                e = t - p.hi
-                total_red = total_row_font_red_upper_only(t, p.hi)
-                err_red = error_font_red_upper_only(t, p.hi)
-            elif k == "calcium_mg" and p.kind == IndicatorKind.LOWER_ONLY and p.lo is not None:
-                e = t - p.lo
-                total_red = total_row_font_red_calcium(t, p.lo)
-                err_red = error_font_red_calcium(t, p.lo)
+        band = _indicator_band(k, p)
+        if band is not None:
+            kind, lo, hi = band
+            if kind == "range":
+                if t < lo:
+                    e = t - lo
+                elif t > hi:
+                    e = t - hi
+                total_red = total_row_font_red_range(t, lo, hi)
+                err_red = error_font_red_range(t, lo, hi)
+            elif kind == "upper":
+                e = t - hi
+                total_red = total_row_font_red_upper_only(t, hi)
+                err_red = error_font_red_upper_only(t, hi)
+            else:
+                e = t - lo
+                total_red = total_row_font_red_calcium(t, lo)
+                err_red = error_font_red_calcium(t, lo)
 
         if k in _FAT_PCT_KEYS:
             pct = _fat_pct_for_indicator(k, p)
@@ -209,17 +223,15 @@ def _calc_day_summary(
             err_red = False
         # UI 與字色一致：若顯示值（1 位小數）已達標，總計列必須黑色。
         disp_t = _round1(t)
-        if p is not None:
-            if k in ("kcal", "protein_g", "carb_g") and p.kind == IndicatorKind.RANGE and p.lo is not None and p.hi is not None:
-                if p.lo <= disp_t <= p.hi:
-                    total_red = False
-            elif k in ("sugar_g", "cholesterol_mg", "sodium_mg") and p.kind == IndicatorKind.UPPER_ONLY and p.hi is not None:
-                if disp_t <= p.hi:
-                    total_red = False
-            elif k == "calcium_mg" and p.kind == IndicatorKind.LOWER_ONLY and p.lo is not None:
-                if disp_t >= p.lo:
-                    total_red = False
-        if k in ("fat_total_g", "fat_sat_g", "fat_trans_g") and _round1(e) == 0.0:
+        if band is not None:
+            kind, lo, hi = band
+            if (
+                (kind == "range" and lo <= disp_t <= hi)
+                or (kind == "upper" and disp_t <= hi)
+                or (kind == "lower" and disp_t >= lo)
+            ):
+                total_red = False
+        if k in _FAT_PCT_KEYS and _round1(e) == 0.0:
             total_red = False
 
         errors[k] = e
@@ -262,7 +274,6 @@ def _validate_indicator_rows_or_raise(work_vals: list[Any], nonwork_vals: list[A
 def preview_days(
     dates: list[date],
     *,
-    skip_allowed_month_validation: bool = False,
     reroll_nonce: int = 0,
     fast_mode: bool = True,
 ) -> dict[str, Any]:
@@ -277,11 +288,10 @@ def preview_days(
                 relaxation_simulation_enabled=True,
             ),
         )
-    if not skip_allowed_month_validation:
-        validate_dates_within_allowed_months(
-            dates,
-            timezone=settings.dates.timezone,
-        )
+    validate_dates_within_allowed_months(
+        dates,
+        timezone=settings.dates.timezone,
+    )
 
     planning_cache = build_meal_planning_cache(settings)
     headers, work_vals, nonwork_vals = load_target_rows(settings)
@@ -448,7 +458,7 @@ def recalc_days_from_edits(days_payload: list[dict[str, Any]]) -> dict[str, Any]
             meal_ingredients[meal] = names
             meal_nutrients[meal] = nutrients
 
-        visible_meals = _visible_meals_from_resolved(meal_plan)
+        visible_meals = visible_meals_from_resolved(meal_plan)
         meal_plan["meal_items"] = meal_items
         meal_plan["meal_ingredients"] = meal_ingredients
         meal_plan["meal_nutrients"] = meal_nutrients
@@ -474,9 +484,6 @@ def recalc_days_from_edits(days_payload: list[dict[str, Any]]) -> dict[str, Any]
                     best_score = score
                     best_g = g
                     best_summary = summary
-                    if score[0] == 0 and score[1] == 0:
-                        # 已達標，之後只會用全偏差 tie-break；保留繼續試可能揀到更貼指標。
-                        pass
             ratio = float(best_g) / 100.0
             meal_nutrients[meal] = {
                 k: base_nutrients[k] + float(entry.nutrients.get(k, 0.0)) * ratio
@@ -571,7 +578,7 @@ def resolve_day_out_of_stock(
     old_ings = meal_plan_in.get("meal_ingredients", {}) if isinstance(meal_plan_in.get("meal_ingredients"), dict) else {}
     old_nut = meal_plan_in.get("meal_nutrients", {}) if isinstance(meal_plan_in.get("meal_nutrients"), dict) else {}
     locked: dict[str, dict[str, Any]] = {}
-    for meal in _MEAL_NAMES:
+    for meal in MEAL_LABELS:
         if meal not in set(locked_meal_names or []):
             continue
         base = old_nut.get(meal, {}) if isinstance(old_nut.get(meal), dict) else {}

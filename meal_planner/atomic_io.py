@@ -13,7 +13,17 @@ import os
 from pathlib import Path
 
 
-def _replace_atomically(path: Path, data: bytes) -> None:
+def write_text_atomic(
+    path: Path,
+    text: str,
+    *,
+    encoding: str = "utf-8",
+    newline: str = "\n",
+) -> None:
+    """`Path.write_text()` 嘅原子版本；預設 UTF-8 + LF，唔會被 Windows 轉 CRLF。"""
+    if newline != "\n":
+        text = text.replace("\n", newline)
+    data = text.encode(encoding)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
@@ -28,21 +38,3 @@ def _replace_atomically(path: Path, data: bytes) -> None:
         except OSError:
             pass
         raise
-
-
-def write_bytes_atomic(path: Path, data: bytes) -> None:
-    """`Path.write_bytes()` 嘅原子版本。"""
-    _replace_atomically(path, data)
-
-
-def write_text_atomic(
-    path: Path,
-    text: str,
-    *,
-    encoding: str = "utf-8",
-    newline: str = "\n",
-) -> None:
-    """`Path.write_text()` 嘅原子版本；預設 UTF-8 + LF，唔會被 Windows 轉 CRLF。"""
-    if newline != "\n":
-        text = text.replace("\n", newline)
-    _replace_atomically(path, text.encode(encoding))

@@ -59,6 +59,21 @@ def _fat_cap_ratio_for_target(key: str, indicators: DayIndicatorProfile, setting
 
 
 
+def _row_daymax(cs: list[_Candidate], bound_overrides: dict[int, dict[str, float]] | None) -> float | None:
+    """同一食材列當日總克數上限：override 優先，否則用清單 DayMax；冇就 None。
+
+    LP 約束同 solve 後嘅「觸頂」診斷都用同一個數，唔好各計一次。
+    """
+    daymax_vals: list[float] = []
+    for c in cs:
+        ov = (bound_overrides or {}).get(c.entry.row_index, {})
+        if "daymax_g" in ov:
+            daymax_vals.append(float(ov["daymax_g"]))
+        elif c.entry.daymax_g is not None:
+            daymax_vals.append(float(c.entry.daymax_g))
+    return min(daymax_vals) if daymax_vals else None
+
+
 def solve_day_meal_plan(
     *,
     settings: AppSettings,
@@ -212,17 +227,11 @@ def solve_day_meal_plan(
         duplicate_terms.append(LUNCH_DINNER_DUPLICATE_WEIGHT * dup)
 
     # DayMax 約束：同一食材列當日總克數不可超標
+    row_daymax = {row_idx: _row_daymax(cs, bound_overrides) for row_idx, cs in by_row.items()}
     for row_idx, cs in by_row.items():
-        daymax_vals = []
-        for c in cs:
-            ov = (bound_overrides or {}).get(c.entry.row_index, {})
-            if "daymax_g" in ov:
-                daymax_vals.append(float(ov["daymax_g"]))
-            elif c.entry.daymax_g is not None:
-                daymax_vals.append(float(c.entry.daymax_g))
-        if not daymax_vals:
+        daymax = row_daymax[row_idx]
+        if daymax is None:
             continue
-        daymax = min(daymax_vals)
         row_grams = []
         for c in cs:
             meal, idx = c.meal, c.item_idx
@@ -432,16 +441,9 @@ def solve_day_meal_plan(
             "daymax_g": float(c.entry.daymax_g) if c.entry.daymax_g is not None else None,
         }
     for row_idx, cs in by_row.items():
-        daymax_vals = []
-        for c in cs:
-            ov = (bound_overrides or {}).get(c.entry.row_index, {})
-            if "daymax_g" in ov:
-                daymax_vals.append(float(ov["daymax_g"]))
-            elif c.entry.daymax_g is not None:
-                daymax_vals.append(float(c.entry.daymax_g))
-        if not daymax_vals:
+        daymax = row_daymax[row_idx]
+        if daymax is None:
             continue
-        daymax = min(daymax_vals)
         used = 0.0
         for c in cs:
             local = by_item[(c.meal, c.item_idx)].index(c)
@@ -483,7 +485,8 @@ def solve_day_meal_plan(
         combined_plan: list[dict[str, Any]] = []
 
         for ridx in range(1, 4):
-            step_plan = _build_relaxation_plan(
+            # 第一輪嘅輸入同上面 relaxation_plan 一模一樣，唔使再計一次。
+            step_plan = relaxation_plan if ridx == 1 else _build_relaxation_plan(
                 hard_violations=cur_viol,
                 selected_rows=cur_selected_rows,
                 row_entry=row_entry_metrics,
@@ -646,7 +649,7 @@ def solve_day_meal_plan(
             if bool(settings.optimizer.replacement_search_enabled):
                 # 以 auto-retry 較佳方案為基準，再做一次替換搜索。
                 rep_best = _search_replacement_plan(
-            solve_fn=solve_day_meal_plan,
+                    solve_fn=solve_day_meal_plan,
                     settings=settings,
                     indicators=indicators,
                     meal_pattern_parts=meal_pattern_parts,

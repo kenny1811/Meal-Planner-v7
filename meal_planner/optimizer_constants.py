@@ -1,4 +1,8 @@
-"""Tuning constants for optimizer scoring and tie-breaking."""
+"""Tuning constants for optimizer scoring and tie-breaking.
+
+MEAL_ROTATION_OFFSET 亦係 meal_schedule 嘅日期輪替 offset——得呢一份，
+meal_schedule 由呢度 import（佢 import optimizer，反方向會 circular）。
+"""
 
 from __future__ import annotations
 

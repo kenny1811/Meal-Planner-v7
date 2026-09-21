@@ -23,12 +23,12 @@ from meal_planner.schedule_grid import (
 )
 from meal_planner.atomic_io import write_text_atomic
 from meal_planner.settings import AppSettings
+from meal_planner.timeparse import slot_datetime
 
 
 GC_ACCOUNT_EMAIL = "kenny1811@gmail.com"
 WORK_CALENDAR_ID = "om2jpr2m3g1qfb4q54v92l21g4@group.calendar.google.com"
 ALARM_CALENDAR_ID = "vauo4el6f4vh20fjvm7fjlsfc0@group.calendar.google.com"
-OLD_LEAVE_CALENDAR_ID = "lb8dr22puf0b3krrov8oti3r4c@group.calendar.google.com"
 NONWORK_CALENDAR_ID = ""
 SYNC_SOURCE = "meal_planner_roster"
 DEFAULT_TIME_ZONE = "Asia/Hong_Kong"
@@ -91,8 +91,6 @@ def config_from_env(settings: AppSettings) -> GoogleCalendarSyncConfig:
         or os.environ.get("MENU_GOOGLE_CALENDAR_NONWORK_ID")
         or ""
     ).strip()
-    if nonwork_calendar_raw == OLD_LEAVE_CALENDAR_ID:
-        nonwork_calendar_raw = ""
     work_calendar_raw = str(saved.get("work_calendar_id") or "").strip()
     alarm_calendar_raw = str(saved.get("alarm_calendar_id") or "").strip()
     try:
@@ -178,10 +176,9 @@ def _combine(day: date, value: time, tz: ZoneInfo) -> datetime:
 def _combine_shift(day: date, value: time, tz: ZoneInfo) -> datetime:
     """更嘅開工／收工鐘點 → 真正時刻：30 小時制之下 06:00 前嗰段屬翌日凌晨。
 
-    （起身鬧鐘唔行呢條——05:30 起身係當日朝早，唔係第二日。）
+    換算交畀 timeparse.slot_datetime；起身鬧鐘唔行呢條——05:30 起身係當日朝早，唔係第二日。
     """
-    at = _combine(day, value, tz)
-    return at + timedelta(days=1) if value.hour < 6 else at
+    return slot_datetime(day, value, tz)
 
 
 def _combine_alarm(day: date, wake: time, start_time: time, tz: ZoneInfo) -> datetime:
@@ -509,26 +506,15 @@ def _event_roster_date(event: dict[str, Any]) -> str | None:
     return str(raw)[:10]
 
 
-def _event_start_value(event: dict[str, Any]) -> str | None:
-    start = event.get("start") or {}
+def _start_value(event_or_body: dict[str, Any]) -> str | None:
+    """Google event（或者我哋砌嘅 body，結構一樣）嘅 start dateTime／date 文字。"""
+    start = event_or_body.get("start") or {}
     raw = start.get("dateTime") or start.get("date")
     return str(raw) if raw else None
 
 
-def _event_end_value(event: dict[str, Any]) -> str | None:
-    end = event.get("end") or {}
-    raw = end.get("dateTime") or end.get("date")
-    return str(raw) if raw else None
-
-
-def _body_start_value(body: dict[str, Any]) -> str | None:
-    start = body.get("start") or {}
-    raw = start.get("dateTime") or start.get("date")
-    return str(raw) if raw else None
-
-
-def _body_end_value(body: dict[str, Any]) -> str | None:
-    end = body.get("end") or {}
+def _end_value(event_or_body: dict[str, Any]) -> str | None:
+    end = event_or_body.get("end") or {}
     raw = end.get("dateTime") or end.get("date")
     return str(raw) if raw else None
 
@@ -548,8 +534,8 @@ def _event_matches_body(existing: dict[str, Any], body: dict[str, Any]) -> bool:
     existing_private = ((existing.get("extendedProperties") or {}).get("private") or {})
     return (
         str(existing.get("summary") or "").strip() == str(body.get("summary") or "").strip()
-        and _starts_equal(_event_start_value(existing), _body_start_value(body) or "")
-        and _starts_equal(_event_end_value(existing), _body_end_value(body) or "")
+        and _starts_equal(_start_value(existing), _start_value(body) or "")
+        and _starts_equal(_end_value(existing), _end_value(body) or "")
         and str(existing.get("location") or "").strip() == str(body.get("location") or "").strip()
         and _normal_description(existing.get("description")) == _normal_description(body.get("description"))
         and all(str(existing_private.get(k) or "") == str(v or "") for k, v in body_private.items())

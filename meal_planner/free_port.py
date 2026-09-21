@@ -9,49 +9,13 @@ import time
 from typing import Iterable
 
 
-def _parse_int_lines(text: str) -> set[int]:
-    out: set[int] = set()
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            out.add(int(line))
-        except ValueError:
-            continue
-    return out
-
-
 def pids_listening_on_port_windows(port: int) -> set[int]:
-    """搵 Listen 緊指定埠嘅 OwningProcess。
+    """搵 Listen 緊指定埠嘅 OwningProcess（`netstat -ano`）。
 
-    `Get-NetTCPConnection` 在部份 Windows 環境會間歇性卡住，所以啟動流程優先用
-    `netstat -ano`，避免因為查 port 超時而令網站起唔到。
+    `Get-NetTCPConnection` 在部份 Windows 環境會間歇性卡住，所以一律用 netstat，
+    避免因為查 port 超時而令網站起唔到。
     """
-    port_i = int(port)
-    pids = _pids_listening_on_port_windows_netstat(port_i)
-    if pids:
-        return pids
-    if os.environ.get("MENU_API_USE_POWERSHELL_PORT_CHECK", "").strip().lower() not in ("1", "true", "yes"):
-        return set()
-    ps = (
-        f"$c = Get-NetTCPConnection -LocalPort {port_i} -State Listen -ErrorAction SilentlyContinue; "
-        r"$c | ForEach-Object { $_.OwningProcess } | Sort-Object -Unique"
-    )
-    try:
-        r = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=3,
-        )
-    except (subprocess.SubprocessError, OSError):
-        return set()
-    if r.returncode == 0:
-        return _parse_int_lines(r.stdout)
-    return set()
+    return _pids_listening_on_port_windows_netstat(int(port))
 
 
 def _pids_listening_on_port_windows_netstat(port: int) -> set[int]:

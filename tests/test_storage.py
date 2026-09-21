@@ -117,13 +117,21 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(result["days"], [{"date": "2026-06-23", "meal_plan": {"idx": "new"}}])
 
     def test_target_editor_layout_round_trips_with_ui_state(self):
-        storage.save_target_editor_layout(840, {"kcal": 120, "protein_g": 96}, {"name": 240})
+        storage.save_target_editor_layout({"kcal": 120, "protein_g": 96}, {"name": 240})
 
-        width, columns, catalog_columns = storage.load_target_editor_layout()
+        columns, catalog_columns = storage.load_target_editor_layout()
 
-        self.assertEqual(width, 840.0)
         self.assertEqual(columns, {"kcal": 120.0, "protein_g": 96.0})
         self.assertEqual(catalog_columns, {"name": 240.0})
+
+    def test_target_editor_layout_partial_save_keeps_other_table(self):
+        storage.save_target_editor_layout({"kcal": 120}, {"name": 240})
+        storage.save_target_editor_layout(None, {"category": 90})
+
+        columns, catalog_columns = storage.load_target_editor_layout()
+
+        self.assertEqual(columns, {"kcal": 120.0})
+        self.assertEqual(catalog_columns, {"name": 240.0, "category": 90.0})
 
     def test_form_column_widths_round_trip(self):
         storage.save_form_column_widths({"detail_code_pattern": 140, "maint_roster_text": 760})

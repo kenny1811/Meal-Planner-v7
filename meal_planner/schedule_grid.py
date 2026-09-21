@@ -9,9 +9,11 @@ from typing import Any
 
 
 from meal_planner.settings import AppSettings
-from meal_planner.timeparse import cell_text, hhmm30, parse_time as _to_time
+from meal_planner.timeparse import cell_text, hhmm30, minutes_30h, parse_time as _to_time
 
-MEAL_KEYS = ("早餐", "午餐", "小食", "晚餐")
+# 四餐嘅固定次序——全 project 得呢一份（meal_schedule／preview／typhoon 都由呢度 import；
+# 放喺呢個底層模組係因為 meal_schedule 會 import 呢度，反方向會 circular）。
+MEAL_LABELS = ("早餐", "午餐", "小食", "晚餐")
 
 # 行位表嘅「停用」欄：logical field，maint 畫面唔會當佢係一般欄render，
 # 改為每行一粒 toggle + 成行 dim。空／0／false ＝ 用緊。
@@ -204,7 +206,7 @@ def recompute_durations(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     """
     live = sorted(
         (x for x in rows if x.t is not None and not x.disabled and not x.is_marker),
-        key=lambda x: (x.t.hour * 60 + x.t.minute),
+        key=lambda x: minutes_30h(x.t),  # 30 小時制：25:30 排喺 23:30 之後，唔係排最前
     )
     for i, row in enumerate(live):
         if row.fixed_duration_min is not None:
@@ -214,7 +216,7 @@ def recompute_durations(rows: list[ScheduleRow]) -> list[ScheduleRow]:
             row.duration_min = None
             continue
         nxt = live[i + 1]
-        row.duration_min = (nxt.t.hour * 60 + nxt.t.minute) - (row.t.hour * 60 + row.t.minute)
+        row.duration_min = minutes_30h(nxt.t) - minutes_30h(row.t)
     for row in rows:
         if row.is_marker or row.disabled:
             row.duration_min = None
@@ -315,7 +317,7 @@ def resolve_meal_times_display(
     食位喺實際開工之前（打風遲開工咁），佢就食唔到，餐次唔會出，但要講明點解，
     唔可以靜靜哋消失。
     """
-    out: dict[str, Any] = {k: None for k in MEAL_KEYS}
+    out: dict[str, Any] = {k: None for k in MEAL_LABELS}
     skipped: dict[str, str] = {}
     if not primary_rule or not roster_code:
         return out
@@ -362,7 +364,7 @@ def resolve_meal_times_display(
 
         return None
 
-    for meal in MEAL_KEYS:
+    for meal in MEAL_LABELS:
         raw = primary_rule.get(meal)
         out[meal] = resolve_one(meal, raw)
 

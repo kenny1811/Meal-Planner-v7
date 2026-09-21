@@ -11,7 +11,6 @@ from meal_planner.app import app
 from meal_planner.google_calendar_sync import (
     CalendarEventPlan,
     GoogleCalendarSyncConfig,
-    OLD_LEAVE_CALENDAR_ID,
     build_roster_calendar_plan,
     config_from_env,
     event_body,
@@ -321,9 +320,12 @@ class GoogleCalendarSyncRuntimeTests(unittest.TestCase):
         config = config_from_env(settings)
         self.assertEqual(config.leave_calendar_id, "new-nonwork-calendar")
 
-        save_google_calendar_sync_settings({"nonwork_calendar_id": OLD_LEAVE_CALENDAR_ID})
+        # partial patch：淨係帶一個欄，其餘保留
+        save_google_calendar_sync_settings({"nonwork_calendar_id": ""})
         config = config_from_env(settings)
         self.assertEqual(config.leave_calendar_id, "")
+        self.assertTrue(config.enabled)
+        self.assertFalse(config.dry_run)
 
     def test_env_flags_do_not_override_saved_toggle(self):
         settings = get_settings()

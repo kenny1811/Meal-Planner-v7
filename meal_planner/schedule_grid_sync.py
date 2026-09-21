@@ -35,23 +35,21 @@ class ScheduleGridNotFound(LookupError):
 
 _TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 _TRAILING_DURATION_RE = re.compile(r"\s+\d{1,3}$")
-_SCHEDULE_GRID_DATE_ONLY_RE = re.compile(r"^\s*(\d{4}-\d{2}-\d{2}|(\d{1,2})/(\d{1,2})/(\d{4}))\s*$")
+# 生效日期兩種寫法：ISO "2026-06-17" 或 "17/6/2026"（日/月/年）。
+_SCHEDULE_GRID_DATE_RE = re.compile(r"^\s*(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})/(\d{1,2})/(\d{4}))\s*$")
 SCHEDULE_GRID_HEADER = ["更碼", "時間", "內容", "時長", "生效日期", "停用"]
 _BLANK_EFFECTIVE_DATE_SENTINEL = "0001-01-01"
 
 
 def _parse_date_iso(raw: str) -> str:
-    text = raw.strip()
-    if not text:
+    m = _SCHEDULE_GRID_DATE_RE.match(raw)
+    if not m:
         return ""
-    if _SCHEDULE_GRID_DATE_ONLY_RE.fullmatch(text):
-        m = re.match(r"^\s*(\d{4})-(\d{2})-(\d{2})\s*$", text)
-        if m:
-            return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
-        m = re.match(r"^\s*(\d{1,2})/(\d{1,2})/(\d{4})\s*$", text)
-        if m:
-            return f"{int(m.group(3)):04d}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
-    return ""
+    if m.group(1):
+        year, month, day = m.group(1), m.group(2), m.group(3)
+    else:
+        day, month, year = m.group(4), m.group(5), m.group(6)
+    return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
 
 
 def normalize_schedule_grid_effective_date(raw: Any) -> str:
@@ -134,6 +132,7 @@ def check_roster_codes_against_schedule_grid(roster_rows: list[Any]) -> dict[str
 def _next_workday_from(
     start: date,
     roster_map: dict[tuple[int, int], Any],
+    code_defs: list[Any],
     *,
     max_days: int = 365,
 ) -> tuple[date, str] | tuple[None, None]:
@@ -141,7 +140,7 @@ def _next_workday_from(
     for _ in range(max_days + 1):
         month_map = roster_map.get((current.year, current.month))
         code = code_for_date(month_map, current) if month_map else None
-        if code and is_work_day(roster_code_defs(), code):
+        if code and is_work_day(code_defs, code):
             return current, code
         current += timedelta(days=1)
     return None, None
@@ -163,6 +162,7 @@ def _latest_workday_schedule_before(
     start: date,
     roster_map: dict[tuple[int, int], Any],
     parsed_rows: list[Any],
+    code_defs: list[Any],
     *,
     max_days: int = 365,
 ) -> tuple[date, str, list[Any]] | tuple[None, None, list[Any]]:
@@ -170,7 +170,7 @@ def _latest_workday_schedule_before(
     for _ in range(max_days + 1):
         month_map = roster_map.get((current.year, current.month))
         code = code_for_date(month_map, current) if month_map else None
-        if code and is_work_day(roster_code_defs(), code):
+        if code and is_work_day(code_defs, code):
             candidate_rows = rows_for_roster(parsed_rows, code, current)
             if candidate_rows:
                 return current, code, candidate_rows
@@ -211,7 +211,7 @@ def _choose_schedule_grid_export_target(
     roster_rows: list[Any],
 ) -> tuple[str, str, str, list[Any]] | None:
     now = datetime.now(ZoneInfo(timezone))
-    now_minutes = now.hour * 60 + now.minute + (1440 if now.hour < 6 else 0)  # 30 小時制
+    now_minutes = minutes_30h(now)  # 30 小時制
     today = business_date(now)  # 00:00–05:59 仍係前一日：凌晨仲返緊嗰更就要出嗰日嘅行位表
     parsed_rows = load_schedule_rows_from_rows(rows)
     if not parsed_rows:
@@ -220,16 +220,18 @@ def _choose_schedule_grid_export_target(
     roster_map = roster_map_from_sheet_rows(roster_rows)
     if not roster_map:
         return None
+    code_defs = roster_code_defs()  # 讀一次就夠，唔好喺逐日 loop 入面每日開一次 DB
 
     # 唔可以跳過「有更但行位表冇對應更碼」嗰日：寧願俾上層報「搵唔到 X 行位表」，
     # 都好過靜靜雞攞咗第二日嘅行位表落手機。所以呢度淨係按更表揀日子，
     # 行位表配唔到就照返個空 rows 上去。
-    candidate_date, code = _next_workday_from(today, roster_map)
+    candidate_date, code = _next_workday_from(today, roster_map, code_defs)
     if candidate_date is None or not code:
         candidate_date, code, candidate_rows = _latest_workday_schedule_before(
             today - timedelta(days=1),
             roster_map,
             parsed_rows,
+            code_defs,
         )
         if candidate_date is None or not code or not candidate_rows:
             return None
@@ -239,7 +241,7 @@ def _choose_schedule_grid_export_target(
     if candidate_date == today and candidate_rows:
         _, max_time = _schedule_day_minutes(candidate_rows)
         if max_time >= 0 and now_minutes > max_time:
-            next_date, next_code = _next_workday_from(candidate_date + timedelta(days=1), roster_map)
+            next_date, next_code = _next_workday_from(candidate_date + timedelta(days=1), roster_map, code_defs)
             if next_date is None or not next_code:
                 return None
             candidate_date = next_date
@@ -247,41 +249,6 @@ def _choose_schedule_grid_export_target(
             candidate_rows = rows_for_roster(parsed_rows, code, candidate_date)
 
     return candidate_date.isoformat(), str(code), _schedule_grid_effective_iso(candidate_rows), candidate_rows
-
-
-def rows_for_dates(
-    rows: list[list[Any]],
-    dates: set[str],
-    imported_codes: set[str],
-) -> list[list[Any]]:
-    if not dates or not imported_codes:
-        return []
-    return [
-        row for row in rows[1:]
-        if isinstance(row, (list, tuple))
-        and (
-            (normalize_schedule_grid_effective_date(row[4]) if len(row) >= 5 else "")
-            in dates
-        )
-        and (
-            ("" if row[0] is None else str(row[0]).strip()) in imported_codes
-        )
-    ]
-
-
-def extract_schedule_grid_effective_dates(imported_rows: list[list[Any]]) -> set[str]:
-    if not isinstance(imported_rows, list):
-        return set()
-
-    versions: set[str] = set()
-    for row in imported_rows[1:]:
-        if not isinstance(row, (list, tuple)) or len(row) < 5:
-            continue
-        effective = normalize_schedule_grid_effective_date(row[4])
-        if effective:
-            versions.add(effective)
-
-    return versions
 
 
 def collect_schedule_grid_import_codes(rows: list[list[Any]]) -> set[str]:
@@ -350,12 +317,17 @@ def merge_schedule_grid_rows_for_import(
     imported_rows: list[list[Any]],
     imported_dates: set[str],
     imported_codes: set[str],
-) -> list[list[Any]]:
+) -> tuple[list[list[Any]], int]:
+    """電話推上嚟嘅行位表併入現有表：同更碼 + 同生效日期嘅舊行換走，其餘保留。
+
+    回 (合併後 rows, 換走咗幾多行)。
+    """
     existing = existing_rows if isinstance(existing_rows, list) else []
     if not imported_dates:
-        return imported_rows
+        return imported_rows, 0
 
     kept_rows: list[list[Any]] = []
+    replaced = 0
     for row in existing[1:] if isinstance(existing, list) and len(existing) > 1 else []:
         if not isinstance(row, (list, tuple)) or len(row) < 5:
             effective = ""
@@ -363,12 +335,13 @@ def merge_schedule_grid_rows_for_import(
             effective = normalize_schedule_grid_effective_date(row[4])
         code = ("" if len(row) <= 0 or row[0] is None else str(row[0]).strip())
         if imported_codes and effective in imported_dates and code in imported_codes:
+            replaced += 1
             continue
         kept_rows.append(list(row))
     merged = [SCHEDULE_GRID_HEADER[:]]
     merged.extend(kept_rows)
     merged.extend(imported_rows[1:])
-    return merged
+    return merged, replaced
 
 
 def _label_with_duration(content: str, duration: str) -> str:
@@ -379,26 +352,6 @@ def _label_with_duration(content: str, duration: str) -> str:
     if not duration or base == duration:
         return base
     return f"{base} {duration}".strip()
-
-
-def _exact_schedule_rows_for_code_on_day(
-    parsed_rows: list[Any],
-    roster_code: str,
-    target_day: date,
-) -> list[Any]:
-    code = str(roster_code or "").strip()
-    if not code:
-        return []
-    matched = [row for row in parsed_rows if grid_row_matches_roster(getattr(row, "code", ""), code)]
-    dated = [
-        row for row in matched
-        if getattr(row, "effective_from", None) is not None
-        and getattr(row, "effective_from") <= target_day
-    ]
-    if dated:
-        latest = max(getattr(row, "effective_from") for row in dated)
-        return [row for row in dated if getattr(row, "effective_from") == latest]
-    return [row for row in matched if getattr(row, "effective_from", None) is None]
 
 
 def build_schedule_grid_all_variants_export() -> dict[str, Any]:
@@ -446,7 +399,7 @@ def build_schedule_grid_all_variants_export() -> dict[str, Any]:
     variants: list[dict[str, Any]] = []
     for code in code_order:
         # 停用行都要送落電話——電話要見到佢先撳得返啟用；停用資訊喺 alarm 個 disabled 欄。
-        variant_rows = _exact_schedule_rows_for_code_on_day(parsed_rows, code, target_day)
+        variant_rows = rows_for_roster(parsed_rows, code, target_day, include_disabled=True)
         exported_rows = _schedule_rows_to_grid_rows(variant_rows)
         if not exported_rows:
             continue

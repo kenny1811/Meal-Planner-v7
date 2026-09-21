@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import closing
-from datetime import date, datetime, time
+from datetime import datetime
 import json
 import sqlite3
 from typing import Any
@@ -124,19 +124,6 @@ def _display_name_for_key(sheet_key: str) -> str:
     raise KeyError(sheet_key)
 
 
-def _cell_to_json_value(value: Any) -> Any:
-    if isinstance(value, datetime):
-        if value.time() == time(0, 0):
-            return value.date().isoformat()
-        return value.isoformat(sep=" ")
-    if isinstance(value, date):
-        return value.isoformat()
-    if isinstance(value, time):
-        # 30 小時制：凌晨 00:00–05:59 顯示做 24:00–29:59（存入去嘅文字都係咁）。
-        return f"{value.hour + 24 if value.hour < 6 else value.hour:02d}:{value.minute:02d}"
-    return value
-
-
 def _has_sheet_rows(conn: sqlite3.Connection, sheet_key: str) -> bool:
     return (
         conn.execute(
@@ -185,10 +172,6 @@ def save_sheet_rows(
     # 更表/加班表/行位表等一改 → 即刻叫醒 duty scheduler 重新計劃。
     notify_change()
     return {"sheet_key": sheet_key, "updated_at": now, "row_count": len(clean_rows)}
-
-
-def _has_roster_code_definitions(conn: sqlite3.Connection) -> bool:
-    return conn.execute("SELECT 1 FROM roster_code_definitions LIMIT 1").fetchone() is not None
 
 
 def load_roster_code_definitions(settings: AppSettings | None = None) -> list[dict[str, Any]]:
