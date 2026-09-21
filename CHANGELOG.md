@@ -4,6 +4,12 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.11.31 — 22/09/2026 00:10
+- Dropped the /apkdl chunked-download page. It existed because the meshnet link dropped every
+  ~34 seconds on csl; measured tonight, SmarTone holds the tunnel with zero drops and Kenny is
+  cutting the csl line. Installing from the phone now goes through the in-app updater (tap the
+  title) or /apk.
+
 ## 7.11.30 — 21/09/2026 23:45
 - Google Calendar and the roster-grid check now start from the business day, not the calendar day:
   working through the small hours no longer makes the shift you are still on count as "past" and
