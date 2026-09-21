@@ -4,6 +4,7 @@ import unittest
 from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
@@ -19,6 +20,7 @@ from meal_planner.google_calendar_sync import (
     _upsert_events,
 )
 from meal_planner.roster_codes import defs_from_rows
+from meal_planner.timeparse import business_date
 from meal_planner.settings import clear_settings_cache, get_settings
 from meal_planner.storage import save_google_calendar_sync_settings
 
@@ -58,6 +60,37 @@ class GoogleCalendarSyncPlanTests(unittest.TestCase):
         self.assertEqual([event.roster_code for event in plan.leave_events], ["SH08", "SB"])
         self.assertTrue(plan.leave_events[0].all_day)
         self.assertEqual(plan.leave_events[0].summary, "SH08")
+
+    def test_early_morning_keeps_syncing_the_shift_that_started_yesterday(self):
+        """30 小時制：凌晨 02:00 仲係前一日，嗰更未完唔可以當佢過去。
+
+        sync_roster_to_google_calendar 個 from_date 由 business_date 嚟（2026-09-21
+        Kenny 指示改嘅）。用月曆日嘅話，02:00 已經跳咗去 06-02，06-01 嗰更會被
+        `before_sync_start` 剔走，Google Calendar 就會少咗你返緊嗰更。
+        """
+        two_am = datetime(2026, 6, 2, 2, 0, tzinfo=ZoneInfo("Asia/Hong_Kong"))
+        rows = grid_rows(("TSB", "22:00", "29:00"))
+        roster_rows = [["2026年6月 1 TSB 2 WL21"]]
+
+        plan = build_roster_calendar_plan(
+            roster_rows,
+            rows,
+            roster_code_defs=CODE_DEFS,
+            from_date=business_date(two_am),
+        )
+
+        self.assertEqual([e.roster_date for e in plan.work_events], [date(2026, 6, 1)])
+        self.assertNotIn("before_sync_start", [s.get("reason") for s in plan.skipped])
+
+        # 對照：用月曆日（舊寫法）會剔走 06-01 嗰更
+        calendar_day = build_roster_calendar_plan(
+            roster_rows,
+            rows,
+            roster_code_defs=CODE_DEFS,
+            from_date=two_am.date(),
+        )
+        self.assertEqual(calendar_day.work_events, [])
+        self.assertIn("before_sync_start", [s.get("reason") for s in calendar_day.skipped])
 
     def test_mtr_door_rows_set_work_event_location(self):
         roster_rows = [["2026年6月 1 TSB 2 Pen 3 Zzz"]]

@@ -155,14 +155,25 @@ public class AlarmActivity extends Activity {
                 .apply();
     }
 
+    /**
+     * 手錶嗰下 dismiss 係咪熄緊我呢隻鬧鐘。
+     *
+     * <p>一定要 id 夾到先算（2026-09-21 Kenny 指示）。以前 id 一有一冇就退返去
+     * 「三十秒內就當係」，結果：你喺手錶熄咗 07:00，07:01 第二隻響，佢仲喺三十秒
+     * 窗入面，就會自己收聲 —— 你根本未見過第二隻。而家夾唔到就照響，等你自己撳。
+     *
+     * <p>手錶送 dismiss 一路都帶 id（WatchAlarmActivity.alarmId()），電話開鬧鐘畫面
+     * 亦一定帶 id（AlarmScheduler / AlarmAlertService），所以正常情況兩邊都有得對。
+     */
     private boolean shouldDismissFor(String dismissAlarmId, long sentAtMillis) {
         String id = dismissAlarmId == null ? "" : dismissAlarmId.trim();
         String myId = myAlarmId();
-        if (!id.isEmpty() && !myId.isEmpty()) {
-            return id.equals(myId);
+        if (id.isEmpty() || myId.isEmpty()) {
+            DiagLog.log(this, "watch dismiss ignored: no id to match (theirs='"
+                    + id + "' mine='" + myId + "')");
+            return false;
         }
-        long now = System.currentTimeMillis();
-        return sentAtMillis > 0L && Math.abs(now - sentAtMillis) < WATCH_DISMISS_VALID_MS;
+        return id.equals(myId);
     }
 
     private String myAlarmId() {
@@ -170,6 +181,13 @@ public class AlarmActivity extends Activity {
         return id == null ? "" : id.trim();
     }
 
+    /**
+     * 開畫面之前，手錶係咪啱啱已經熄咗<b>同一隻</b>鬧鐘。
+     *
+     * <p>個三十秒窗係為咗趕時間差：手錶嗰個訊息可能喺畫面開之前就到咗，冇呢個記錄
+     * 就會落空，電話照響，要撳兩次。但一定要 id 夾到先收聲（2026-09-21 Kenny 指示）
+     * —— 三十秒內響起嘅<b>另一隻</b>鬧鐘要繼續響，等你自己 dismiss。
+     */
     private boolean hasRecentWatchDismiss() {
         long at = getSharedPreferences(PREFS, MODE_PRIVATE).getLong(KEY_WATCH_DISMISS_AT, 0L);
         long now = System.currentTimeMillis();
@@ -178,7 +196,10 @@ public class AlarmActivity extends Activity {
         }
         String dismissedId = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_WATCH_DISMISS_ID, "");
         String myId = myAlarmId();
-        return dismissedId.isEmpty() || myId.isEmpty() || dismissedId.equals(myId);
+        if (dismissedId.isEmpty() || myId.isEmpty()) {
+            return false;
+        }
+        return dismissedId.equals(myId);
     }
 
     private LinearLayout.LayoutParams weightedHeight(float weight) {

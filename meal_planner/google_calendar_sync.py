@@ -23,7 +23,7 @@ from meal_planner.schedule_grid import (
 )
 from meal_planner.atomic_io import write_text_atomic
 from meal_planner.settings import AppSettings
-from meal_planner.timeparse import slot_datetime
+from meal_planner.timeparse import business_date, slot_datetime
 
 
 GC_ACCOUNT_EMAIL = "kenny1811@gmail.com"
@@ -712,7 +712,8 @@ def sync_roster_to_google_calendar(
         leave_calendar_id=config.leave_calendar_id,
         wake_offset_hours=config.wake_offset_hours,
         time_zone=config.time_zone,
-        from_date=datetime.now(ZoneInfo(config.time_zone)).date(),
+        # 30 小時制：凌晨 00:00–05:59 仲係前一日，嗰更未完唔可以當過去（2026-09-21 Kenny 指示）
+        from_date=business_date(datetime.now(ZoneInfo(config.time_zone))),
     )
     result: dict[str, Any] = {
         "enabled": config.enabled,

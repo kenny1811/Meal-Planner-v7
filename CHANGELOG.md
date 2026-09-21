@@ -4,6 +4,13 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.11.30 — 21/09/2026 23:45
+- Google Calendar and the roster-grid check now start from the business day, not the calendar day:
+  working through the small hours no longer makes the shift you are still on count as "past" and
+  disappear from the calendar.
+- Phone app 7.6: dismissing on the watch only silences the same alarm. A second alarm going off
+  within 30 seconds keeps ringing until you dismiss it yourself.
+
 ## 7.11.29 — 21/09/2026 13:10
 - Phone app 7.5: disabled rows stay silent after a reboot / app update; the 05:00 / 05:30 daily import
   chain survives the process being killed; "today", cached-roster copies and the time editor follow the

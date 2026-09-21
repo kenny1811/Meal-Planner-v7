@@ -88,7 +88,8 @@ def check_roster_codes_against_schedule_grid(roster_rows: list[Any]) -> dict[str
     known_codes.discard("")
 
     code_defs = roster_code_defs(settings)
-    today = datetime.now(ZoneInfo(settings.dates.timezone)).date()
+    # 30 小時制：凌晨 00:00–05:59 仲係前一日，唔可以當嗰更已經過去（2026-09-21 Kenny 指示）
+    today = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
     grouped: dict[tuple[str, str], list[str]] = {}
     for (year, month), month_map in sorted(roster_map_from_sheet_rows(roster_rows).items()):
         for day, raw_code in sorted(month_map.day_to_code.items()):
