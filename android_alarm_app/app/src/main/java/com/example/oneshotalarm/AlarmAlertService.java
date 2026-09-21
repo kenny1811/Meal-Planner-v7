@@ -75,9 +75,15 @@ public class AlarmAlertService extends Service {
             return START_NOT_STICKY;
         }
 
-        String id = intent == null ? "" : intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_ID);
-        String label = intent == null ? "鬧鐘" : intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_LABEL);
-        long triggerAtMillis = intent == null ? 0L : intent.getLongExtra(AlarmScheduler.EXTRA_ALARM_TRIGGER_AT, 0L);
+        if (intent == null) {
+            // 唔用 START_STICKY：process 被殺後系統以 null intent 重啟，以前會用
+            // id="" label="鬧鐘響喇" 再震一輪——冇 alarm 資料就冇嘢好響，直接收工。
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        String id = intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_ID);
+        String label = intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_LABEL);
+        long triggerAtMillis = intent.getLongExtra(AlarmScheduler.EXTRA_ALARM_TRIGGER_AT, 0L);
         if (label == null || label.trim().isEmpty()) {
             label = "鬧鐘響喇";
         }
@@ -87,7 +93,7 @@ public class AlarmAlertService extends Service {
         acquireWakeLock();
         startStrongVibration();
         startPocketGuard(id, label, triggerAtMillis);
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     /**

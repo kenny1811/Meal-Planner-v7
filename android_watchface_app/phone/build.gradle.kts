@@ -11,8 +11,9 @@ android {
         applicationId = "com.kenny.watchface.wear"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        // 版本只改 versionName 一行；versionCode 自動 = major*100 + minor（1.1 → 101）
+        versionName = "1.1"
+        versionCode = versionName!!.split(".").let { it[0].toInt() * 100 + it[1].toInt() }
     }
 }
 

@@ -61,23 +61,7 @@ class DutyReportView {
         renderLoading();
         final String path = "/api/duty-report/plan"
                 + (viewDate.isEmpty() ? "" : "?date_iso=" + viewDate);
-        new Thread(() -> {
-            try {
-                String body = ApiClient.request(activity, "GET", path, null, HTTP_READ_TIMEOUT_MS);
-                JSONObject parsed = new JSONObject(body);
-                activity.runOnUiThread(() -> {
-                    plan = parsed;
-                    loading = false;
-                    render();
-                });
-            } catch (Exception e) {
-                activity.runOnUiThread(() -> {
-                    loading = false;
-                    lastError = "Cannot reach PC: " + e.getMessage();
-                    render();
-                });
-            }
-        }, "duty-report-fetch").start();
+        requestPlan("GET", path, null, "duty-report-fetch", "Cannot reach PC: ");
     }
 
     private void postJson(String path, JSONObject payload, String busyText) {
@@ -87,23 +71,22 @@ class DutyReportView {
         loading = true;
         lastError = "";
         Toast.makeText(activity, busyText, Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            try {
-                String body = ApiClient.request(activity, "POST", path, payload.toString(), HTTP_READ_TIMEOUT_MS);
-                JSONObject parsed = new JSONObject(body);
-                activity.runOnUiThread(() -> {
+        requestPlan("POST", path, payload, "duty-report-post", "Action failed: ");
+    }
+
+    /** 標準一款：成功就 plan＝結果、loading 完、重畫；失敗就出 lastError 重畫。 */
+    private void requestPlan(String method, String path, JSONObject payload, String threadName, String errorPrefix) {
+        ui.request(method, path, payload, HTTP_READ_TIMEOUT_MS, threadName,
+                parsed -> {
                     plan = parsed;
                     loading = false;
                     render();
-                });
-            } catch (Exception e) {
-                activity.runOnUiThread(() -> {
+                },
+                e -> {
                     loading = false;
-                    lastError = "Action failed: " + e.getMessage();
+                    lastError = errorPrefix + e.getMessage();
                     render();
                 });
-            }
-        }, "duty-report-post").start();
     }
 
     private JSONObject overridePayload() {
@@ -590,16 +573,9 @@ class DutyReportView {
             return;
         }
         loading = true;
-        new Thread(() -> {
-            try {
-                String body = ApiClient.request(
-                        activity,
-                        "GET",
-                        "/api/duty-report/plan" + (target.isEmpty() ? "" : "?date_iso=" + target),
-                        null,
-                        HTTP_READ_TIMEOUT_MS);
-                JSONObject parsed = new JSONObject(body);
-                activity.runOnUiThread(() -> {
+        ui.request("GET", "/api/duty-report/plan" + (target.isEmpty() ? "" : "?date_iso=" + target),
+                null, HTTP_READ_TIMEOUT_MS, "duty-report-shift",
+                parsed -> {
                     loading = false;
                     // 未有更碼嘅日子（更表未出）唔入去。
                     if ("none".equals(parsed.optString("source", ""))) {
@@ -609,148 +585,35 @@ class DutyReportView {
                     viewDate = target;
                     plan = parsed;
                     render();
-                });
-            } catch (Exception e) {
-                activity.runOnUiThread(() -> {
+                },
+                e -> {
                     loading = false;
                     Toast.makeText(activity, "Cannot reach PC: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
-            }
-        }, "duty-report-shift").start();
     }
 
     // ---------------------------------------------------------------- dialogs
 
-    /** 大窗時間輸入（同行位表一致）：兩個大數字格，打滿自動跳；時 0–29（30小時制）。 */
+    /** 大窗時間輸入（PanelUi.showTimeDialog，同行位表一份）：時 0–29（30小時制）。 */
     private void showTimeDialog(JSONObject slot) {
         String slotId = slot.optString("id", "");
         String[] parts = slot.optString("time", "00:00").split(":");
-
-        LinearLayout box = new LinearLayout(activity);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(18), dp(4), dp(18), 0);
-
-        LinearLayout inputs = new LinearLayout(activity);
-        inputs.setOrientation(LinearLayout.HORIZONTAL);
-        inputs.setGravity(Gravity.CENTER);
-
-        EditText hourInput = timePartInput(parts.length > 0 ? parts[0] : "00");
-        EditText minuteInput = timePartInput(parts.length > 1 ? parts[1] : "00");
-        TextView colon = new TextView(activity);
-        colon.setText(":");
-        colon.setTextSize(34);
-        colon.setGravity(Gravity.CENTER);
-        colon.setTextColor(0xFF111827);
-
-        inputs.addView(hourInput, weighted(1f));
-        inputs.addView(colon, new LinearLayout.LayoutParams(dp(28), LinearLayout.LayoutParams.WRAP_CONTENT));
-        inputs.addView(minuteInput, weighted(1f));
-        box.addView(inputs, fullWidth());
-
-        LinearLayout labels = new LinearLayout(activity);
-        labels.setOrientation(LinearLayout.HORIZONTAL);
-        labels.setGravity(Gravity.CENTER);
-        labels.addView(timePartLabel("Hour (0-29)"), weighted(1f));
-        labels.addView(timePartLabel(""), new LinearLayout.LayoutParams(dp(28), LinearLayout.LayoutParams.WRAP_CONTENT));
-        labels.addView(timePartLabel("Minute"), weighted(1f));
-        box.addView(labels, fullWidth());
-
-        hourInput.addTextChangedListener(new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (digitsOnly(s).length() >= 2) {
-                    minuteInput.requestFocus();
-                    minuteInput.selectAll();
-                }
-            }
-            @Override public void afterTextChanged(android.text.Editable s) {}
-        });
-        minuteInput.addTextChangedListener(new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (digitsOnly(s).length() >= 2) {
-                    hideKeyboard(minuteInput);
-                }
-            }
-            @Override public void afterTextChanged(android.text.Editable s) {}
-        });
-
-        AlertDialog dialog = new AlertDialog.Builder(activity)
-                .setTitle("Edit time (original " + slot.optString("original_time", "") + ")")
-                .setView(box)
-                .setNegativeButton("Cancel", null)
-                .setNeutralButton("Restore original", (d, w) -> postSlotPatch(slotId, "time", ""))
-                .setPositiveButton("OK", null)
-                .create();
-        dialog.setOnShowListener(d -> {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                int hour = parseTwoDigit(hourInput, -1);
-                int minute = parseTwoDigit(minuteInput, -1);
-                if (hour < 0 || hour > 29 || minute < 0 || minute > 59) {
-                    Toast.makeText(activity, "00:00 - 29:59 (24-29 = next-day early morning)", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                postSlotPatch(slotId, "time", String.format(java.util.Locale.US, "%02d%02d", hour, minute));
-                dialog.dismiss();
-            });
-            hourInput.requestFocus();
-            hourInput.selectAll();
-            hourInput.postDelayed(() -> {
-                android.view.inputmethod.InputMethodManager imm =
-                        (android.view.inputmethod.InputMethodManager) activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-                if (imm != null) {
-                    imm.showSoftInput(hourInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
-                }
-            }, 180);
-        });
-        dialog.show();
+        ui.showTimeDialog(
+                "Edit time (original " + slot.optString("original_time", "") + ")",
+                parseIntOr(parts.length > 0 ? parts[0] : "", 0),
+                parseIntOr(parts.length > 1 ? parts[1] : "", 0),
+                "Restore original",
+                () -> postSlotPatch(slotId, "time", ""),
+                (hour, minute) -> postSlotPatch(
+                        slotId, "time", String.format(java.util.Locale.US, "%02d%02d", hour, minute))
+        );
     }
 
-    private EditText timePartInput(String value) {
-        EditText input = new EditText(activity);
-        input.setText(value);
-        input.setTextSize(42);
-        input.setGravity(Gravity.CENTER);
-        input.setSelectAllOnFocus(true);
-        input.setSingleLine(true);
-        input.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(2)});
-        input.setInputType(InputType.TYPE_CLASS_NUMBER);
-        input.setPadding(dp(10), dp(8), dp(10), dp(8));
-        return input;
-    }
-
-    private TextView timePartLabel(String text) {
-        TextView label = new TextView(activity);
-        label.setText(text);
-        label.setTextSize(12);
-        label.setTextColor(0xFF6B7280);
-        label.setGravity(Gravity.CENTER);
-        label.setTypeface(regularTypeface);
-        label.setPadding(0, dp(4), 0, 0);
-        return label;
-    }
-
-    private static String digitsOnly(CharSequence s) {
-        return String.valueOf(s == null ? "" : s).replaceAll("\\D+", "");
-    }
-
-    private static int parseTwoDigit(EditText input, int fallback) {
+    private static int parseIntOr(String raw, int fallback) {
         try {
-            String raw = digitsOnly(input.getText());
-            if (raw.isEmpty()) {
-                return fallback;
-            }
-            return Integer.parseInt(raw);
+            return Integer.parseInt(raw.trim());
         } catch (NumberFormatException e) {
             return fallback;
-        }
-    }
-
-    private void hideKeyboard(EditText input) {
-        android.view.inputmethod.InputMethodManager imm =
-                (android.view.inputmethod.InputMethodManager) activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-        if (imm != null) {
-            imm.hideSoftInputFromWindow(input.getWindowToken(), 0);
         }
     }
 

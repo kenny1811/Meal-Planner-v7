@@ -4,6 +4,15 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.11.29 — 21/09/2026 13:10
+- Phone app 7.5: disabled rows stay silent after a reboot / app update; the 05:00 / 05:30 daily import
+  chain survives the process being killed; "today", cached-roster copies and the time editor follow the
+  30-hour clock (hours 24-29 accepted); "Watch OFF" really stops the watch ringing; deleting the last
+  row no longer wipes the meal cache; no more /health polling after the app is closed.
+- Watch app 7.5: schedule tile dims past rows correctly after midnight, prev/next skip disabled rows,
+  duplicate dismiss messages are ignored, and the app no longer kills its own process after an alarm.
+- Watch face 7.2: same look, rebuilt with colour transforms (2177 -> 487 lines); companion apps 1.1.
+
 ## 7.11.28 — 21/09/2026 13:20
 - Maint panel: if the remembered sheet is gone, the first sheet opens instead of an empty panel.
 - Leaving Typhoon via any sidebar entry (Maint sheets, custom menus) now saves the typhoon state.

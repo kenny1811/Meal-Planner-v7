@@ -13,11 +13,10 @@ import com.google.android.gms.wearable.Wearable;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 
 final class WatchBridge {
     private static final String TAG = "OneShotWatchBridge";
@@ -55,29 +54,43 @@ final class WatchBridge {
                 .addOnFailureListener(e -> Log.e(TAG, "Send dismiss data to watch failed", e));
     }
 
+    /**
+     * 推行位表上錶（雙通道：data item 捱得過 Doze，message 快）。
+     * 「手錶OFF」嗰陣送空表——手錶自己按呢份表排鬧鐘，空表＝真係唔響；
+     * 以前 OFF 淨係唔轉發 dismiss，手錶照響，個掣名係誤導。
+     */
     static void sendTileState(Context context) {
         long now = System.currentTimeMillis();
-        AlarmStore.PrevNext pair = AlarmStore.findPrevNext(context, now);
+        boolean watchEnabled = AlarmStore.isWatchAlarmEnabled(context);
+        AlarmStore.PrevNext pair = watchEnabled
+                ? AlarmStore.findPrevNext(context, now)
+                : new AlarmStore.PrevNext(null, 0L, null, 0L);
+        JSONArray scheduleItems = watchEnabled ? buildScheduleItems(context) : new JSONArray();
+
+        JSONObject fields = new JSONObject();
+        try {
+            fields.put("updated_at", now);
+            fields.put("plan_date", watchEnabled ? AlarmStore.getPlanDate(context) : "");
+            fields.put("roster_code", watchEnabled ? AlarmStore.getRosterCode(context) : "");
+            putAlarm(fields, "prev", pair.prev, pair.prevAt);
+            putAlarm(fields, "next", pair.next, pair.nextAt);
+        } catch (Exception e) {
+            Log.e(TAG, "Build tile state failed", e);
+            return;
+        }
+
         PutDataMapRequest request = PutDataMapRequest.create(TILE_STATE_PATH);
         DataMap map = request.getDataMap();
-        map.putLong("updated_at", now);
-        map.putString("plan_date", AlarmStore.getPlanDate(context));
-        map.putString("roster_code", AlarmStore.getRosterCode(context));
-        putAlarm(map, "prev", pair.prev, pair.prevAt);
-        putAlarm(map, "next", pair.next, pair.nextAt);
-        JSONArray scheduleItems = buildScheduleItems(context);
+        copyFields(fields, map);
         map.putString("schedule_items_json", scheduleItems.toString());
         Wearable.getDataClient(context)
                 .putDataItem(request.asPutDataRequest().setUrgent())
                 .addOnSuccessListener(item -> Log.d(TAG, "Sent tile state to watch"))
                 .addOnFailureListener(e -> Log.e(TAG, "Send tile state to watch failed", e));
-        JSONObject payload = new JSONObject();
+
+        JSONObject payload;
         try {
-            payload.put("updated_at", now);
-            payload.put("plan_date", AlarmStore.getPlanDate(context));
-            payload.put("roster_code", AlarmStore.getRosterCode(context));
-            putAlarm(payload, "prev", pair.prev, pair.prevAt);
-            putAlarm(payload, "next", pair.next, pair.nextAt);
+            payload = new JSONObject(fields.toString());
             payload.put("schedule_items", scheduleItems);
         } catch (Exception e) {
             Log.e(TAG, "Build tile state message failed", e);
@@ -87,6 +100,20 @@ final class WatchBridge {
         Wearable.getNodeClient(context).getConnectedNodes()
                 .addOnSuccessListener(nodes -> sendToNodes(context, nodes, TILE_STATE_PATH, bytes))
                 .addOnFailureListener(e -> Log.e(TAG, "Get watch nodes for tile state failed", e));
+    }
+
+    /** JSON 欄位（long／String）逐個抄入 DataMap——prev/next 只寫一份，唔使兩邊各抄。 */
+    private static void copyFields(JSONObject fields, DataMap map) {
+        Iterator<String> keys = fields.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            Object value = fields.opt(key);
+            if (value instanceof Number) {
+                map.putLong(key, ((Number) value).longValue());
+            } else if (value != null) {
+                map.putString(key, String.valueOf(value));
+            }
+        }
     }
 
     private static byte[] dismissPayload(String alarmId) {
@@ -138,31 +165,14 @@ final class WatchBridge {
         return rows;
     }
 
-    private static void putAlarm(DataMap map, String prefix, JSONObject alarm, long triggerAt) {
-        if (alarm == null || triggerAt <= 0L) {
-            map.putString(prefix + "_time", "--:--");
-            map.putString(prefix + "_date", "");
-            map.putString(prefix + "_label", "沒有資料");
-            map.putLong(prefix + "_at", 0L);
-            return;
-        }
-        map.putString(prefix + "_time", Clock30.format(triggerAt));
-        map.putString(prefix + "_date", new SimpleDateFormat("dd/MM EEE", Locale.getDefault()).format(triggerAt));
-        map.putLong(prefix + "_at", triggerAt);
-        String label = alarm.optString("label", "").trim();
-        map.putString(prefix + "_label", label.isEmpty() ? "鬧鐘" : label);
-    }
-
     private static void putAlarm(JSONObject json, String prefix, JSONObject alarm, long triggerAt) throws Exception {
         if (alarm == null || triggerAt <= 0L) {
             json.put(prefix + "_time", "--:--");
-            json.put(prefix + "_date", "");
             json.put(prefix + "_label", "沒有資料");
             json.put(prefix + "_at", 0L);
             return;
         }
         json.put(prefix + "_time", Clock30.format(triggerAt));
-        json.put(prefix + "_date", new SimpleDateFormat("dd/MM EEE", Locale.getDefault()).format(triggerAt));
         json.put(prefix + "_at", triggerAt);
         String label = alarm.optString("label", "").trim();
         json.put(prefix + "_label", label.isEmpty() ? "鬧鐘" : label);
@@ -180,6 +190,5 @@ final class WatchBridge {
                     .addOnFailureListener(e -> Log.e(TAG, "Send message to watch failed: " + path, e));
         }
     }
-
 
 }

@@ -12,16 +12,13 @@ android {
         minSdk = 33
         targetSdk = 36
         // 版本只改 versionName 一行；versionCode 自動 = major*100 + minor（7.0 → 700）
-        versionName = "7.0"
+        versionName = "7.2"
         versionCode = versionName!!.split(".").let { it[0].toInt() * 100 + it[1].toInt() }
     }
 
+    // hasCode="false" in the manifest: there is no bytecode to minify, so no R8 config here.
     buildTypes {
-        debug {
-            isMinifyEnabled = true
-        }
         release {
-            isMinifyEnabled = true
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
         }

@@ -99,7 +99,7 @@ public class NextAlarmProvider extends ContentProvider {
     private Cursor queryRoster() {
         MatrixCursor cursor = new MatrixCursor(new String[]{COL_DATE, COL_CODE});
         SharedPreferences prefs = getContext()
-                .getSharedPreferences("alarm_store", Context.MODE_PRIVATE);
+                .getSharedPreferences(AlarmStore.PREFS, Context.MODE_PRIVATE);
 
         List<String> dates = new ArrayList<>();
         for (String key : prefs.getAll().keySet()) {
@@ -130,7 +130,7 @@ public class NextAlarmProvider extends ContentProvider {
         return cursor;
     }
 
-    private static final String MEAL_PREFIX = "meal_plan_json_";
+    private static final String MEAL_PREFIX = AlarmStore.KEY_MEAL_PLAN_JSON_BY_DATE_PREFIX;
 
     @Override
     public String getType(Uri uri) {

@@ -8,10 +8,7 @@ import android.content.IntentFilter;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.PowerManager;
-import android.os.Process;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
@@ -25,13 +22,11 @@ public class WatchAlarmActivity extends Activity {
     static final String EXTRA_ALARM_ID = "alarm_id";
     static final String EXTRA_TIME = "time";
     static final String EXTRA_LABEL = "label";
-    static final String EXTRA_DISMISS = "dismiss";
     static final String ACTION_DISMISS_LOCAL = "com.example.oneshotalarm.watch.ACTION_DISMISS_LOCAL";
 
     private boolean dismissed = false;
     private boolean receiverRegistered = false;
     private PowerManager.WakeLock wakeLock;
-    private final Handler handler = new Handler(Looper.getMainLooper());
     private final BroadcastReceiver dismissReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -45,12 +40,6 @@ public class WatchAlarmActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (getIntent().getBooleanExtra(EXTRA_DISMISS, false)) {
-            dismissed = true;
-            stopAlert();
-            finishAndExitSoon();
-            return;
-        }
         turnScreenOn();
         acquireWakeLock();
         buildUi();
@@ -108,11 +97,6 @@ public class WatchAlarmActivity extends Activity {
     protected void onNewIntent(android.content.Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (intent != null && intent.getBooleanExtra(EXTRA_DISMISS, false)) {
-            dismissed = true;
-            stopAlert();
-            finishAndExitSoon();
-        }
     }
 
     private void turnScreenOn() {
@@ -241,6 +225,10 @@ public class WatchAlarmActivity extends Activity {
         return alarmId == null ? "" : alarmId;
     }
 
+    /**
+     * 收工就 finish——唔好 killProcess：同一個 process 仲有 WearAlarmListenerService
+     * 同 6 個 complication service，正傳緊嘅 dismiss／APK 會跟住死。
+     */
     private void finishAndExitSoon() {
         releaseWakeLock();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -248,7 +236,6 @@ public class WatchAlarmActivity extends Activity {
         } else {
             finish();
         }
-        handler.postDelayed(() -> Process.killProcess(Process.myPid()), 2600);
     }
 
     private LinearLayout.LayoutParams wrapHeight() {

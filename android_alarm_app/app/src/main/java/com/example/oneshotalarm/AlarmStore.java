@@ -7,23 +7,19 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-
 final class AlarmStore {
-    private static final String PREFS = "alarm_store";
+    /** package-private：NextAlarmProvider 讀更碼要直接掃 prefs（唔再硬寫 "alarm_store"）。 */
+    static final String PREFS = "alarm_store";
     static final String DEFAULT_AUTO_SYNC_SERVER = "http://192.168.15.125:8765";
     // NordVPN Meshnet：出街（mobile data）時 LAN 到唔到，經 meshnet IP 直達 PC。
     static final String MESHNET_AUTO_SYNC_SERVER = "http://100.119.164.40:8765";
     private static final String KEY_ALARMS = "alarms_json";
     private static final String KEY_PLAN_DATE = "plan_date";
     private static final String KEY_ROSTER_CODE = "roster_code";
-    private static final String KEY_AUTO_SYNC_SERVER = "auto_sync_server_url";
-    private static final String KEY_MEAL_PLAN_TEXT = "meal_plan_text";
     private static final String KEY_MEAL_PLAN_JSON = "meal_plan_json";
     private static final String KEY_MEAL_PLAN_JSON_DATE = "meal_plan_json_date";
     private static final String KEY_MEAL_PLAN_JSON_VERSION = "meal_plan_json_version";
-    private static final String KEY_MEAL_PLAN_JSON_BY_DATE_PREFIX = "meal_plan_json_";
+    static final String KEY_MEAL_PLAN_JSON_BY_DATE_PREFIX = "meal_plan_json_";
     private static final String KEY_MEAL_PLAN_JSON_VERSION_BY_DATE_PREFIX = "meal_plan_json_version_";
     private static final String KEY_LAST_IMPORT_AT = "last_import_at_epoch_ms";
     private static final String KEY_WATCH_ALARM_ENABLED = "watch_alarm_enabled";
@@ -38,17 +34,7 @@ final class AlarmStore {
     private AlarmStore() {
     }
 
-    static void savePlan(Context context, JSONArray alarms, long cleanupAtMillis) {
-        savePlan(context, alarms, cleanupAtMillis, getPlanDate(context), getRosterCode(context));
-    }
-
-    static void savePlan(
-            Context context,
-            JSONArray alarms,
-            long cleanupAtMillis,
-            String planDate,
-            String rosterCode
-    ) {
+    static void savePlan(Context context, JSONArray alarms, String planDate, String rosterCode) {
         prefs(context).edit()
                 .putString(KEY_ALARMS, alarms == null ? "[]" : alarms.toString())
                 .putString(KEY_PLAN_DATE, planDate == null ? "" : planDate)
@@ -105,10 +91,6 @@ final class AlarmStore {
         prefs(context).edit().putBoolean(KEY_WATCH_ALARM_ENABLED, enabled).apply();
     }
 
-    static String getMealPlanText(Context context) {
-        return prefs(context).getString(KEY_MEAL_PLAN_TEXT, "");
-    }
-
     static void saveMealPlanJson(Context context, String dateIso, String json, String version) {
         String normalizedDate = normalizeDateKey(dateIso);
         SharedPreferences.Editor editor = prefs(context).edit()
@@ -131,28 +113,12 @@ final class AlarmStore {
         return prefs(context).getString(KEY_MEAL_PLAN_JSON_DATE, "");
     }
 
-    static String getMealPlanJsonVersion(Context context) {
-        return prefs(context).getString(KEY_MEAL_PLAN_JSON_VERSION, "");
-    }
-
     static String getMealPlanJsonForDate(Context context, String dateIso) {
         String normalizedDate = normalizeDateKey(dateIso);
         if (normalizedDate.isEmpty()) {
             return "";
         }
         return prefs(context).getString(KEY_MEAL_PLAN_JSON_BY_DATE_PREFIX + normalizedDate, "");
-    }
-
-    static String getMealPlanJsonVersionForDate(Context context, String dateIso) {
-        String normalizedDate = normalizeDateKey(dateIso);
-        if (normalizedDate.isEmpty()) {
-            return "";
-        }
-        return prefs(context).getString(KEY_MEAL_PLAN_JSON_VERSION_BY_DATE_PREFIX + normalizedDate, "");
-    }
-
-    static String getAutoSyncServerUrl(Context context) {
-        return DEFAULT_AUTO_SYNC_SERVER;
     }
 
     // 屋企 LAN 網段：淨係喺自己屋企個 router 先會派呢啲 IP（唔靠 Wi-Fi 名，唔使 location 權限）。
@@ -288,25 +254,17 @@ final class AlarmStore {
         NextAlarmProvider.notifyChanged(context);     // 響咗＝Prev／Next 都變
     }
 
+    /**
+     * 清走行位表 plan（alarms／plan_date／roster_code）。
+     * 餐單 cache、已下載嘅更碼 variants、last_import 一律唔郁——刪淨行位表最後一行
+     * 唔應該連餐單同更碼都陪葬。
+     */
     static void clear(Context context) {
-        SharedPreferences preferences = prefs(context);
-        SharedPreferences.Editor editor = preferences.edit()
+        prefs(context).edit()
                 .remove(KEY_ALARMS)
                 .remove(KEY_PLAN_DATE)
                 .remove(KEY_ROSTER_CODE)
-                .remove(KEY_MEAL_PLAN_TEXT)
-                .remove(KEY_MEAL_PLAN_JSON)
-                .remove(KEY_MEAL_PLAN_JSON_DATE)
-                .remove(KEY_MEAL_PLAN_JSON_VERSION)
-                .remove(KEY_SCHEDULE_GRID_VARIANTS)
-                .remove(KEY_LAST_IMPORT_AT);
-        for (String key : preferences.getAll().keySet()) {
-            if (key.startsWith(KEY_MEAL_PLAN_JSON_BY_DATE_PREFIX)
-                    || key.startsWith(KEY_MEAL_PLAN_JSON_VERSION_BY_DATE_PREFIX)) {
-                editor.remove(key);
-            }
-        }
-        editor.apply();
+                .apply();
         NextAlarmProvider.notifyChanged(context);
     }
 

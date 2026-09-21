@@ -25,10 +25,6 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
-
 public class ScheduleGridTileActivity extends Activity {
     private final Handler clockHandler = new Handler(Looper.getMainLooper());
     private HeaderView headerView;
@@ -96,8 +92,10 @@ public class ScheduleGridTileActivity extends Activity {
                         row.optString("time", "--:--"),
                         row.optString("content", "沒有資料"),
                         // 停用咗嘅行位同過咗鐘一樣暗色——錶面淨係睇，改要去電話／電腦。
+                        // 「過咗鐘」直接比 epoch（at <= now）：以前用 30h 分鐘同 0–23 時嘅 now 比，
+                        // 凌晨行位永遠唔 dim；plan_date 用日曆日比，凌晨成張表反而全 dim。
                         row.optBoolean("disabled", false)
-                                || isPastDisplayTime(row.optString("time", ""), row.optLong("at", 0L), now, planDate)
+                                || isPastDisplayTime(row.optLong("at", 0L), now)
                 );
             }
         }
@@ -193,13 +191,6 @@ public class ScheduleGridTileActivity extends Activity {
         root.addView(row, fixedRowParams());
     }
 
-    private LinearLayout.LayoutParams fullWidthParams() {
-        return new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-    }
-
     private LinearLayout.LayoutParams fixedRowParams() {
         return new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -225,35 +216,8 @@ public class ScheduleGridTileActivity extends Activity {
         }
     }
 
-    private boolean isPastDisplayTime(String time, long atMillis, long nowMillis, String planDate) {
-        int dateComparison = comparePlanDateToToday(planDate, nowMillis);
-        if (dateComparison < 0) {
-            return true;
-        }
-        if (dateComparison > 0) {
-            return false;
-        }
-        String clean = safe(time, "");
-        if (clean.matches("\\d{1,2}:\\d{2}")) {
-            String[] parts = clean.split(":");
-            int rowMinutes = Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1]);
-            Date now = new Date(nowMillis);
-            SimpleDateFormat hourFormat = new SimpleDateFormat("H", Locale.US);
-            SimpleDateFormat minuteFormat = new SimpleDateFormat("m", Locale.US);
-            int nowMinutes = Integer.parseInt(hourFormat.format(now)) * 60
-                    + Integer.parseInt(minuteFormat.format(now));
-            return rowMinutes <= nowMinutes;
-        }
+    private boolean isPastDisplayTime(long atMillis, long nowMillis) {
         return atMillis > 0L && atMillis <= nowMillis;
-    }
-
-    private int comparePlanDateToToday(String planDate, long nowMillis) {
-        String value = safe(planDate, "");
-        if (!value.matches("\\d{4}-\\d{2}-\\d{2}")) {
-            return 0;
-        }
-        String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(nowMillis));
-        return value.compareTo(today);
     }
 
     private String subtitle(String planDate, String rosterCode) {

@@ -1,0 +1,1473 @@
+package com.example.oneshotalarm;
+
+import android.app.Activity;
+import android.graphics.Typeface;
+import android.net.Uri;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 餐單 tab：日期列＋營養摘要＋逐餐卡＋米類備註＋AOD 掣＋Last update。
+ * 由 MainActivity 拆出嚟（以前同一個 class 三千幾行）；行為一模一樣，只係搬。
+ * 餐單 JSON 由電腦 /api/mobile-meal-plan 攞，本機 cache 逐日存（AlarmStore）。
+ */
+final class MealPlanView {
+
+    /** MainActivity 話俾我知而家係咪顯示緊餐單頁（唔係就唔好開 request／重試）。 */
+    interface PageCheck {
+        boolean isActive();
+    }
+
+    private static final int HTTP_READ_TIMEOUT_MS = 7000;
+    /** 撥停幾耐先開背景補拉（避免連撥幾下疊幾十個 request）。 */
+    private static final long MEAL_SWEEP_DEBOUNCE_MS = 700L;
+    /** 餐單攞唔到嘅自動重試梯級（毫秒）——期間照顯示 cache，通返自動填。 */
+    private static final long[] MEAL_RETRY_MS = new long[]{2000L, 5000L, 10000L};
+    private static final String NO_PLAN_TEXT = "未有餐單資料（等你電腦同步後會顯示）";
+
+    private final Activity activity;
+    private final PanelUi ui;
+    private final PageCheck pageCheck;
+    private final Typeface regularTypeface;
+    private final Typeface boldTypeface;
+
+    private TextView mealPlanView;
+    private TextView mealDateView;
+    private LinearLayout mealSummaryView;
+    private LinearLayout mealCardsView;
+    private Button aodToggleButton;
+    private TextView mealLastUpdateTitleView;
+    private TextView mealLastUpdateStatusView;
+
+    /** 撥動用：每撥一下 +1，舊嘅背景 sweep／過期 response 見到唔同就自己收手。 */
+    private volatile int mealFetchSeq = 0;
+    private final android.os.Handler mealSweepHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private final android.os.Handler mealRetryHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    /** 連續失敗次數：決定用 MEAL_RETRY_MS 邊一級。 */
+    private int mealRetryAttempt = 0;
+    // 以下狀態一律只喺 UI thread 寫（背景 thread 攞完嘢要 runOnUiThread 先改）。
+    private JSONObject mealPlanJson;
+    private String mealSelectedDate = "";
+    private String mealKnownLastDate = "";
+    private String mealExpandedKey = "";
+    private String mealFetchErrorText = "";
+    private long mealLastFetchAtMs = 0L;
+    private boolean mealFetchInFlight = false;
+    private boolean kitchenModeEnabled = true;
+
+    MealPlanView(Activity activity, LinearLayout container, Typeface regular, Typeface bold, PageCheck pageCheck) {
+        this.activity = activity;
+        this.pageCheck = pageCheck;
+        this.regularTypeface = regular != null ? regular : Typeface.DEFAULT;
+        this.boldTypeface = bold != null ? bold : Typeface.DEFAULT_BOLD;
+        this.ui = new PanelUi(activity, regular, bold);
+        buildUi(container);
+        applyAodState(false);
+    }
+
+    // ---------------------------------------------------------------- MainActivity 入口
+
+    /** 行位表 status 行「餐單：已連線／未連線」用。 */
+    boolean hasPlan() {
+        return mealPlanJson != null;
+    }
+
+    /** 每次返返嚟／撳返「餐單」都用返當時嘅 default 餐。 */
+    void resetExpanded() {
+        mealExpandedKey = "";
+    }
+
+    void loadFromStore() {
+        if (mealSelectedDate == null || mealSelectedDate.trim().isEmpty()) {
+            mealSelectedDate = Clock30.todayIso();
+        }
+        loadMealPlanJsonForSelectedDateFromStore();
+    }
+
+    void render() {
+        renderMealPage();
+    }
+
+    /** 顯示緊嗰日去電腦攞一次（onResume／轉入餐單頁）。 */
+    void refresh() {
+        ensureMealPlanLoaded();
+    }
+
+    void onPause() {
+        mealRetryHandler.removeCallbacksAndMessages(null);
+    }
+
+    // ---------------------------------------------------------------- UI 骨架
+
+    private void buildUi(LinearLayout mealSection) {
+        LinearLayout mealDateBar = new LinearLayout(activity);
+        mealDateBar.setOrientation(LinearLayout.HORIZONTAL);
+        mealDateBar.setGravity(Gravity.CENTER_VERTICAL);
+        mealDateBar.setPadding(0, 0, 0, 0);
+
+        mealDateView = new TextView(activity);
+        mealDateView.setTextSize(17);
+        mealDateView.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        mealDateView.setTextColor(0xFF064E2D);
+        mealDateView.setTypeface(boldTypeface);
+        mealDateView.setIncludeFontPadding(false);
+        mealDateView.setSingleLine(true);
+        mealDateView.setPadding(dp(6), 0, dp(6), 0);
+        mealDateView.setLayoutParams(weightedParams(1.8f));
+        mealDateBar.addView(mealDateView);
+
+        Button mealTodayButton = ui.bottomButton("今日");
+        mealTodayButton.setTextColor(0xFF0B3D5A);
+        mealTodayButton.setTypeface(boldTypeface);
+        mealTodayButton.setBackground(roundedBg(0xFFFFFFFF, 14, 0xFF7FB9D6, 1));
+        mealTodayButton.setOnClickListener(v -> setMealDate(Clock30.todayIso()));
+        LinearLayout.LayoutParams todayParams = new LinearLayout.LayoutParams(dp(64), dp(34));
+        todayParams.setMargins(dp(8), 0, 0, 0);
+        mealDateBar.addView(mealTodayButton, todayParams);
+
+        mealSection.addView(mealDateBar, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(40)
+        ));
+
+        mealPlanView = new TextView(activity);
+        mealPlanView.setTextSize(10);
+        mealPlanView.setTextColor(0xFF526D7A);
+        mealPlanView.setTypeface(regularTypeface);
+        mealPlanView.setLineSpacing(1.3f, 1.2f);
+        mealPlanView.setSingleLine(false);
+        mealPlanView.setPadding(dp(4), 0, dp(4), dp(3));
+        mealPlanView.setVisibility(View.GONE);
+        mealSection.addView(mealPlanView, fullWidthWrapHeight());
+
+        mealSummaryView = new LinearLayout(activity);
+        mealSummaryView.setOrientation(LinearLayout.VERTICAL);
+        mealSummaryView.setPadding(0, 0, 0, dp(3));
+        mealSection.addView(mealSummaryView, fullWidthWrapHeight());
+
+        mealCardsView = new LinearLayout(activity);
+        mealCardsView.setOrientation(LinearLayout.VERTICAL);
+        mealSection.addView(mealCardsView, fullWidthWrapHeight());
+
+        LinearLayout mealActionBar = new LinearLayout(activity);
+        mealActionBar.setOrientation(LinearLayout.HORIZONTAL);
+        mealActionBar.setGravity(Gravity.CENTER_VERTICAL);
+        mealActionBar.setPadding(0, 0, 0, 0);
+        aodToggleButton = ui.bottomButton("AOD OFF");
+        aodToggleButton.setTextSize(15);
+        aodToggleButton.setTypeface(boldTypeface);
+        aodToggleButton.setOnClickListener(v -> toggleKitchenMode());
+        mealActionBar.addView(aodToggleButton, new LinearLayout.LayoutParams(0, dp(38), 0.85f));
+
+        LinearLayout lastUpdateColumn = new LinearLayout(activity);
+        lastUpdateColumn.setOrientation(LinearLayout.VERTICAL);
+        lastUpdateColumn.setGravity(Gravity.CENTER_VERTICAL);
+        lastUpdateColumn.setPadding(dp(10), 0, 0, 0);
+        mealLastUpdateTitleView = new TextView(activity);
+        mealLastUpdateTitleView.setText("Last update");
+        mealLastUpdateTitleView.setTextSize(10);
+        mealLastUpdateTitleView.setTextColor(0xFF36505D);
+        mealLastUpdateTitleView.setTypeface(regularTypeface);
+        mealLastUpdateTitleView.setIncludeFontPadding(false);
+        mealLastUpdateTitleView.setGravity(Gravity.LEFT);
+        lastUpdateColumn.addView(mealLastUpdateTitleView, fullWidthWrapHeight());
+        mealLastUpdateStatusView = new TextView(activity);
+        mealLastUpdateStatusView.setTextSize(10);
+        mealLastUpdateStatusView.setTextColor(0xFF36505D);
+        mealLastUpdateStatusView.setTypeface(regularTypeface);
+        mealLastUpdateStatusView.setGravity(Gravity.LEFT);
+        mealLastUpdateStatusView.setIncludeFontPadding(false);
+        mealLastUpdateStatusView.setSingleLine(true);
+        mealLastUpdateStatusView.setLineSpacing(0f, 1.0f);
+        lastUpdateColumn.addView(mealLastUpdateStatusView, fullWidthWrapHeight());
+        LinearLayout.LayoutParams updateParams = new LinearLayout.LayoutParams(0, dp(38), 1.15f);
+        updateParams.setMargins(dp(8), 0, 0, 0);
+        mealActionBar.addView(lastUpdateColumn, updateParams);
+        LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(38)
+        );
+        mealSection.addView(mealActionBar, actionParams);
+    }
+
+    private String mealIcon(String meal) {
+        if ("早餐".equals(meal)) {
+            return "☀";
+        }
+        if ("午餐".equals(meal)) {
+            return "🍱";
+        }
+        if ("小食".equals(meal) || "加餐".equals(meal)) {
+            return "⏱";
+        }
+        if ("晚餐".equals(meal)) {
+            return "☾";
+        }
+        return "🍽";
+    }
+
+    private int iconColorForMeal(String meal) {
+        if ("早餐".equals(meal)) {
+            return 0xFFF59E0B;
+        }
+        if ("午餐".equals(meal)) {
+            return 0xFF15803D;
+        }
+        if ("小食".equals(meal) || "加餐".equals(meal)) {
+            return 0xFFD97706;
+        }
+        if ("晚餐".equals(meal)) {
+            return 0xFF0369A1;
+        }
+        return 0xFF064E2D;
+    }
+
+    private String foodIcon(String name) {
+        String text = name == null ? "" : name;
+        if (text.contains("飯") || text.contains("米") || text.contains("燕麥")) {
+            return "🍚";
+        }
+        if (text.contains("奶") || text.contains("豆奶") || text.contains("乳酪") || text.contains("乳")) {
+            return "🥛";
+        }
+        if (text.contains("蛋")) {
+            return "🥚";
+        }
+        if (text.contains("籽") || text.contains("亞麻") || text.contains("奇亞")) {
+            return "🌱";
+        }
+        if (text.contains("粉") || text.contains("膠原")) {
+            return "🥄";
+        }
+        if (text.contains("香蕉")) {
+            return "🍌";
+        }
+        if (text.contains("雞胸") || text.contains("雞")) {
+            return "🍗";
+        }
+        if (text.contains("西蘭花") || text.contains("菜") || text.contains("心")) {
+            return "🥦";
+        }
+        if (text.contains("油")) {
+            return "🫒";
+        }
+        if (text.contains("魚")) {
+            return "🐟";
+        }
+        if (text.contains("薯")) {
+            return "🍠";
+        }
+        if (text.contains("藍莓")) {
+            return "🫐";
+        }
+        return "🍽";
+    }
+
+    // ---------------------------------------------------------------- cache
+
+    private void loadMealPlanJsonForSelectedDateFromStore() {
+        String selectedDate = mealSelectedDate == null ? "" : mealSelectedDate.trim();
+        String raw = AlarmStore.getMealPlanJsonForDate(activity, selectedDate);
+        if ((raw == null || raw.trim().isEmpty()) && selectedDate.equals(AlarmStore.getMealPlanJsonDate(activity))) {
+            raw = AlarmStore.getMealPlanJson(activity);
+        }
+        mealPlanJson = null;
+        if (raw != null && !raw.trim().isEmpty()) {
+            try {
+                mealPlanJson = new JSONObject(raw);
+            } catch (JSONException ignored) {
+                mealPlanJson = null;
+            }
+        }
+    }
+
+    private String formatPlanDateWithRoster(String iso, JSONObject day) {
+        String text = Clock30.formatPlanDate(iso);
+        String roster = day == null ? "" : day.optString("roster_code", "").trim();
+        if (!roster.isEmpty()) {
+            text = (text + " " + roster).trim();
+        }
+        return text;
+    }
+
+    // ---------------------------------------------------------------- render
+
+    private void renderMealPage() {
+        if (mealDateView == null || mealSummaryView == null || mealCardsView == null) {
+            return;
+        }
+        if (mealSelectedDate == null || mealSelectedDate.trim().isEmpty()) {
+            mealSelectedDate = Clock30.todayIso();
+        }
+        mealDateView.setText(Clock30.formatPlanDate(mealSelectedDate));
+        mealSummaryView.removeAllViews();
+        mealCardsView.removeAllViews();
+
+        JSONObject day = mealPlanJson == null ? null : mealPlanJson.optJSONObject("day");
+        if (day == null) {
+            setMealPlanStatusText(mealFetchInFlight ? "連線電腦餐單中..." : NO_PLAN_TEXT, true);
+            updateMealLastUpdateStatus();
+            return;
+        }
+        mealDateView.setText(formatPlanDateWithRoster(mealSelectedDate, day));
+
+        String stalePlanCode = day.optString("stale_plan_code", "").trim();
+        if (mealFetchInFlight) {
+            setMealPlanStatusText("更新中...", true);
+        } else if (mealFetchErrorText != null && !mealFetchErrorText.trim().isEmpty()) {
+            setMealPlanStatusText(mealFetchErrorText.trim(), true);
+        } else if (!stalePlanCode.isEmpty()) {
+            setMealPlanStatusText("⚠ 更表已改，餐單內容仍按舊碼 " + stalePlanCode
+                    + " 生成——去電腦重新生成先會跟新碼", true);
+        } else {
+            setMealPlanStatusText("", false);
+        }
+        updateMealLastUpdateStatus();
+        renderMealSummary(day);
+        renderMealCards(day);
+    }
+
+    private void setMealPlanStatusText(String text, boolean visible) {
+        if (mealPlanView == null) {
+            return;
+        }
+        String value = text == null ? "" : text.trim();
+        mealPlanView.setText(value);
+        mealPlanView.setVisibility(visible && !value.isEmpty() ? View.VISIBLE : View.GONE);
+    }
+
+    private void renderMealSummary(JSONObject day) {
+        JSONObject mealPlan = day.optJSONObject("meal_plan");
+        JSONObject summary = mealPlan == null ? null : mealPlan.optJSONObject("summary");
+        JSONObject indicators = day.optJSONObject("nutrient_indicators");
+        JSONArray totals = summary == null ? null : summary.optJSONArray("totals");
+        JSONArray errors = summary == null ? null : summary.optJSONArray("errors");
+        JSONArray totalRedFlags = summary == null ? null : summary.optJSONArray("total_red_flags");
+        JSONArray errorRedFlags = summary == null ? null : summary.optJSONArray("error_red_flags");
+        LinearLayout wrap = new LinearLayout(activity);
+        wrap.setOrientation(LinearLayout.HORIZONTAL);
+        wrap.setPadding(dp(3), dp(2), dp(3), dp(2));
+        wrap.setBackground(roundedBg(0xFFFFFEFA, 14, 0xFFE5DCCB, 1));
+        LinearLayout.LayoutParams wrapParams = fullWidthWrapHeight();
+        wrapParams.setMargins(0, 0, 0, dp(8));
+        mealSummaryView.addView(wrap, wrapParams);
+
+        String[] keys = new String[]{"kcal", "protein_g", "carb_g", "fat_total_g"};
+        String[] labels = new String[]{"🔥 熱量", "💪 蛋白質", "🍚 碳水", "💧 脂肪"};
+        for (int i = 0; i < keys.length; i++) {
+            String key = keys[i];
+            int keyIdx = keyIndex(key);
+            double value = arrayDoubleAt(totals, keyIndex(key));
+            double delta = arrayDoubleAt(errors, keyIndex(key));
+            JSONObject indicator = indicators == null ? null : indicators.optJSONObject(key);
+            LinearLayout card = summaryCard(
+                    labels[i],
+                    formatMetricValue(key, value),
+                    formatTargetRule(key, indicator, arrayDoubleAt(totals, keyIndex("kcal"))),
+                    formatDelta(key, delta),
+                    boolArrayAt(totalRedFlags, keyIdx),
+                    boolArrayAt(errorRedFlags, keyIdx)
+            );
+            wrap.addView(card, weightedParams(1f));
+        }
+
+        LinearLayout side = new LinearLayout(activity);
+        side.setOrientation(LinearLayout.VERTICAL);
+        side.setPadding(dp(3), 0, 0, 0);
+        wrap.addView(side, weightedParams(0.92f));
+        addSummarySmallCell(side, "鈉", "sodium_mg", totals, errors, indicators, totalRedFlags, errorRedFlags);
+        addSummarySmallCell(side, "鈣質", "calcium_mg", totals, errors, indicators, totalRedFlags, errorRedFlags);
+    }
+
+    private void renderMealCards(JSONObject day) {
+        JSONObject mealPlan = day.optJSONObject("meal_plan");
+        if (mealPlan == null) {
+            return;
+        }
+        JSONObject resolved = mealPlan.optJSONObject("meal_times_resolved");
+        if (resolved == null) {
+            resolved = new JSONObject();
+        }
+        String[] meals = new String[]{"早餐", "午餐", "小食", "晚餐"};
+        String defaultExpanded = defaultExpandedMeal(mealPlan, resolved);
+        if (mealExpandedKey == null || mealExpandedKey.trim().isEmpty() || resolved.optString(mealExpandedKey, "").trim().isEmpty()) {
+            mealExpandedKey = defaultExpanded;
+        }
+        boolean hasVisibleMeal = false;
+        for (String meal : meals) {
+            String timeText = cleanMealText(resolved.optString(meal, ""));
+            if (timeText.isEmpty()) {
+                continue;
+            }
+            if (!mealHasContent(mealPlan, meal)) {
+                continue;
+            }
+            hasVisibleMeal = true;
+            mealCardsView.addView(mealCard(mealPlan, meal, timeText, meal.equals(mealExpandedKey)), fullWidthWrapHeight());
+        }
+        if (!hasVisibleMeal) {
+            TextView empty = new TextView(activity);
+            empty.setText("當日未有餐單內容");
+            empty.setTextSize(12);
+            empty.setTextColor(0xFF64748B);
+            empty.setPadding(dp(8), dp(12), dp(8), dp(12));
+            empty.setBackground(roundedBg(0xFFFFFDF8, 14, 0xFFE7DDCA, 1));
+            mealCardsView.addView(empty, fullWidthWrapHeight());
+        }
+        addRiceNoteCard(mealPlan);
+    }
+
+    private LinearLayout summaryCard(String label, String value, String target, String delta, boolean totalRed, boolean errorRed) {
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(3), dp(3), dp(3), dp(3));
+        LinearLayout.LayoutParams params = weightedParams(1f);
+        params.setMargins(0, 0, dp(2), 0);
+        box.setLayoutParams(params);
+
+        TextView title = new TextView(activity);
+        title.setText(label);
+        title.setTextSize(7);
+        title.setTextColor(0xFF0F172A);
+        title.setTypeface(boldTypeface);
+        title.setSingleLine(true);
+        box.addView(title, fullWidthWrapHeight());
+
+        String mainText = value;
+        if ((mainText == null || mainText.trim().isEmpty()) && !target.isEmpty()) {
+            mainText = target;
+        }
+        if ((mainText == null || mainText.trim().isEmpty())) {
+            mainText = "—";
+        }
+        String targetText = target == null ? "" : target.trim();
+        String deltaText = errorRed ? delta : "OK";
+
+        TextView main = new TextView(activity);
+        main.setText(mainText);
+        main.setTextSize(11);
+        main.setTextColor(totalRed ? 0xFFB91C1C : 0xFF064E2D);
+        main.setTypeface(boldTypeface);
+        main.setSingleLine(true);
+        main.setPadding(0, dp(2), 0, dp(1));
+        box.addView(main, fullWidthWrapHeight());
+
+        TextView targetView = new TextView(activity);
+        targetView.setText(targetText.isEmpty() ? " " : "目標 " + targetText);
+        targetView.setTextSize(6);
+        targetView.setTextColor(0xFF6B7280);
+        targetView.setTypeface(regularTypeface);
+        targetView.setSingleLine(true);
+        box.addView(targetView, fullWidthWrapHeight());
+
+        TextView deltaView = new TextView(activity);
+        deltaView.setText(deltaText);
+        deltaView.setTextSize(7);
+        deltaView.setTextColor(errorRed ? 0xFFEA580C : 0xFF064E2D);
+        deltaView.setTypeface(boldTypeface);
+        deltaView.setSingleLine(true);
+        deltaView.setPadding(0, dp(1), 0, 0);
+        box.addView(deltaView, fullWidthWrapHeight());
+
+        LinearLayout bar = progressBar(progressRatioForTarget(target, parseLeadingNumber(value)));
+        LinearLayout.LayoutParams barParams = fullWidthWrapHeight();
+        barParams.setMargins(0, dp(4), 0, 0);
+        box.addView(bar, barParams);
+        return box;
+    }
+
+    private void addSummarySmallCell(
+            LinearLayout side,
+            String label,
+            String key,
+            JSONArray totals,
+            JSONArray errors,
+            JSONObject indicators,
+            JSONArray totalRedFlags,
+            JSONArray errorRedFlags
+    ) {
+        int keyIdx = keyIndex(key);
+        double value = arrayDoubleAt(totals, keyIdx);
+        double delta = arrayDoubleAt(errors, keyIdx);
+        JSONObject indicator = indicators == null ? null : indicators.optJSONObject(key);
+        String target = formatTargetRule(key, indicator, arrayDoubleAt(totals, keyIndex("kcal")));
+        boolean totalRed = boolArrayAt(totalRedFlags, keyIdx);
+        boolean errorRed = boolArrayAt(errorRedFlags, keyIdx);
+
+        TextView cell = new TextView(activity);
+        cell.setText(label + "\n" + formatMetricValue(key, value) + "\n/ " + target + "\n" + (errorRed ? formatDelta(key, delta) : "OK"));
+        cell.setTextSize(6);
+        cell.setTextColor(totalRed || errorRed ? 0xFFB91C1C : 0xFF0F172A);
+        cell.setTypeface(boldTypeface);
+        cell.setPadding(dp(4), dp(2), dp(4), dp(2));
+        cell.setBackground(roundedBg(0xFFFFFEFA, 10, 0xFFE5DCCB, 1));
+        LinearLayout.LayoutParams params = fullWidthWrapHeight();
+        params.setMargins(0, 0, 0, dp(4));
+        side.addView(cell, params);
+    }
+
+    private LinearLayout progressBar(double ratio) {
+        LinearLayout outer = new LinearLayout(activity);
+        outer.setOrientation(LinearLayout.HORIZONTAL);
+        outer.setBackground(roundedBg(0xFFD7DDC9, 4, 0xFFD7DDC9, 0));
+        outer.setMinimumHeight(dp(5));
+        int filled = Math.max(1, Math.min(100, (int) Math.round(ratio * 100.0d)));
+        View green = new View(activity);
+        green.setBackground(roundedBg(0xFF065F46, 4, 0xFF065F46, 0));
+        outer.addView(green, new LinearLayout.LayoutParams(0, dp(5), filled));
+        View rest = new View(activity);
+        outer.addView(rest, new LinearLayout.LayoutParams(0, dp(5), 100 - filled));
+        return outer;
+    }
+
+    private double progressRatioForTarget(String target, double value) {
+        String text = target == null ? "" : target;
+        Matcher matcher = Pattern.compile("(\\d+(?:\\.\\d+)?)").matcher(text);
+        double last = 0.0d;
+        while (matcher.find()) {
+            try {
+                last = Double.parseDouble(matcher.group(1));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (last <= 0.0d) {
+            return 0.85d;
+        }
+        return Math.max(0.0d, Math.min(1.0d, value / last));
+    }
+
+    private double parseLeadingNumber(String value) {
+        Matcher matcher = Pattern.compile("(\\d+(?:\\.\\d+)?)").matcher(value == null ? "" : value);
+        if (!matcher.find()) {
+            return 0.0d;
+        }
+        try {
+            return Double.parseDouble(matcher.group(1));
+        } catch (NumberFormatException e) {
+            return 0.0d;
+        }
+    }
+
+    private LinearLayout mealCard(JSONObject mealPlan, String meal, String timeText, boolean expanded) {
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(roundedBg(0xFFFFFEFA, 14, expanded ? 0xFF065F46 : 0xFFE5DCCB, expanded ? 2 : 1));
+        LinearLayout.LayoutParams params = fullWidthWrapHeight();
+        params.setMargins(0, 0, 0, dp(2));
+        card.setLayoutParams(params);
+        card.setPadding(0, 0, 0, 0);
+        card.setOnClickListener(v -> {
+            mealExpandedKey = meal.equals(mealExpandedKey) ? "" : meal;
+            renderMealPage();
+        });
+
+        if (!expanded) {
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setPadding(dp(8), dp(4), dp(8), dp(4));
+
+            TextView compactIcon = new TextView(activity);
+            compactIcon.setText(mealIcon(meal));
+            compactIcon.setTextSize(13);
+            compactIcon.setTextColor(iconColorForMeal(meal));
+            compactIcon.setGravity(Gravity.CENTER);
+            compactIcon.setTypeface(boldTypeface);
+            card.addView(compactIcon, new LinearLayout.LayoutParams(dp(34), LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            TextView compactText = new TextView(activity);
+            compactText.setText(timeText + "  " + meal);
+            compactText.setTextSize(13);
+            compactText.setTextColor(0xFF0F172A);
+            compactText.setTypeface(boldTypeface);
+            compactText.setSingleLine(true);
+            card.addView(compactText, weightedParams(1f));
+
+            TextView compactChevron = new TextView(activity);
+            compactChevron.setText("﹀");
+            compactChevron.setTextSize(16);
+            compactChevron.setTextColor(0xFF0F172A);
+            compactChevron.setGravity(Gravity.CENTER);
+            card.addView(compactChevron, new LinearLayout.LayoutParams(dp(34), LinearLayout.LayoutParams.WRAP_CONTENT));
+            return card;
+        }
+
+        LinearLayout body = new LinearLayout(activity);
+        body.setOrientation(LinearLayout.HORIZONTAL);
+        body.setBaselineAligned(false);
+        body.setPadding(0, 0, 0, 0);
+        body.setMinimumHeight(dp(150));
+        card.addView(body, fullWidthWrapHeight());
+
+        LinearLayout side = new LinearLayout(activity);
+        side.setOrientation(LinearLayout.VERTICAL);
+        side.setGravity(Gravity.CENTER_HORIZONTAL);
+        side.setPadding(dp(5), dp(5), dp(5), dp(4));
+        side.setBackground(roundedBg(0xFFF3F8EE, 14, 0x00000000, 0));
+        LinearLayout.LayoutParams sideParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 0.78f);
+        sideParams.setMargins(dp(3), dp(3), dp(3), dp(3));
+        body.addView(side, sideParams);
+
+        TextView icon = new TextView(activity);
+        icon.setText(mealIcon(meal));
+        icon.setTextSize(13);
+        icon.setGravity(Gravity.CENTER);
+        icon.setTextColor(iconColorForMeal(meal));
+        icon.setTypeface(boldTypeface);
+        side.addView(icon, fullWidthWrapHeight());
+
+        TextView timeTag = new TextView(activity);
+        timeTag.setText(timeText);
+        timeTag.setTextSize(13);
+        timeTag.setTextColor(0xFF0F172A);
+        timeTag.setTypeface(boldTypeface);
+        timeTag.setGravity(Gravity.CENTER);
+        timeTag.setPadding(0, dp(2), 0, 0);
+        side.addView(timeTag, fullWidthWrapHeight());
+
+        TextView title = new TextView(activity);
+        title.setText(meal);
+        title.setTextSize(15);
+        title.setTextColor(0xFF0F172A);
+        title.setTypeface(boldTypeface);
+        title.setGravity(Gravity.CENTER);
+        title.setPadding(0, dp(1), 0, dp(2));
+        side.addView(title, fullWidthWrapHeight());
+
+        View sideSpacer = new View(activity);
+        side.addView(sideSpacer, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+        ));
+
+        String macroText = mealMacroLine(mealPlan, meal);
+        TextView macro = new TextView(activity);
+        macro.setText(formatMealMacroForSide(macroText));
+        macro.setTextSize(8);
+        macro.setTextColor(0xFF064E2D);
+        macro.setTypeface(boldTypeface);
+        macro.setGravity(Gravity.CENTER);
+        macro.setSingleLine(false);
+        macro.setPadding(0, dp(2), 0, 0);
+        side.addView(macro, fullWidthWrapHeight());
+
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(6), dp(3), dp(4), dp(3));
+        body.addView(content, weightedParams(2.05f));
+
+        TextView chevron = new TextView(activity);
+        chevron.setText(expanded ? "︿" : "﹀");
+        chevron.setTextSize(15);
+        chevron.setTextColor(0xFF0F172A);
+        chevron.setTypeface(regularTypeface);
+        chevron.setGravity(Gravity.CENTER);
+        body.addView(chevron, new LinearLayout.LayoutParams(dp(24), LinearLayout.LayoutParams.MATCH_PARENT));
+
+        addMealRows(content, mealPlan, meal, Integer.MAX_VALUE);
+        return card;
+    }
+
+    private LinearLayout mealItemRow(JSONObject item) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(1), 0, dp(1));
+
+        TextView icon = new TextView(activity);
+        icon.setText(foodIcon(item.optString("name", "")));
+        icon.setTextSize(15);
+        icon.setGravity(Gravity.CENTER);
+        row.addView(icon, new LinearLayout.LayoutParams(dp(24), LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        TextView name = new TextView(activity);
+        name.setText(cleanMealText(item.optString("name", "")));
+        name.setTextSize(13);
+        name.setTextColor(0xFF0F172A);
+        name.setTypeface(boldTypeface);
+        name.setSingleLine(true);
+        name.setLayoutParams(weightedParams(1f));
+        row.addView(name);
+
+        TextView amount = new TextView(activity);
+        amount.setText(formatItemAmount(item.opt("grams")));
+        amount.setTextSize(13);
+        amount.setTextColor(0xFF0F172A);
+        amount.setTypeface(boldTypeface);
+        amount.setSingleLine(true);
+        amount.setGravity(Gravity.END);
+        row.addView(amount, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        return row;
+    }
+
+    private boolean mealHasContent(JSONObject mealPlan, String meal) {
+        JSONObject mealItems = mealPlan == null ? null : mealPlan.optJSONObject("meal_items");
+        JSONArray items = mealItems == null ? null : mealItems.optJSONArray(meal);
+        if (items != null && items.length() > 0) {
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.optJSONObject(i);
+                if (item != null
+                        && !cleanMealText(item.optString("name", "")).isEmpty()
+                        && itemHasUsefulAmount(item)) {
+                    return true;
+                }
+            }
+        }
+        JSONObject mealIngredients = mealPlan == null ? null : mealPlan.optJSONObject("meal_ingredients");
+        JSONArray ingredients = mealIngredients == null ? null : mealIngredients.optJSONArray(meal);
+        if (ingredients != null && ingredients.length() > 0) {
+            for (int i = 0; i < ingredients.length(); i++) {
+                if (isMeaningfulMealIngredient(String.valueOf(ingredients.opt(i)))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void addMealRows(LinearLayout target, JSONObject mealPlan, String meal, int maxRows) {
+        int added = 0;
+        JSONObject mealItems = mealPlan == null ? null : mealPlan.optJSONObject("meal_items");
+        JSONArray items = mealItems == null ? null : mealItems.optJSONArray(meal);
+        if (items != null && items.length() > 0) {
+            for (int i = 0; i < items.length() && added < maxRows; i++) {
+                JSONObject item = items.optJSONObject(i);
+                if (item == null || cleanMealText(item.optString("name", "")).isEmpty()) {
+                    continue;
+                }
+                target.addView(mealItemRow(item), fullWidthWrapHeight());
+                added++;
+            }
+            return;
+        }
+
+        JSONObject mealIngredients = mealPlan == null ? null : mealPlan.optJSONObject("meal_ingredients");
+        JSONArray ingredients = mealIngredients == null ? null : mealIngredients.optJSONArray(meal);
+        if (ingredients == null) {
+            return;
+        }
+        for (int i = 0; i < ingredients.length() && added < maxRows; i++) {
+            String text = String.valueOf(ingredients.opt(i)).trim();
+            if (!isMeaningfulMealIngredient(text)) {
+                continue;
+            }
+            TextView line = new TextView(activity);
+            line.setText(text);
+            line.setTextSize(11);
+            line.setTextColor(0xFF0F172A);
+            line.setTypeface(boldTypeface);
+            line.setSingleLine(false);
+            line.setMaxLines(2);
+            line.setPadding(0, dp(2), 0, dp(2));
+            target.addView(line, fullWidthWrapHeight());
+            added++;
+        }
+    }
+
+    private boolean itemHasUsefulAmount(JSONObject item) {
+        if (item == null || !item.has("grams")) {
+            return true;
+        }
+        Object raw = item.opt("grams");
+        if (raw == null || JSONObject.NULL.equals(raw)) {
+            return true;
+        }
+        if (raw instanceof Number) {
+            return ((Number) raw).doubleValue() > 0.0d;
+        }
+        String text = String.valueOf(raw).trim();
+        if (text.isEmpty()) {
+            return true;
+        }
+        try {
+            return Double.parseDouble(text) > 0.0d;
+        } catch (NumberFormatException ignored) {
+            return true;
+        }
+    }
+
+    private boolean isMeaningfulMealIngredient(String raw) {
+        String text = cleanMealText(raw);
+        if (text.isEmpty()) {
+            return false;
+        }
+        String compact = text
+                .replace("—", "")
+                .replace("-", "")
+                .replace("－", "")
+                .replace("null", "")
+                .replace("NULL", "")
+                .trim();
+        if (compact.isEmpty()) {
+            return false;
+        }
+        String lower = compact.toLowerCase(Locale.US);
+        return !("breakfast".equals(lower)
+                || "lunch".equals(lower)
+                || "dinner".equals(lower)
+                || "snack".equals(lower)
+                || "早餐".equals(compact)
+                || "午餐".equals(compact)
+                || "晚餐".equals(compact)
+                || "小食".equals(compact));
+    }
+
+    private String cleanMealText(String raw) {
+        String text = raw == null ? "" : raw.trim();
+        if (text.equalsIgnoreCase("null")
+                || text.equalsIgnoreCase("none")
+                || text.equalsIgnoreCase("nan")
+                || text.equals("—")
+                || text.equals("-")
+                || text.equals("－")) {
+            return "";
+        }
+        return text;
+    }
+
+    private void addRiceNoteCard(JSONObject mealPlan) {
+        String note = mealPlan == null ? "" : mealPlan.optString("rice_note", "").trim();
+        if (note.isEmpty() || note.contains("配餐後填")) {
+            return;
+        }
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.TOP);
+        card.setPadding(dp(10), 0, dp(10), dp(3));
+        card.setBackground(roundedBg(0xFFFFFEFA, 14, 0xFFE5DCCB, 1));
+        LinearLayout.LayoutParams params = fullWidthWrapHeight();
+        params.setMargins(0, 0, 0, dp(8));
+
+        TextView icon = new TextView(activity);
+        icon.setText("🍚");
+        icon.setTextSize(17);
+        icon.setGravity(Gravity.CENTER);
+        icon.setIncludeFontPadding(false);
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(38), LinearLayout.LayoutParams.WRAP_CONTENT);
+        iconParams.setMargins(0, dp(1), 0, 0);
+        card.addView(icon, iconParams);
+
+        LinearLayout textBox = new LinearLayout(activity);
+        textBox.setOrientation(LinearLayout.VERTICAL);
+        textBox.setGravity(Gravity.TOP);
+        textBox.setPadding(dp(8), 0, 0, 0);
+
+        TextView title = riceNoteLine("米類生熟比", 10);
+        textBox.addView(title, fullWidthWrapHeight());
+
+        String[] noteLines = riceNoteLines(note);
+        for (String line : noteLines) {
+            textBox.addView(riceNoteLine(line, 10), fullWidthWrapHeight());
+        }
+
+        card.addView(textBox, weightedParams(1f));
+        mealCardsView.addView(card, params);
+    }
+
+    private TextView riceNoteLine(String text, int sizeSp) {
+        TextView view = new TextView(activity);
+        view.setText(text == null ? "" : text.trim());
+        view.setTextSize(sizeSp);
+        view.setTextColor(0xFF064E2D);
+        view.setTypeface(boldTypeface);
+        view.setSingleLine(true);
+        view.setIncludeFontPadding(false);
+        view.setPadding(0, 0, 0, dp(1));
+        return view;
+    }
+
+    private String[] riceNoteLines(String note) {
+        String text = note == null ? "" : note.trim();
+        if (text.isEmpty()) {
+            return new String[0];
+        }
+        String[] raw = text.split("\\r?\\n");
+        ArrayList<String> lines = new ArrayList<>();
+        for (String line : raw) {
+            String trimmed = line == null ? "" : line.trim();
+            if (!trimmed.isEmpty()) {
+                lines.add(trimmed);
+            }
+        }
+        return lines.toArray(new String[0]);
+    }
+
+    private void toggleKitchenMode() {
+        kitchenModeEnabled = !kitchenModeEnabled;
+        applyAodState(true);
+    }
+
+    private void applyAodState(boolean showToast) {
+        if (kitchenModeEnabled) {
+            activity.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            if (aodToggleButton != null) {
+                aodToggleButton.setText("AOD ON");
+                aodToggleButton.setTextColor(0xFFFFFFFF);
+                aodToggleButton.setAlpha(1f);
+                aodToggleButton.setBackground(roundedBg(0xFF065F46, 10, 0xFF065F46, 1));
+            }
+            if (showToast) {
+                Toast.makeText(activity, "AOD ON：螢幕保持開啟", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            activity.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            if (aodToggleButton != null) {
+                aodToggleButton.setText("AOD OFF");
+                aodToggleButton.setTextColor(0xFFE5EDF1);
+                aodToggleButton.setAlpha(0.68f);
+                aodToggleButton.setBackground(roundedBg(0xFF263238, 10, 0xFF263238, 1));
+            }
+            if (showToast) {
+                Toast.makeText(activity, "AOD OFF", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void updateMealLastUpdateStatus() {
+        if (mealLastUpdateStatusView == null) {
+            return;
+        }
+        String value;
+        int textColor;
+        if (mealFetchInFlight) {
+            value = "Updating...";
+            textColor = 0xFF92400E;
+        } else if (mealFetchErrorText != null && !mealFetchErrorText.trim().isEmpty()) {
+            value = mealFetchErrorText.trim();
+            textColor = 0xFF9F1239;
+        } else if (mealLastFetchAtMs > 0L) {
+            value = Clock30.formatFull(mealLastFetchAtMs);
+            textColor = 0xFF166534;
+        } else {
+            value = "--";
+            textColor = 0xFF36505D;
+        }
+        if (mealLastUpdateTitleView != null) {
+            mealLastUpdateTitleView.setTextColor(textColor);
+        }
+        mealLastUpdateStatusView.setText(value);
+        mealLastUpdateStatusView.setTextColor(textColor);
+    }
+
+    // ---------------------------------------------------------------- 網絡
+
+    private void ensureMealPlanLoaded() {
+        if (!pageCheck.isActive() || mealFetchInFlight) {
+            return;
+        }
+        if (mealSelectedDate == null || mealSelectedDate.trim().isEmpty()) {
+            mealSelectedDate = Clock30.todayIso();
+        }
+        fetchMealPlanForDate(mealSelectedDate);
+    }
+
+    /**
+     * 攞一日餐單並顯示。狀態欄位（mealPlanJson／mealFetchInFlight／mealLastFetchAtMs…）
+     * 全部喺 runOnUiThread 入面先改——以前背景 thread 直接寫，同 UI thread 打交。
+     */
+    private void fetchMealPlanForDate(String dateIso) {
+        mealFetchInFlight = true;
+        setMealPlanStatusText("連線電腦餐單中...", true);
+        updateMealLastUpdateStatus();
+        new Thread(() -> {
+            JSONObject json;
+            try {
+                json = fetchMealPlanJson(dateIso);
+                AlarmStore.saveMealPlanJson(activity, dateIso, json.toString(),
+                        json.optString("content_version", "").trim());
+            } catch (Exception e) {
+                activity.runOnUiThread(() -> {
+                    mealFetchInFlight = false;
+                    mealLastFetchAtMs = System.currentTimeMillis();
+                    mealFetchErrorText = "更新失敗";
+                    renderMealPage();
+                    scheduleMealRetry(dateIso);
+                });
+                return;
+            }
+            final JSONObject finalJson = json;
+            prefetchNeighborMealPlans(dateIso);
+            activity.runOnUiThread(() -> {
+                mealPlanJson = finalJson;
+                mealFetchErrorText = "";
+                mealLastFetchAtMs = System.currentTimeMillis();
+                mealFetchInFlight = false;
+                cancelMealRetry();
+                renderMealPage();
+            });
+        }).start();
+    }
+
+    /** 由電腦搂一日餐單（ApiClient 已經包 LAN→meshnet failover 同 last-good server 記憶）。 */
+    private JSONObject fetchMealPlanJson(String dateIso) throws Exception {
+        String body = ApiClient.request(
+                activity,
+                "GET",
+                "/api/mobile-meal-plan?date_iso=" + Uri.encode(dateIso),
+                (String) null,
+                HTTP_READ_TIMEOUT_MS
+        );
+        JSONObject json = new JSONObject(body);
+        if (!json.optBoolean("ok", false)) {
+            throw new IOException("電腦未返回餐單");
+        }
+        return json;
+    }
+
+    void shiftDate(int deltaDays) {
+        String base = mealSelectedDate == null || mealSelectedDate.trim().isEmpty() ? Clock30.todayIso() : mealSelectedDate.trim();
+        try {
+            String[] parts = base.split("-");
+            Calendar cal = Calendar.getInstance();
+            cal.set(Calendar.YEAR, Integer.parseInt(parts[0]));
+            cal.set(Calendar.MONTH, Integer.parseInt(parts[1]) - 1);
+            cal.set(Calendar.DAY_OF_MONTH, Integer.parseInt(parts[2]));
+            cal.add(Calendar.DAY_OF_MONTH, deltaDays);
+            String targetDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.getTime());
+            String today = Clock30.todayIso();
+            String earliestDate = offsetDateIso(today, -1);
+            if (earliestDate.isEmpty()) {
+                earliestDate = today;
+            }
+            if (targetDate.compareTo(earliestDate) < 0) {
+                targetDate = earliestDate;
+            }
+            if (!mealKnownLastDate.isEmpty() && targetDate.compareTo(mealKnownLastDate) > 0) {
+                targetDate = mealKnownLastDate;
+            }
+            mealSelectedDate = targetDate;
+            mealExpandedKey = "";
+            loadMealPlanJsonForSelectedDateFromStore();
+            mealFetchErrorText = "";
+            renderMealPage();
+            // 眼見嗰日行先（一個 request），其餘日子撥停咗先喺背景補。
+            refreshSelectedMealDate(targetDate);
+            scheduleBackgroundMealSweep(targetDate);
+        } catch (Exception ignored) {
+            setMealDate(Clock30.todayIso());
+        }
+    }
+
+    /** 攞到嘢就收工：清走排緊隊嘅重試。 */
+    private void cancelMealRetry() {
+        mealRetryHandler.removeCallbacksAndMessages(null);
+        mealRetryAttempt = 0;
+    }
+
+    /**
+     * 攞唔到就自己再試（2/5/10 秒），期間畫面照顯示 cache。
+     * 出街轉流動數據頭嗰十幾秒 tunnel 未起身，一律會 fail；有呢個梯級就唔使你
+     * 退出再入返個版先重試。試夠三次都唔得先認輸。
+     */
+    private void scheduleMealRetry(String dateIso) {
+        String target = dateIso == null ? "" : dateIso.trim();
+        if (target.isEmpty() || mealRetryAttempt >= MEAL_RETRY_MS.length) {
+            return;
+        }
+        long delay = MEAL_RETRY_MS[mealRetryAttempt];
+        mealRetryAttempt++;
+        mealRetryHandler.removeCallbacksAndMessages(null);
+        mealRetryHandler.postDelayed(() -> {
+            if (!pageCheck.isActive() || !target.equals(mealSelectedDate)) {
+                return;
+            }
+            refreshSelectedMealDate(target);
+        }, delay);
+    }
+
+    /**
+     * 撥到邊日就攞邊日：淨係打一個 request。畫面已經用 cache 出咗，呢度返到
+     * 新版先重畫——即刻郁到，又唔會睇住舊嘢。
+     * 撥快啲嗰陣舊 response 會被 seq 擋住，唔會倒轉蓋咗新嗰日。
+     */
+    private void refreshSelectedMealDate(String dateIso) {
+        String target = dateIso == null ? "" : dateIso.trim();
+        if (target.isEmpty()) {
+            return;
+        }
+        final int seq = ++mealFetchSeq;
+        mealFetchInFlight = true;
+        updateMealLastUpdateStatus();
+        new Thread(() -> {
+            JSONObject json = null;
+            try {
+                json = fetchMealPlanJson(target);
+                AlarmStore.saveMealPlanJson(
+                        activity,
+                        target,
+                        json.toString(),
+                        json.optString("content_version", "").trim()
+                );
+            } catch (Exception ignored) {
+                json = null;
+            }
+            final JSONObject finalJson = json;
+            activity.runOnUiThread(() -> {
+                if (seq != mealFetchSeq) {
+                    return; // 已經撥去第二日，呢個結果過咗期
+                }
+                mealFetchInFlight = false;
+                if (finalJson != null) {
+                    cancelMealRetry();
+                    mealLastFetchAtMs = System.currentTimeMillis();
+                    if (target.equals(mealSelectedDate)) {
+                        mealPlanJson = finalJson;
+                    }
+                    mealFetchErrorText = "";
+                } else {
+                    // 有 cache 就唔好嘈——右邊個綠色時間本身已經話你知幾時校過。
+                    mealFetchErrorText = mealPlanJson == null ? "連線電腦失敗" : "";
+                    scheduleMealRetry(target);
+                }
+                renderMealPage();
+            });
+        }, "meal-day-fetch").start();
+    }
+
+    /** 成個月嘅補拉：撥停 MEAL_SWEEP_DEBOUNCE_MS 先開，連撥唔會疊。 */
+    private void scheduleBackgroundMealSweep(String displayDateIso) {
+        String target = displayDateIso == null ? "" : displayDateIso.trim();
+        mealSweepHandler.removeCallbacksAndMessages(null);
+        mealSweepHandler.postDelayed(
+                () -> refreshMealPlansFromTodayToEnd(target),
+                MEAL_SWEEP_DEBOUNCE_MS
+        );
+    }
+
+    private void prefetchNeighborMealPlans(String dateIso) {
+        String previous = offsetDateIso(dateIso, -1);
+        String next = offsetDateIso(dateIso, 1);
+        if (!previous.isEmpty()) {
+            prefetchMealPlanCacheOnly(previous);
+        }
+        if (!next.isEmpty()) {
+            prefetchMealPlanCacheOnly(next);
+        }
+    }
+
+    private void prefetchMealPlanCacheOnly(String dateIso) {
+        if (dateIso == null || dateIso.trim().isEmpty()) {
+            return;
+        }
+        if (!AlarmStore.getMealPlanJsonForDate(activity, dateIso).trim().isEmpty()) {
+            return;
+        }
+        new Thread(() -> {
+            try {
+                JSONObject json = fetchMealPlanJson(dateIso);
+                AlarmStore.saveMealPlanJson(
+                        activity,
+                        dateIso,
+                        json.toString(),
+                        json.optString("content_version", "").trim()
+                );
+            } catch (Exception ignored) {
+            }
+        }).start();
+    }
+
+    private void refreshMealPlansFromTodayToEnd(String displayDateIso) {
+        // 背景補拉：唔亮 Updating（嗰個位淨係代表「你睇緊嗰日」攞緊嘢），
+        // 亦唔阻撥動；一撥新嘅 seq 就變，呢個 sweep 自己收手。
+        final int seq = mealFetchSeq;
+        new Thread(() -> {
+            String today = Clock30.todayIso();
+            String cursor = offsetDateIso(today, -1);
+            if (cursor.isEmpty()) {
+                cursor = today;
+            }
+            int loaded = 0;
+            String lastLoadedDate = "";
+            boolean displayedDateLoaded = false;
+            Exception lastError = null;
+            for (int day = 0; day < 45; day++) {
+                if (seq != mealFetchSeq) {
+                    return; // 用戶又撥咗，唔好再喺度拉舊嗰批
+                }
+                boolean dateLoaded = false;
+                try {
+                    JSONObject json = fetchMealPlanJson(cursor);
+                    AlarmStore.saveMealPlanJson(
+                            activity,
+                            cursor,
+                            json.toString(),
+                            json.optString("content_version", "").trim()
+                    );
+                    loaded++;
+                    lastLoadedDate = cursor;
+                    dateLoaded = true;
+                    if (cursor.equals(displayDateIso)) {
+                        displayedDateLoaded = true;
+                        JSONObject displayJson = json;
+                        activity.runOnUiThread(() -> {
+                            if (!displayDateIso.equals(mealSelectedDate)) {
+                                return;
+                            }
+                            mealPlanJson = displayJson;
+                            mealFetchErrorText = "";
+                            renderMealPage();
+                        });
+                    }
+                } catch (Exception e) {
+                    lastError = e;
+                }
+                if (!dateLoaded) {
+                    break;
+                }
+                String next = offsetDateIso(cursor, 1);
+                if (next.isEmpty()) {
+                    break;
+                }
+                cursor = next;
+            }
+            Exception finalError = lastError;
+            boolean finalDisplayedDateLoaded = displayedDateLoaded;
+            int finalLoaded = loaded;
+            String finalLastLoadedDate = lastLoadedDate;
+            activity.runOnUiThread(() -> {
+                mealLastFetchAtMs = System.currentTimeMillis();
+                if (seq != mealFetchSeq) {
+                    return;
+                }
+                if (!finalLastLoadedDate.isEmpty()) {
+                    mealKnownLastDate = finalLastLoadedDate;
+                }
+                if (!finalLastLoadedDate.isEmpty()
+                        && mealSelectedDate.compareTo(finalLastLoadedDate) > 0) {
+                    mealSelectedDate = finalLastLoadedDate;
+                    mealExpandedKey = "";
+                    loadMealPlanJsonForSelectedDateFromStore();
+                    mealFetchErrorText = "";
+                    renderMealPage();
+                    return;
+                }
+                if (!displayDateIso.equals(mealSelectedDate)) {
+                    return;
+                }
+                if (!finalDisplayedDateLoaded) {
+                    loadMealPlanJsonForSelectedDateFromStore();
+                }
+                mealFetchErrorText = finalLoaded == 0 && finalError != null ? "連線電腦失敗" : "";
+                renderMealPage();
+            });
+        }).start();
+    }
+
+    private String offsetDateIso(String dateIso, int deltaDays) {
+        String value = dateIso == null ? "" : dateIso.trim();
+        try {
+            String[] parts = value.split("-");
+            Calendar cal = Calendar.getInstance();
+            cal.set(Calendar.YEAR, Integer.parseInt(parts[0]));
+            cal.set(Calendar.MONTH, Integer.parseInt(parts[1]) - 1);
+            cal.set(Calendar.DAY_OF_MONTH, Integer.parseInt(parts[2]));
+            cal.add(Calendar.DAY_OF_MONTH, deltaDays);
+            return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.getTime());
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private void setMealDate(String dateIso) {
+        mealSelectedDate = dateIso == null || dateIso.trim().isEmpty() ? Clock30.todayIso() : dateIso.trim();
+        mealExpandedKey = "";
+        loadMealPlanJsonForSelectedDateFromStore();
+        renderMealPage();
+        ensureMealPlanLoaded();
+    }
+
+    private String defaultExpandedMeal(JSONObject mealPlan, JSONObject resolved) {
+        // 順住餐次揀 default：未過該餐 +1 鐘就開嗰餐（過咗早餐 +1 鐘 → 午餐，如此類推）。
+        String[] meals = new String[]{"早餐", "午餐", "小食", "晚餐"};
+        ArrayList<String> visible = new ArrayList<>();
+        ArrayList<Integer> times = new ArrayList<>();
+        for (String meal : meals) {
+            String timeText = cleanMealText(resolved.optString(meal, ""));
+            int minutes = firstClockMinutes(timeText);
+            if (minutes < 0 || !mealHasContent(mealPlan, meal)) {
+                continue;
+            }
+            visible.add(meal);
+            times.add(minutes);
+        }
+        if (visible.isEmpty()) {
+            return "";
+        }
+        if (!Clock30.todayIso().equals(mealSelectedDate)) {
+            return visible.get(0);
+        }
+        Calendar now = Calendar.getInstance();
+        int nowMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+        for (int i = 0; i < visible.size(); i++) {
+            if (nowMinutes < times.get(i) + 60) {
+                return visible.get(i);
+            }
+        }
+        return visible.get(visible.size() - 1);
+    }
+
+    private String mealMacroLine(JSONObject mealPlan, String meal) {
+        JSONObject mealNutrients = mealPlan.optJSONObject("meal_nutrients");
+        JSONObject nutrients = mealNutrients == null ? null : mealNutrients.optJSONObject(meal);
+        if (nutrients == null) {
+            return "";
+        }
+        return formatMetricValue("kcal", nutrients.optDouble("kcal", 0.0))
+                + " kcal  P" + formatNumber(nutrients.optDouble("protein_g", 0.0))
+                + "  C" + formatNumber(nutrients.optDouble("carb_g", 0.0))
+                + "  F" + formatNumber(nutrients.optDouble("fat_total_g", 0.0));
+    }
+
+    private String formatMealMacroForSide(String macroText) {
+        String text = macroText == null ? "" : macroText.trim();
+        if (text.isEmpty()) {
+            return " ";
+        }
+        int proteinIndex = text.indexOf("  P");
+        if (proteinIndex < 0) {
+            proteinIndex = text.indexOf(" P");
+        }
+        if (proteinIndex > 0) {
+            String kcal = text.substring(0, proteinIndex).trim();
+            String macros = text.substring(proteinIndex).trim().replace("  ", " ");
+            return kcal + "\n" + macros;
+        }
+        return text;
+    }
+
+    private String formatItemAmount(Object grams) {
+        if (grams instanceof Number) {
+            return formatNumber(((Number) grams).doubleValue()) + "g";
+        }
+        return "";
+    }
+
+    private int keyIndex(String key) {
+        if ("kcal".equals(key)) return 0;
+        if ("protein_g".equals(key)) return 1;
+        if ("carb_g".equals(key)) return 2;
+        if ("sugar_g".equals(key)) return 3;
+        if ("cholesterol_mg".equals(key)) return 4;
+        if ("sodium_mg".equals(key)) return 5;
+        if ("calcium_mg".equals(key)) return 6;
+        if ("fat_total_g".equals(key)) return 7;
+        if ("fat_sat_g".equals(key)) return 8;
+        if ("fat_trans_g".equals(key)) return 9;
+        return -1;
+    }
+
+    private double arrayDoubleAt(JSONArray array, int index) {
+        if (array == null || index < 0 || index >= array.length()) {
+            return 0.0;
+        }
+        return array.optDouble(index, 0.0);
+    }
+
+    private boolean boolArrayAt(JSONArray array, int index) {
+        if (array == null || index < 0 || index >= array.length()) {
+            return false;
+        }
+        return array.optBoolean(index, false);
+    }
+
+    private String formatMetricValue(String key, double value) {
+        if ("kcal".equals(key)) {
+            return formatNumber(value);
+        }
+        if ("sodium_mg".equals(key) || "calcium_mg".equals(key)) {
+            return formatNumber(value) + "mg";
+        }
+        return formatNumber(value) + "g";
+    }
+
+    private String formatTargetRule(String key, JSONObject indicator, double kcalTotal) {
+        if (indicator == null) {
+            return "";
+        }
+        String kind = indicator.optString("kind", "");
+        if (("fat_total_g".equals(key) || "fat_sat_g".equals(key) || "fat_trans_g".equals(key))
+                && "fat_pct".equals(kind)) {
+            double pct = indicator.optDouble("fat_pct", 0.0);
+            if (pct > 0.0 && kcalTotal > 0.0) {
+                return "<" + formatNumber(kcalTotal * pct / 9.0) + "g";
+            }
+        }
+        return indicator.optString("raw", "").trim();
+    }
+
+    private String formatDelta(String key, double delta) {
+        if (Math.abs(delta) < 0.05d) {
+            return "OK";
+        }
+        String sign = delta > 0 ? "+" : "";
+        if ("kcal".equals(key)) {
+            return sign + formatNumber(delta) + " kcal";
+        }
+        if ("sodium_mg".equals(key) || "calcium_mg".equals(key)) {
+            return sign + formatNumber(delta) + "mg";
+        }
+        return sign + formatNumber(delta) + "g";
+    }
+
+    private String formatNumber(double value) {
+        if (Math.abs(value - Math.rint(value)) < 0.05d) {
+            return String.valueOf((int) Math.rint(value));
+        }
+        return String.format(Locale.getDefault(), "%.1f", value);
+    }
+
+    private int firstClockMinutes(String text) {
+        if (text == null) {
+            return -1;
+        }
+        Matcher matcher = Pattern.compile("(\\d{1,2}):(\\d{2})").matcher(text);
+        if (!matcher.find()) {
+            return -1;
+        }
+        try {
+            int hour = Integer.parseInt(matcher.group(1));
+            int minute = Integer.parseInt(matcher.group(2));
+            return hour * 60 + minute;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    // ---- 共用 UI 工廠：薄 delegate 落 PanelUi ----
+
+    private int dp(int value) {
+        return ui.dp(value);
+    }
+
+    private android.graphics.drawable.GradientDrawable roundedBg(int fillColor, int radiusDp, int strokeColor, int strokeDp) {
+        return ui.roundedBg(fillColor, radiusDp, strokeColor, strokeDp);
+    }
+
+    private LinearLayout.LayoutParams fullWidthWrapHeight() {
+        return ui.fullWidth();
+    }
+
+    private LinearLayout.LayoutParams weightedParams(float weight) {
+        return ui.weighted(weight);
+    }
+}

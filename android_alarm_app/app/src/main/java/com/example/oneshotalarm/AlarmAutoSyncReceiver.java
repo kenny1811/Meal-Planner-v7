@@ -20,22 +20,25 @@ public final class AlarmAutoSyncReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent == null ? null : intent.getAction();
-        if (ACTION_DAILY_IMPORT.equals(action)) {
-            int slot = intent.getIntExtra(EXTRA_DAILY_IMPORT_SLOT, 0);
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        ScheduleGridAutoImporter.importFromPc(context);
-                    } catch (Exception e) {
-                        Log.w(TAG, "Daily schedule_grid import failed", e);
-                    } finally {
-                        scheduleDailyImportSlot(context, slot);
-                    }
-                }
-            }).start();
+        if (!ACTION_DAILY_IMPORT.equals(action)) {
             return;
         }
+        int slot = intent.getIntExtra(EXTRA_DAILY_IMPORT_SLOT, 0);
+        // 先同步排定聽日同一棍——以前擺喺 thread 嘅 finally，process 一被殺就冇咗下一日，
+        // 每日匯入鏈會斷。
+        scheduleDailyImportSlot(context, slot);
+        // HTTP 最長 12s+9s，onReceive 本身唔可以做——goAsync 揸住 receiver（系統會俾 wakelock）。
+        final PendingResult pending = goAsync();
+        final Context appContext = context.getApplicationContext();
+        new Thread(() -> {
+            try {
+                ScheduleGridAutoImporter.importFromPc(appContext);
+            } catch (Exception e) {
+                Log.w(TAG, "Daily schedule_grid import failed", e);
+            } finally {
+                pending.finish();
+            }
+        }, "daily-import").start();
     }
 
     static void schedulePolling(Context context) {

@@ -32,7 +32,6 @@ class OnOffDutyView {
     private final Activity activity;
     private final LinearLayout container;
     private final PanelUi ui;
-    private final Typeface regularTypeface;
     private final Typeface boldTypeface;
     private JSONObject plan;
     private boolean loading = false;
@@ -42,7 +41,6 @@ class OnOffDutyView {
     OnOffDutyView(Activity activity, LinearLayout container, Typeface regular, Typeface bold) {
         this.activity = activity;
         this.container = container;
-        this.regularTypeface = regular != null ? regular : Typeface.DEFAULT;
         this.boldTypeface = bold != null ? bold : Typeface.DEFAULT_BOLD;
         this.ui = new PanelUi(activity, regular, bold);
     }
@@ -58,23 +56,22 @@ class OnOffDutyView {
         renderLoading();
         final String path = "/api/onoffduty/plan"
                 + (viewDate.isEmpty() ? "" : "?date_iso=" + viewDate);
-        new Thread(() -> {
-            try {
-                String body = ApiClient.request(activity, "GET", path, null, HTTP_READ_TIMEOUT_MS);
-                JSONObject parsed = new JSONObject(body);
-                activity.runOnUiThread(() -> {
+        requestPlan("GET", path, null, "onoffduty-fetch", "Cannot reach PC: ");
+    }
+
+    /** 標準一款：成功就 plan＝結果、loading 完、重畫；失敗就出 lastError 重畫。 */
+    private void requestPlan(String method, String path, JSONObject payload, String threadName, String errorPrefix) {
+        ui.request(method, path, payload, HTTP_READ_TIMEOUT_MS, threadName,
+                parsed -> {
                     plan = parsed;
                     loading = false;
                     render();
-                });
-            } catch (Exception e) {
-                activity.runOnUiThread(() -> {
+                },
+                e -> {
                     loading = false;
-                    lastError = "Cannot reach PC: " + e.getMessage();
+                    lastError = errorPrefix + e.getMessage();
                     render();
                 });
-            }
-        }, "onoffduty-fetch").start();
     }
 
     void shiftDate(int deltaDays) {
@@ -118,18 +115,14 @@ class OnOffDutyView {
             }
         } catch (Exception ignored) {
         }
-        new Thread(() -> {
-            try {
-                String body = ApiClient.request(activity, "POST", "/api/onoffduty/log", payload.toString(), HTTP_READ_TIMEOUT_MS);
-                JSONObject parsed = new JSONObject(body);
-                activity.runOnUiThread(() -> {
+        ui.request("POST", "/api/onoffduty/log", payload, HTTP_READ_TIMEOUT_MS, "onoffduty-log",
+                parsed -> {
                     plan = parsed;
                     render();
+                },
+                ignored -> {
+                    // log 失敗唔阻開 form；下次 refresh 會見返真狀態。
                 });
-            } catch (Exception ignored) {
-                // log 失敗唔阻開 form；下次 refresh 會見返真狀態。
-            }
-        }, "onoffduty-log").start();
         try {
             activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
         } catch (Exception e) {
@@ -282,23 +275,7 @@ class OnOffDutyView {
             payload.put("code", code);
         } catch (Exception ignored) {
         }
-        new Thread(() -> {
-            try {
-                String body = ApiClient.request(activity, "POST", "/api/onoffduty/roster-code", payload.toString(), HTTP_READ_TIMEOUT_MS);
-                JSONObject parsed = new JSONObject(body);
-                activity.runOnUiThread(() -> {
-                    plan = parsed;
-                    loading = false;
-                    render();
-                });
-            } catch (Exception e) {
-                activity.runOnUiThread(() -> {
-                    loading = false;
-                    lastError = "Code change failed: " + e.getMessage();
-                    render();
-                });
-            }
-        }, "onoffduty-code").start();
+        requestPlan("POST", "/api/onoffduty/roster-code", payload, "onoffduty-code", "Code change failed: ");
     }
 
     private void postOverride(String kind, String timeValue, String note) {
@@ -315,23 +292,7 @@ class OnOffDutyView {
             }
         } catch (Exception ignored) {
         }
-        new Thread(() -> {
-            try {
-                String body = ApiClient.request(activity, "POST", "/api/onoffduty/override", payload.toString(), HTTP_READ_TIMEOUT_MS);
-                JSONObject parsed = new JSONObject(body);
-                activity.runOnUiThread(() -> {
-                    plan = parsed;
-                    loading = false;
-                    render();
-                });
-            } catch (Exception e) {
-                activity.runOnUiThread(() -> {
-                    loading = false;
-                    lastError = "Override failed: " + e.getMessage();
-                    render();
-                });
-            }
-        }, "onoffduty-override").start();
+        requestPlan("POST", "/api/onoffduty/override", payload, "onoffduty-override", "Override failed: ");
     }
 
     // ---------------------------------------------------------------- render
@@ -633,11 +594,8 @@ class OnOffDutyView {
             }
         } catch (Exception ignored) {
         }
-        new Thread(() -> {
-            try {
-                String body = ApiClient.request(activity, "POST", "/api/onoffduty/lateoff", payload.toString(), HTTP_READ_TIMEOUT_MS);
-                JSONObject parsed = new JSONObject(body);
-                activity.runOnUiThread(() -> {
+        ui.request("POST", "/api/onoffduty/lateoff", payload, HTTP_READ_TIMEOUT_MS, "onoffduty-holdsend",
+                parsed -> {
                     plan = parsed;
                     loading = false;
                     render();
@@ -648,15 +606,12 @@ class OnOffDutyView {
                                 + "\n加班表: " + (result.optBoolean("overtime_written", false) ? "已寫入" : "冇寫");
                         new AlertDialog.Builder(activity).setMessage(message).setPositiveButton("OK", null).show();
                     }
-                });
-            } catch (Exception e) {
-                activity.runOnUiThread(() -> {
+                },
+                e -> {
                     loading = false;
                     lastError = "Hold/send failed: " + e.getMessage();
                     render();
                 });
-            }
-        }, "onoffduty-holdsend").start();
     }
 
     private static String formatLoggedAt(String iso) {

@@ -134,7 +134,7 @@ final class PhoneCaptureHttpServer {
                 break;
             }
             int colon = line.indexOf(':');
-            if (colon > 0 && line.substring(0, colon).trim().equalsIgnoreCase("X-Alarm-Token")) {
+            if (colon > 0 && line.substring(0, colon).trim().equalsIgnoreCase(ApiClient.TOKEN_HEADER)) {
                 token = line.substring(colon + 1).trim();
             }
         }

@@ -39,13 +39,9 @@ Write-Host "Installing wear APK..."
 $out = & $adbPath -s $target install -r "$apkPath" 2>&1
 $out | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) {
-    if ("$out" -match 'VERSION_DOWNGRADE|UPDATE_INCOMPATIBLE|signatures do not match') {
-        Write-Host "Install blocked (downgrade/incompatible). Uninstalling $pkg from watch and retrying clean..."
-        & $adbPath -s $target uninstall $pkg | ForEach-Object { Write-Host $_ }
-        & $adbPath -s $target install "$apkPath"
-        if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: clean reinstall failed (rc=$LASTEXITCODE)."; exit 1 }
-    } else {
-        Write-Host "ERROR: watch install failed (rc=$LASTEXITCODE)."; exit 1
-    }
+    # 唔會自動 uninstall 自癒：uninstall 會甩 SYSTEM_ALERT_WINDOW／POST_NOTIFICATIONS 權限，
+    # 錶面 complication slot 亦會 orphan（見 CLAUDE.md）。downgrade 錯誤＝versionCode 未跟 phone 對齊，改 build.gradle。
+    Write-Host "ERROR: watch install failed (rc=$LASTEXITCODE). Not uninstalling $pkg (would drop permissions/complications)."
+    exit 1
 }
 Write-Host "Install complete on: $target"

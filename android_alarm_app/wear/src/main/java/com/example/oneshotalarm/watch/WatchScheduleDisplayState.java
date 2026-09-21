@@ -10,11 +10,6 @@ import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUp
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Locale;
-
 final class WatchScheduleDisplayState {
     private static final String TAG = "ShiftAlarmWatch";
 
@@ -43,6 +38,9 @@ final class WatchScheduleDisplayState {
             if (row == null) {
                 continue;
             }
+            if (row.optBoolean("disabled", false)) {
+                continue;  // 停用嘅行位唔算 prev/next——同電話 findPrevNext 一致，唔會響就唔好顯示做 NEXT
+            }
             long at = row.optLong("at", 0L);
             if (at <= 0L) {
                 continue;
@@ -57,8 +55,7 @@ final class WatchScheduleDisplayState {
             }
         }
 
-        SharedPreferences.Editor editor = prefs.edit()
-                .putLong(AlarmScheduleState.KEY_UPDATED_AT, now);
+        SharedPreferences.Editor editor = prefs.edit();
         putRow(editor, true, prev, prevAt);
         putRow(editor, false, next, nextAt == Long.MAX_VALUE ? 0L : nextAt);
         editor.apply();
@@ -77,7 +74,6 @@ final class WatchScheduleDisplayState {
     private static void putRow(SharedPreferences.Editor editor, boolean prev, JSONObject row, long at) {
         if (row == null || at <= 0L) {
             editor.putString(prev ? AlarmScheduleState.KEY_PREV_TIME : AlarmScheduleState.KEY_NEXT_TIME, "--:--")
-                    .putString(prev ? AlarmScheduleState.KEY_PREV_DATE : AlarmScheduleState.KEY_NEXT_DATE, "")
                     .putString(prev ? AlarmScheduleState.KEY_PREV_LABEL : AlarmScheduleState.KEY_NEXT_LABEL, "沒有資料")
                     .putLong(prev ? AlarmScheduleState.KEY_PREV_AT : AlarmScheduleState.KEY_NEXT_AT, 0L);
             return;
@@ -86,27 +82,9 @@ final class WatchScheduleDisplayState {
         if (label.isEmpty()) {
             label = "鬧鐘";
         }
-        editor.putString(prev ? AlarmScheduleState.KEY_PREV_TIME : AlarmScheduleState.KEY_NEXT_TIME, format30(at))
-                .putString(prev ? AlarmScheduleState.KEY_PREV_DATE : AlarmScheduleState.KEY_NEXT_DATE, format("dd/MM EEE", at))
+        editor.putString(prev ? AlarmScheduleState.KEY_PREV_TIME : AlarmScheduleState.KEY_NEXT_TIME, Clock30.format(at))
                 .putString(prev ? AlarmScheduleState.KEY_PREV_LABEL : AlarmScheduleState.KEY_NEXT_LABEL, label)
                 .putLong(prev ? AlarmScheduleState.KEY_PREV_AT : AlarmScheduleState.KEY_NEXT_AT, at);
-    }
-
-    private static String format(String pattern, long at) {
-        return new SimpleDateFormat(pattern, Locale.getDefault()).format(new Date(at));
-    }
-
-    // 30-hour clock: the shift day rolls over at 06:00 (matching the watch face date),
-    // so 00:00–05:59 is shown as 24:00–29:59.
-    private static String format30(long at) {
-        Calendar cal = Calendar.getInstance();
-        cal.setTimeInMillis(at);
-        int hour = cal.get(Calendar.HOUR_OF_DAY);
-        int minute = cal.get(Calendar.MINUTE);
-        if (hour < 6) {
-            hour += 24;
-        }
-        return String.format(Locale.US, "%02d:%02d", hour, minute);
     }
 
     private static JSONArray parseRows(String raw) {

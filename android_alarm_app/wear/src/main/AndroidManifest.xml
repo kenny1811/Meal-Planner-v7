@@ -7,9 +7,7 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -41,7 +39,7 @@
 
         <activity
             android:name=".ScheduleGridTileActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="今日行位" />
 
         <activity
@@ -117,7 +115,7 @@
 
         <receiver
             android:name=".DebugComplicationRefreshReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.example.oneshotalarm.watch.DEBUG_REFRESH_COMPLICATIONS" />
             </intent-filter>

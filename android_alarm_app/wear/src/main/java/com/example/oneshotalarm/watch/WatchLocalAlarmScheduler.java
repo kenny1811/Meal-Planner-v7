@@ -18,7 +18,6 @@ final class WatchLocalAlarmScheduler {
     static final String EXTRA_ALARM_ID = "alarm_id";
     static final String EXTRA_TIME = "time";
     static final String EXTRA_LABEL = "label";
-    static final String EXTRA_AT = "at";
 
     private static final String TAG = "ShiftAlarmWatch";
     private static final String KEY_SCHEDULED_IDS = "local_alarm_ids";
@@ -80,7 +79,7 @@ final class WatchLocalAlarmScheduler {
     }
 
     static void cancelAlarm(Context context, String id) {
-        PendingIntent pendingIntent = alarmPendingIntent(context, id, "--:--", "鬧鐘", 0L, PendingIntent.FLAG_NO_CREATE);
+        PendingIntent pendingIntent = alarmPendingIntent(context, id, "--:--", "鬧鐘", PendingIntent.FLAG_NO_CREATE);
         if (pendingIntent != null) {
             alarmManager(context).cancel(pendingIntent);
             pendingIntent.cancel();
@@ -88,7 +87,7 @@ final class WatchLocalAlarmScheduler {
     }
 
     private static void scheduleOne(Context context, String id, String time, String label, long at) {
-        PendingIntent pendingIntent = alarmPendingIntent(context, id, time, label, at, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pendingIntent = alarmPendingIntent(context, id, time, label, PendingIntent.FLAG_UPDATE_CURRENT);
         AlarmManager manager = alarmManager(context);
         PendingIntent showIntent = alarmActivityPendingIntent(
                 context,
@@ -124,7 +123,6 @@ final class WatchLocalAlarmScheduler {
             String id,
             String time,
             String label,
-            long at,
             int extraFlags
     ) {
         Intent intent = new Intent(context, WatchLocalAlarmReceiver.class);
@@ -132,7 +130,6 @@ final class WatchLocalAlarmScheduler {
         intent.putExtra(EXTRA_ALARM_ID, id == null ? "" : id);
         intent.putExtra(EXTRA_TIME, time == null ? "--:--" : time);
         intent.putExtra(EXTRA_LABEL, label == null ? "鬧鐘" : label);
-        intent.putExtra(EXTRA_AT, at);
         return PendingIntent.getBroadcast(
                 context,
                 requestCodeFor(id),

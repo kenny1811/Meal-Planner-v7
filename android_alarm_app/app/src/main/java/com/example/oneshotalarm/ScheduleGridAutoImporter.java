@@ -82,7 +82,7 @@ final class ScheduleGridAutoImporter {
             return new ImportResult(false, 0, "", missingRoster, message);
         }
         AlarmStore.saveScheduleGridVariants(context, storedVariants);
-        AlarmScheduler.schedulePlan(context, selected.alarms, 0L, selected.planDate, selectedRoster);
+        AlarmScheduler.schedulePlan(context, selected.alarms, selected.planDate, selectedRoster);
         AlarmStore.markLastImportNow(context);
         Log.d(TAG, "Imported " + storedVariants.length() + " variants; active " + selectedRoster);
         return new ImportResult(

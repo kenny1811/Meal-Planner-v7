@@ -5,23 +5,14 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.media.AudioAttributes;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
 import android.view.Gravity;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import java.text.SimpleDateFormat;
-import java.util.Locale;
 
 public class AlarmActivity extends Activity {
     static final String ACTION_WATCH_DISMISS = "com.example.oneshotalarm.ACTION_WATCH_DISMISS";
@@ -33,7 +24,6 @@ public class AlarmActivity extends Activity {
     private static final long WATCH_DISMISS_VALID_MS = 30 * 1000L;
     private boolean stopped = false;
     private PowerManager.WakeLock wakeLock;
-    private Vibrator vibrator;
     private final BroadcastReceiver watchDismissReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -220,49 +210,6 @@ public class AlarmActivity extends Activity {
                 "oneshotalarm:alarm-activity"
         );
         wakeLock.acquire();
-    }
-
-    private void startStrongVibration() {
-        if (vibrator == null) {
-            vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-        }
-        if (vibrator == null || !vibrator.hasVibrator()) {
-            return;
-        }
-
-        long[] pattern = {
-                0,
-                1200, 80,
-                1200, 80,
-                1500, 100,
-                1500, 100,
-                1800, 120,
-                2200, 160
-        };
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            AudioAttributes attributes = new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build();
-            if (vibrator.hasAmplitudeControl()) {
-                int[] amplitudes = {
-                        0,
-                        255, 0,
-                        255, 0,
-                        255, 0,
-                        255, 0,
-                        255, 0,
-                        255, 0
-                };
-                vibrator.vibrate(VibrationEffect.createWaveform(pattern, amplitudes, 0), attributes);
-                return;
-            }
-            vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0), attributes);
-            return;
-        }
-
-        vibrator.vibrate(pattern, 0);
     }
 
     private void stopAlert() {

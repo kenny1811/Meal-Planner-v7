@@ -31,17 +31,11 @@ import android.widget.TextView;
 
 public class WatchAlarmService extends Service {
     static final String ACTION_START = "com.example.oneshotalarm.watch.ACTION_START";
-    static final String ACTION_STOP = "com.example.oneshotalarm.watch.ACTION_STOP";
-    static final String ACTION_SET_STRENGTH = "com.example.oneshotalarm.watch.ACTION_SET_STRENGTH";
-    static final String EXTRA_STRENGTH = "strength";
-    static final String STRENGTH_STRONG = "strong";
-    static final String STRENGTH_MEDIUM = "medium";
-    static final String STRENGTH_WEAK = "weak";
-    static final String STRENGTH_ZIG = "zig";
-    static final String STRENGTH_PULSE = "pulse";
     private static final String PREFS = "watch_alarm";
-    private static final String KEY_STRENGTH = "strength";
     private static final String KEY_ACTIVE = "active";
+    /** 震動 pattern（以前有 strong/medium/weak/zig/pulse 五款可揀，但從冇人 set，永遠係 pulse）。 */
+    private static final long[] VIBRATION_PATTERN = {0, 100, 50, 100, 50, 100, 50, 100, 50, 100, 50};
+    private static final int[] VIBRATION_AMPLITUDES = {0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0};
     private static final String KEY_LAST_ALARM_KEY = "last_alarm_key";
     private static final String KEY_LAST_STARTED_AT = "last_started_at";
     private static final String EXTRA_ALARM_KEY = "alarm_key";
@@ -82,16 +76,6 @@ public class WatchAlarmService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
-            markInactive(this);
-            stopAlert();
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-        if (intent != null && ACTION_SET_STRENGTH.equals(intent.getAction())) {
-            saveStrength(intent.getStringExtra(EXTRA_STRENGTH));
-            return START_NOT_STICKY;
-        }
         String alarmKey = intent == null ? "" : intent.getStringExtra(EXTRA_ALARM_KEY);
         if (isDuplicateActiveAlarm(alarmKey)) {
             Log.d(TAG, "Duplicate active watch alarm ignored by service");
@@ -133,16 +117,14 @@ public class WatchAlarmService extends Service {
             Log.d(TAG, "Watch vibrator unavailable");
             return;
         }
-        StrengthConfig config = strengthConfig();
-        long[] pattern = config.pattern;
+        long[] pattern = VIBRATION_PATTERN;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             AudioAttributes attributes = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build();
             if (vibrator.hasAmplitudeControl()) {
-                int[] amplitudes = config.amplitudes;
-                vibrator.vibrate(VibrationEffect.createWaveform(pattern, amplitudes, 0), attributes);
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, VIBRATION_AMPLITUDES, 0), attributes);
                 Log.d(TAG, "Watch vibration started with amplitude control");
                 return;
             }
@@ -379,66 +361,6 @@ public class WatchAlarmService extends Service {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean(KEY_ACTIVE, false)
                 .apply();
-    }
-
-    private void saveStrength(String raw) {
-        String value = normalizeStrength(raw);
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_STRENGTH, value).apply();
-    }
-
-    private StrengthConfig strengthConfig() {
-        String value = normalizeStrength(
-                getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_STRENGTH, STRENGTH_PULSE)
-        );
-        if (STRENGTH_WEAK.equals(value)) {
-            return new StrengthConfig(
-                    new long[]{0, 180, 260, 180, 360, 240, 650},
-                    new int[]{0, 120, 0, 120, 0, 140, 0, 150}
-            );
-        }
-        if (STRENGTH_MEDIUM.equals(value)) {
-            return new StrengthConfig(
-                    new long[]{0, 260, 180, 260, 180, 450, 220, 650, 300},
-                    new int[]{0, 200, 0, 200, 0, 220, 0, 230, 0}
-            );
-        }
-        if (STRENGTH_ZIG.equals(value)) {
-            return new StrengthConfig(
-                    new long[]{0, 180, 90, 180, 90, 180, 520},
-                    new int[]{0, 255, 0, 255, 0, 255, 0}
-            );
-        }
-        if (STRENGTH_PULSE.equals(value)) {
-            return new StrengthConfig(
-                    new long[]{0, 100, 50, 100, 50, 100, 50, 100, 50, 100, 50},
-                    new int[]{0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0}
-            );
-        }
-        return new StrengthConfig(
-                new long[]{0, 350, 120, 350, 120, 550, 160, 350, 120, 800, 350},
-                new int[]{0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0}
-        );
-    }
-
-    private String normalizeStrength(String raw) {
-        String value = raw == null ? "" : raw.trim().toLowerCase();
-        if (STRENGTH_WEAK.equals(value)
-                || STRENGTH_MEDIUM.equals(value)
-                || STRENGTH_ZIG.equals(value)
-                || STRENGTH_PULSE.equals(value)) {
-            return value;
-        }
-        return STRENGTH_STRONG;
-    }
-
-    private static final class StrengthConfig {
-        final long[] pattern;
-        final int[] amplitudes;
-
-        StrengthConfig(long[] pattern, int[] amplitudes) {
-            this.pattern = pattern;
-            this.amplitudes = amplitudes;
-        }
     }
 
     private void stopAlert() {

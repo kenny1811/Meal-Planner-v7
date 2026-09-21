@@ -47,7 +47,7 @@ public class WearAlarmListenerService extends WearableListenerService {
                 return;
             }
             if (TILE_STATE_PATH.equals(event.getDataItem().getUri().getPath())) {
-                saveTileState(DataMapItem.fromDataItem(event.getDataItem()).getDataMap());
+                saveTileState(toJson(DataMapItem.fromDataItem(event.getDataItem()).getDataMap()), "data channel");
             }
         }
     }
@@ -65,7 +65,7 @@ public class WearAlarmListenerService extends WearableListenerService {
             return;
         }
         if (TILE_STATE_PATH.equals(messageEvent.getPath())) {
-            saveTileState(new String(messageEvent.getData(), StandardCharsets.UTF_8));
+            saveTileState(parseJson(new String(messageEvent.getData(), StandardCharsets.UTF_8)), "message channel");
             return;
         }
         if (CAPTURE_REQUEST_PATH.equals(messageEvent.getPath())) {
@@ -155,61 +155,61 @@ public class WearAlarmListenerService extends WearableListenerService {
         return false;
     }
 
-    private void saveTileState(DataMap map) {
+    /**
+     * DataMap → JSONObject（同 message 通道一個格式）：schedule_items_json 字串解返做 array，
+     * 咁兩條通道就共用一個 saveTileState。
+     */
+    private static JSONObject toJson(DataMap map) {
+        JSONObject json = new JSONObject();
         if (map == null) {
+            return json;
+        }
+        try {
+            for (String key : map.keySet()) {
+                if ("schedule_items_json".equals(key)) {
+                    json.put("schedule_items", new JSONArray(map.getString(key, "[]")));
+                } else {
+                    json.put(key, map.get(key));
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Convert tile state data map failed", e);
+        }
+        return json;
+    }
+
+    private static JSONObject parseJson(String rawJson) {
+        try {
+            return new JSONObject(rawJson == null ? "{}" : rawJson);
+        } catch (Exception e) {
+            Log.e(TAG, "Parse tile state message failed", e);
+            return new JSONObject();
+        }
+    }
+
+    private void saveTileState(JSONObject json, String channel) {
+        if (json == null || json.length() == 0) {
             return;
         }
-        if (isDuplicateTileState(map.getLong("updated_at", 0L))) {
-            Log.d(TAG, "Duplicate tile state (data channel) ignored");
+        if (isDuplicateTileState(json.optLong("updated_at", 0L))) {
+            Log.d(TAG, "Duplicate tile state (" + channel + ") ignored");
             return;
         }
+        JSONArray items = json.optJSONArray("schedule_items");
         getSharedPreferences(AlarmScheduleState.PREFS, Context.MODE_PRIVATE).edit()
-                .putString(AlarmScheduleState.KEY_PLAN_DATE, map.getString("plan_date", ""))
-                .putString(AlarmScheduleState.KEY_ROSTER_CODE, map.getString("roster_code", ""))
-                .putString(AlarmScheduleState.KEY_SCHEDULE_ITEMS_JSON, map.getString("schedule_items_json", "[]"))
+                .putString(AlarmScheduleState.KEY_PLAN_DATE, json.optString("plan_date", ""))
+                .putString(AlarmScheduleState.KEY_ROSTER_CODE, json.optString("roster_code", ""))
+                .putString(AlarmScheduleState.KEY_SCHEDULE_ITEMS_JSON, items == null ? "[]" : items.toString())
                 .remove("schedule_count")
-                .putString(AlarmScheduleState.KEY_PREV_TIME, map.getString("prev_time", "--:--"))
-                .putString(AlarmScheduleState.KEY_PREV_DATE, map.getString("prev_date", ""))
-                .putString(AlarmScheduleState.KEY_PREV_LABEL, map.getString("prev_label", "沒有資料"))
-                .putLong(AlarmScheduleState.KEY_PREV_AT, map.getLong("prev_at", 0L))
-                .putString(AlarmScheduleState.KEY_NEXT_TIME, map.getString("next_time", "--:--"))
-                .putString(AlarmScheduleState.KEY_NEXT_DATE, map.getString("next_date", ""))
-                .putString(AlarmScheduleState.KEY_NEXT_LABEL, map.getString("next_label", "沒有資料"))
-                .putLong(AlarmScheduleState.KEY_NEXT_AT, map.getLong("next_at", 0L))
-                .putLong(AlarmScheduleState.KEY_UPDATED_AT, map.getLong("updated_at", System.currentTimeMillis()))
+                .putString(AlarmScheduleState.KEY_PREV_TIME, json.optString("prev_time", "--:--"))
+                .putString(AlarmScheduleState.KEY_PREV_LABEL, json.optString("prev_label", "沒有資料"))
+                .putLong(AlarmScheduleState.KEY_PREV_AT, json.optLong("prev_at", 0L))
+                .putString(AlarmScheduleState.KEY_NEXT_TIME, json.optString("next_time", "--:--"))
+                .putString(AlarmScheduleState.KEY_NEXT_LABEL, json.optString("next_label", "沒有資料"))
+                .putLong(AlarmScheduleState.KEY_NEXT_AT, json.optLong("next_at", 0L))
                 .apply();
         WatchLocalAlarmScheduler.scheduleFromCachedState(this);
         WatchScheduleDisplayState.refreshFromCacheAndRequest(this);
-    }
-
-    private void saveTileState(String rawJson) {
-        try {
-            JSONObject json = new JSONObject(rawJson == null ? "{}" : rawJson);
-            if (isDuplicateTileState(json.optLong("updated_at", 0L))) {
-                Log.d(TAG, "Duplicate tile state (message channel) ignored");
-                return;
-            }
-            JSONArray items = json.optJSONArray("schedule_items");
-            getSharedPreferences(AlarmScheduleState.PREFS, Context.MODE_PRIVATE).edit()
-                    .putString(AlarmScheduleState.KEY_PLAN_DATE, json.optString("plan_date", ""))
-                    .putString(AlarmScheduleState.KEY_ROSTER_CODE, json.optString("roster_code", ""))
-                    .putString(AlarmScheduleState.KEY_SCHEDULE_ITEMS_JSON, items == null ? "[]" : items.toString())
-                    .remove("schedule_count")
-                    .putString(AlarmScheduleState.KEY_PREV_TIME, json.optString("prev_time", "--:--"))
-                    .putString(AlarmScheduleState.KEY_PREV_DATE, json.optString("prev_date", ""))
-                    .putString(AlarmScheduleState.KEY_PREV_LABEL, json.optString("prev_label", "沒有資料"))
-                    .putLong(AlarmScheduleState.KEY_PREV_AT, json.optLong("prev_at", 0L))
-                    .putString(AlarmScheduleState.KEY_NEXT_TIME, json.optString("next_time", "--:--"))
-                    .putString(AlarmScheduleState.KEY_NEXT_DATE, json.optString("next_date", ""))
-                    .putString(AlarmScheduleState.KEY_NEXT_LABEL, json.optString("next_label", "沒有資料"))
-                    .putLong(AlarmScheduleState.KEY_NEXT_AT, json.optLong("next_at", 0L))
-                    .putLong(AlarmScheduleState.KEY_UPDATED_AT, json.optLong("updated_at", System.currentTimeMillis()))
-                    .apply();
-            WatchLocalAlarmScheduler.scheduleFromCachedState(this);
-            WatchScheduleDisplayState.refreshFromCacheAndRequest(this);
-        } catch (Exception e) {
-            Log.e(TAG, "Save tile state message failed", e);
-        }
     }
 
     private JSONObject dismissPayload(byte[] data) {

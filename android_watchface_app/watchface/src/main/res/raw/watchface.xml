@@ -3,1019 +3,308 @@
     <Metadata key="CLOCK_TYPE" value="DIGITAL" />
     <Metadata key="PREVIEW_TIME" value="01:41:40" />
 
+    <!--
+        Colour ladders: every text colour follows the same day-light curve. The
+        thresholds are sunrise/sunset fits on [DAY_OF_YEAR] (minutes since
+        midnight); the ladder is one <Transform target="color"> ternary chain per
+        element instead of a 19-deep Condition tree per element. Batteries use a
+        10-step ladder on the percentage.
+
+        Device-tested rules for a colour Transform (Galaxy Watch5, format v4):
+        - the value must be Color-typed: colorArgb(a, r, g, b). A quoted
+          "#aarrggbb" string leaves the static color attribute in force.
+        - chain nested ternaries flat (a ? X : b ? Y : Z); wrapping the nested
+          part in parentheses stops the expression evaluating.
+    -->
     <Scene backgroundColor="#ff000000">
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor0">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff063a8f">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor1">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff0b4fa8">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor2">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff2475cf">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor3">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff56a2e8">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor4">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff92cdf8">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor5">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff3a8add">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor6">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffa8dafa">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor7">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffc5e9ff">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor8">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffe6f7ff">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor9">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#fff2fbff">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor10">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffffffff">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor11">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#fff2fbff">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor12">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffe6f7ff">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor13">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffc5e9ff">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor14">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffa8dafa">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor15">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff3a8add">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor16">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff92cdf8">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor17">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff56a2e8">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="dateColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="dateColor18">
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff2475cf">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Compare>
-            <Default>
-                <PartText x="0" y="0" width="450" height="128" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
-                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff063a8f">
-                            <Template>date_line
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
-                                <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
-                            </Template>
-                        </Font>
-                    </TextCircular>
-                </PartText>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>
+        <!-- Date, arced across the top -->
+        <PartText x="0" y="0" width="450" height="128" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <TextCircular centerX="225" centerY="230" width="424" height="424" startAngle="312" endAngle="48" align="CENTER" direction="CLOCKWISE">
+                <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff063a8f">
+                    <Template>date_line
+                        <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY_OF_WEEK] == 1 ? &quot;Sat&quot; : [DAY_OF_WEEK] == 2 ? &quot;Sun&quot; : [DAY_OF_WEEK] == 3 ? &quot;Mon&quot; : [DAY_OF_WEEK] == 4 ? &quot;Tue&quot; : [DAY_OF_WEEK] == 5 ? &quot;Wed&quot; : [DAY_OF_WEEK] == 6 ? &quot;Thu&quot; : &quot;Fri&quot;) : [DAY_OF_WEEK_S]" />
+                        <Parameter expression="[HOUR_0_23] &lt; 6 ? ([DAY] &gt; 1 ? [DAY] - 1 : ([MONTH] == 3 ? ((([YEAR] % 4 == 0 &amp;&amp; [YEAR] % 100 != 0) || [YEAR] % 400 == 0) ? 29 : 28) : ([MONTH] == 5 || [MONTH] == 7 || [MONTH] == 10 || [MONTH] == 12 ? 30 : 31))) : [DAY]" />
+                        <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 ? ([MONTH] == 1 ? &quot;Dec&quot; : [MONTH] == 2 ? &quot;Jan&quot; : [MONTH] == 3 ? &quot;Feb&quot; : [MONTH] == 4 ? &quot;Mar&quot; : [MONTH] == 5 ? &quot;Apr&quot; : [MONTH] == 6 ? &quot;May&quot; : [MONTH] == 7 ? &quot;Jun&quot; : [MONTH] == 8 ? &quot;Jul&quot; : [MONTH] == 9 ? &quot;Aug&quot; : [MONTH] == 10 ? &quot;Sep&quot; : [MONTH] == 11 ? &quot;Oct&quot; : &quot;Nov&quot;) : [MONTH_S]" />
+                        <Parameter expression="[HOUR_0_23] &lt; 6 &amp;&amp; [DAY] == 1 &amp;&amp; [MONTH] == 1 ? [YEAR] - 1 : [YEAR]" />
+                    </Template>
+                    <Transform target="color" value="([HOUR_0_23] * 60 + [MINUTE]) &lt; (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 6, 58, 143) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 11, 79, 168) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 36, 117, 207) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 86, 162, 232) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 146, 205, 248) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 58, 138, 221) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 168, 218, 250) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 197, 233, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 230, 247, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779)) ? colorArgb(255, 242, 251, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779)) ? colorArgb(255, 255, 255, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 242, 251, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 230, 247, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 197, 233, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 168, 218, 250) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 58, 138, 221) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 146, 205, 248) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 86, 162, 232) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 36, 117, 207) : colorArgb(255, 6, 58, 143)" />
+                </Font>
+            </TextCircular>
+        </PartText>
 
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor0">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff063a8f">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor1">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff0b4fa8">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor2">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff2475cf">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor3">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff56a2e8">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor4">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff92cdf8">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor5">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff3a8add">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor6">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffa8dafa">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor7">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffc5e9ff">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor8">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffe6f7ff">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor9">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#fff2fbff">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor10">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffffffff">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor11">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#fff2fbff">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor12">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffe6f7ff">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor13">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffc5e9ff">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor14">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ffa8dafa">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor15">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff3a8add">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor16">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff92cdf8">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor17">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff56a2e8">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-        <Condition>
-            <Expressions>
-                <Expression name="mainTimeColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
-            <Compare expression="mainTimeColor18">
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff2475cf">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Compare>
-            <Default>
-                <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff063a8f">
-                            <Template><![CDATA[%s:%s]]>
-                                <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
-                                <Parameter expression="[MINUTE_Z]" />
-                            </Template>
-                        </Font>
-                    </Text>
-                </PartText>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>
+        <!-- Main HH:MM, 30-hour style (00:00-05:59 shown as 24:00-29:59) -->
+        <PartText x="-30" y="76" width="450" height="206" pivotX="0.5" pivotY="0.5" alpha="255" scaleX="0.78" scaleY="1.32">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <Text align="CENTER" verticalAlign="CENTER" isAutoSize="TRUE">
+                <Font family="SYNC_TO_DEVICE" size="158" weight="BOLD" slant="NORMAL" color="#ff063a8f">
+                    <Template><![CDATA[%s:%s]]>
+                        <Parameter expression="[HOUR_0_23] &lt; 6 ? numberFormat(&quot;00&quot;, [HOUR_0_23] + 24) : numberFormat(&quot;00&quot;, [HOUR_0_23])" />
+                        <Parameter expression="[MINUTE_Z]" />
+                    </Template>
+                    <Transform target="color" value="([HOUR_0_23] * 60 + [MINUTE]) &lt; (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 6, 58, 143) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 11, 79, 168) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 36, 117, 207) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 86, 162, 232) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 146, 205, 248) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 58, 138, 221) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 168, 218, 250) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 197, 233, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 230, 247, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779)) ? colorArgb(255, 242, 251, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779)) ? colorArgb(255, 255, 255, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 242, 251, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 230, 247, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 197, 233, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 168, 218, 250) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 58, 138, 221) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 146, 205, 248) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 86, 162, 232) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 36, 117, 207) : colorArgb(255, 6, 58, 143)" />
+                </Font>
+            </Text>
+        </PartText>
 
+        <!-- Seconds keep the Condition ladder: the WFF schema (clock/timeText.xsd) gives
+             TimeText its own childless Font, so a color Transform is not allowed there. -->
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression></Expressions>
             <Compare expression="secondsColor0">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff063a8f" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression></Expressions>
             <Compare expression="secondsColor1">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff0b4fa8" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression></Expressions>
             <Compare expression="secondsColor2">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff2475cf" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression></Expressions>
             <Compare expression="secondsColor3">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff56a2e8" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression></Expressions>
             <Compare expression="secondsColor4">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff92cdf8" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression></Expressions>
             <Compare expression="secondsColor5">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff3a8add" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression></Expressions>
             <Compare expression="secondsColor6">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffa8dafa" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression></Expressions>
             <Compare expression="secondsColor7">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffc5e9ff" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression></Expressions>
             <Compare expression="secondsColor8">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffe6f7ff" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression></Expressions>
             <Compare expression="secondsColor9">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#fff2fbff" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression></Expressions>
             <Compare expression="secondsColor10">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffffffff" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression></Expressions>
             <Compare expression="secondsColor11">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#fff2fbff" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression></Expressions>
             <Compare expression="secondsColor12">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffe6f7ff" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression></Expressions>
             <Compare expression="secondsColor13">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffc5e9ff" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression></Expressions>
             <Compare expression="secondsColor14">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ffa8dafa" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression></Expressions>
             <Compare expression="secondsColor15">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff3a8add" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression></Expressions>
             <Compare expression="secondsColor16">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff92cdf8" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression></Expressions>
             <Compare expression="secondsColor17">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff56a2e8" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
         <Condition>
-            <Expressions>
-                <Expression name="secondsColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-            </Expressions>
+            <Expressions><Expression name="secondsColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression></Expressions>
             <Compare expression="secondsColor18">
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff2475cf" />
                     </TimeText>
-                </DigitalClock>            </Compare>
+                </DigitalClock>
+            </Compare>
             <Default>
                 <DigitalClock x="0" y="0" width="450" height="450">
                     <TimeText x="326" y="94" width="86" height="60" pivotX="0" pivotY="0.5" scaleX="0.78" scaleY="1.32" alpha="255" align="RIGHT" format="ss" hourFormat="SYNC_TO_DEVICE">
                         <Variant mode="AMBIENT" target="alpha" value="0" />
                         <Font family="SYNC_TO_DEVICE" size="44" weight="BOLD" slant="NORMAL" color="#ff063a8f" />
                     </TimeText>
-                </DigitalClock>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
-        </Condition>            </Default>
+                </DigitalClock>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
+        </Condition>
+            </Default>
         </Condition>
 
-        <PartText
-            x="24"
-            y="140"
-            width="402"
-            height="130"
-            pivotX="0.5"
-            pivotY="0.5"
-            alpha="0"
-            scaleX="0.88"
-            scaleY="1.12">
+        <!-- Ambient-only thin HH:MM -->
+        <PartText x="24" y="140" width="402" height="130" pivotX="0.5" pivotY="0.5" alpha="0" scaleX="0.88" scaleY="1.12">
             <Variant mode="AMBIENT" target="alpha" value="255" />
             <Text align="CENTER" verticalAlign="CENTER">
                 <Font family="SYNC_TO_DEVICE" size="132" weight="THIN" slant="NORMAL" color="#ff1262c2">
@@ -1028,190 +317,23 @@
             </Text>
         </PartText>
 
+        <!-- Watch battery, arced bottom-left -->
         <Group x="0" y="0" width="450" height="450" name="battery_status">
             <Variant mode="AMBIENT" target="alpha" value="0" />
-            <Condition>
-                <Expressions>
-                    <Expression name="watchBattery90"><![CDATA[[BATTERY_PERCENT] >= 90]]></Expression>
-                </Expressions>
-                <Compare expression="watchBattery90">
-                    <PartText x="0" y="0" width="450" height="450">
-                        <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                            <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff2fe37a">
-                                <Template>battery_value
-                                    <Parameter expression="[BATTERY_PERCENT]" />
-                                </Template>
-                            </Font>
-                        </TextCircular>
-                    </PartText>
-                </Compare>
-                <Default>
-                    <Condition>
-                        <Expressions>
-                            <Expression name="watchBattery80"><![CDATA[[BATTERY_PERCENT] >= 80]]></Expression>
-                        </Expressions>
-                        <Compare expression="watchBattery80">
-                            <PartText x="0" y="0" width="450" height="450">
-                                <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                    <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff55dc6a">
-                                        <Template>battery_value
-                                            <Parameter expression="[BATTERY_PERCENT]" />
-                                        </Template>
-                                    </Font>
-                                </TextCircular>
-                            </PartText>
-                        </Compare>
-                        <Default>
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="watchBattery70"><![CDATA[[BATTERY_PERCENT] >= 70]]></Expression>
-                                </Expressions>
-                                <Compare expression="watchBattery70">
-                                    <PartText x="0" y="0" width="450" height="450">
-                                        <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                            <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff86d95b">
-                                                <Template>battery_value
-                                                    <Parameter expression="[BATTERY_PERCENT]" />
-                                                </Template>
-                                            </Font>
-                                        </TextCircular>
-                                    </PartText>
-                                </Compare>
-                                <Default>
-                                    <Condition>
-                                        <Expressions>
-                                            <Expression name="watchBattery60"><![CDATA[[BATTERY_PERCENT] >= 60]]></Expression>
-                                        </Expressions>
-                                        <Compare expression="watchBattery60">
-                                            <PartText x="0" y="0" width="450" height="450">
-                                                <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                    <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffb8d84d">
-                                                        <Template>battery_value
-                                                            <Parameter expression="[BATTERY_PERCENT]" />
-                                                        </Template>
-                                                    </Font>
-                                                </TextCircular>
-                                            </PartText>
-                                        </Compare>
-                                        <Default>
-                                            <Condition>
-                                                <Expressions>
-                                                    <Expression name="watchBattery50"><![CDATA[[BATTERY_PERCENT] >= 50]]></Expression>
-                                                </Expressions>
-                                                <Compare expression="watchBattery50">
-                                                    <PartText x="0" y="0" width="450" height="450">
-                                                        <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                            <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffe6d348">
-                                                                <Template>battery_value
-                                                                    <Parameter expression="[BATTERY_PERCENT]" />
-                                                                </Template>
-                                                            </Font>
-                                                        </TextCircular>
-                                                    </PartText>
-                                                </Compare>
-                                                <Default>
-                                                    <Condition>
-                                                        <Expressions>
-                                                            <Expression name="watchBattery40"><![CDATA[[BATTERY_PERCENT] >= 40]]></Expression>
-                                                        </Expressions>
-                                                        <Compare expression="watchBattery40">
-                                                            <PartText x="0" y="0" width="450" height="450">
-                                                                <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                    <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffffb23f">
-                                                                        <Template>battery_value
-                                                                            <Parameter expression="[BATTERY_PERCENT]" />
-                                                                        </Template>
-                                                                    </Font>
-                                                                </TextCircular>
-                                                            </PartText>
-                                                        </Compare>
-                                                        <Default>
-                                                            <Condition>
-                                                                <Expressions>
-                                                                    <Expression name="watchBattery30"><![CDATA[[BATTERY_PERCENT] >= 30]]></Expression>
-                                                                </Expressions>
-                                                                <Compare expression="watchBattery30">
-                                                                    <PartText x="0" y="0" width="450" height="450">
-                                                                        <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                            <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffff8c3f">
-                                                                                <Template>battery_value
-                                                                                    <Parameter expression="[BATTERY_PERCENT]" />
-                                                                                </Template>
-                                                                            </Font>
-                                                                        </TextCircular>
-                                                                    </PartText>
-                                                                </Compare>
-                                                                <Default>
-                                                                    <Condition>
-                                                                        <Expressions>
-                                                                            <Expression name="watchBattery20"><![CDATA[[BATTERY_PERCENT] >= 20]]></Expression>
-                                                                        </Expressions>
-                                                                        <Compare expression="watchBattery20">
-                                                                            <PartText x="0" y="0" width="450" height="450">
-                                                                                <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                                    <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffff6640">
-                                                                                        <Template>battery_value
-                                                                                            <Parameter expression="[BATTERY_PERCENT]" />
-                                                                                        </Template>
-                                                                                    </Font>
-                                                                                </TextCircular>
-                                                                            </PartText>
-                                                                        </Compare>
-                                                                        <Default>
-                                                                            <Condition>
-                                                                                <Expressions>
-                                                                                    <Expression name="watchBattery10"><![CDATA[[BATTERY_PERCENT] >= 10]]></Expression>
-                                                                                </Expressions>
-                                                                                <Compare expression="watchBattery10">
-                                                                                    <PartText x="0" y="0" width="450" height="450">
-                                                                                        <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                                            <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffff4444">
-                                                                                                <Template>battery_value
-                                                                                                    <Parameter expression="[BATTERY_PERCENT]" />
-                                                                                                </Template>
-                                                                                            </Font>
-                                                                                        </TextCircular>
-                                                                                    </PartText>
-                                                                                </Compare>
-                                                                                <Default>
-                                                                                    <PartText x="0" y="0" width="450" height="450">
-                                                                                        <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                                            <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffcc2238">
-                                                                                                <Template>battery_value
-                                                                                                    <Parameter expression="[BATTERY_PERCENT]" />
-                                                                                                </Template>
-                                                                                            </Font>
-                                                                                        </TextCircular>
-                                                                                    </PartText>
-                                                                                </Default>
-                                                                            </Condition>
-                                                                        </Default>
-                                                                    </Condition>
-                                                                </Default>
-                                                            </Condition>
-                                                        </Default>
-                                                    </Condition>
-                                                </Default>
-                                            </Condition>
-                                        </Default>
-                                    </Condition>
-                                </Default>
-                            </Condition>
-                        </Default>
-                    </Condition>
-                </Default>
-            </Condition>
+            <PartText x="0" y="0" width="450" height="450">
+                <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="222" endAngle="196" align="CENTER" direction="COUNTER_CLOCKWISE">
+                    <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffcc2238">
+                        <Template>battery_value
+                            <Parameter expression="[BATTERY_PERCENT]" />
+                        </Template>
+                        <Transform target="color" value="[BATTERY_PERCENT] &gt;= 90 ? colorArgb(255, 47, 227, 122) : [BATTERY_PERCENT] &gt;= 80 ? colorArgb(255, 85, 220, 106) : [BATTERY_PERCENT] &gt;= 70 ? colorArgb(255, 134, 217, 91) : [BATTERY_PERCENT] &gt;= 60 ? colorArgb(255, 184, 216, 77) : [BATTERY_PERCENT] &gt;= 50 ? colorArgb(255, 230, 211, 72) : [BATTERY_PERCENT] &gt;= 40 ? colorArgb(255, 255, 178, 63) : [BATTERY_PERCENT] &gt;= 30 ? colorArgb(255, 255, 140, 63) : [BATTERY_PERCENT] &gt;= 20 ? colorArgb(255, 255, 102, 64) : [BATTERY_PERCENT] &gt;= 10 ? colorArgb(255, 255, 68, 68) : colorArgb(255, 204, 34, 56)" />
+                    </Font>
+                </TextCircular>
+            </PartText>
         </Group>
 
-        <ComplicationSlot
-            x="0"
-            y="0"
-            width="450"
-            height="450"
-            slotId="10"
-            displayName="phone_battery"
-            supportedTypes="RANGED_VALUE EMPTY"
-            isCustomizable="FALSE">
+        <!-- Phone battery (companion complication), arced bottom-right -->
+        <ComplicationSlot x="0" y="0" width="450" height="450" slotId="10" displayName="phone_battery" supportedTypes="RANGED_VALUE EMPTY" isCustomizable="FALSE">
             <BoundingRoundBox x="0" y="0" width="450" height="450" outlinePadding="0.0" cornerRadius="0" />
             <DefaultProviderPolicy
                 primaryProvider="com.kenny.watchface.wear/com.kenny.watchface.wear.PhoneBatteryComplicationDataSourceService"
@@ -1220,189 +342,21 @@
                 defaultSystemProviderType="EMPTY" />
             <Complication type="RANGED_VALUE">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
-                <Condition>
-                    <Expressions>
-                        <Expression name="phoneBattery90"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 90]]></Expression>
-                    </Expressions>
-                    <Compare expression="phoneBattery90">
-                        <PartText x="0" y="0" width="450" height="450">
-                            <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff2fe37a">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TEXT]" />
-                                    </Template>
-                                </Font>
-                            </TextCircular>
-                        </PartText>
-                    </Compare>
-                    <Default>
-                        <Condition>
-                            <Expressions>
-                                <Expression name="phoneBattery80"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 80]]></Expression>
-                            </Expressions>
-                            <Compare expression="phoneBattery80">
-                                <PartText x="0" y="0" width="450" height="450">
-                                    <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff55dc6a">
-                                            <Template><![CDATA[%s]]>
-                                                <Parameter expression="[COMPLICATION.TEXT]" />
-                                            </Template>
-                                        </Font>
-                                    </TextCircular>
-                                </PartText>
-                            </Compare>
-                            <Default>
-                                <Condition>
-                                    <Expressions>
-                                        <Expression name="phoneBattery70"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 70]]></Expression>
-                                    </Expressions>
-                                    <Compare expression="phoneBattery70">
-                                        <PartText x="0" y="0" width="450" height="450">
-                                            <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ff86d95b">
-                                                    <Template><![CDATA[%s]]>
-                                                        <Parameter expression="[COMPLICATION.TEXT]" />
-                                                    </Template>
-                                                </Font>
-                                            </TextCircular>
-                                        </PartText>
-                                    </Compare>
-                                    <Default>
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="phoneBattery60"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 60]]></Expression>
-                                            </Expressions>
-                                            <Compare expression="phoneBattery60">
-                                                <PartText x="0" y="0" width="450" height="450">
-                                                    <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffb8d84d">
-                                                            <Template><![CDATA[%s]]>
-                                                                <Parameter expression="[COMPLICATION.TEXT]" />
-                                                            </Template>
-                                                        </Font>
-                                                    </TextCircular>
-                                                </PartText>
-                                            </Compare>
-                                            <Default>
-                                                <Condition>
-                                                    <Expressions>
-                                                        <Expression name="phoneBattery50"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 50]]></Expression>
-                                                    </Expressions>
-                                                    <Compare expression="phoneBattery50">
-                                                        <PartText x="0" y="0" width="450" height="450">
-                                                            <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffe6d348">
-                                                                    <Template><![CDATA[%s]]>
-                                                                        <Parameter expression="[COMPLICATION.TEXT]" />
-                                                                    </Template>
-                                                                </Font>
-                                                            </TextCircular>
-                                                        </PartText>
-                                                    </Compare>
-                                                    <Default>
-                                                        <Condition>
-                                                            <Expressions>
-                                                                <Expression name="phoneBattery40"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 40]]></Expression>
-                                                            </Expressions>
-                                                            <Compare expression="phoneBattery40">
-                                                                <PartText x="0" y="0" width="450" height="450">
-                                                                    <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffffb23f">
-                                                                            <Template><![CDATA[%s]]>
-                                                                                <Parameter expression="[COMPLICATION.TEXT]" />
-                                                                            </Template>
-                                                                        </Font>
-                                                                    </TextCircular>
-                                                                </PartText>
-                                                            </Compare>
-                                                            <Default>
-                                                                <Condition>
-                                                                    <Expressions>
-                                                                        <Expression name="phoneBattery30"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 30]]></Expression>
-                                                                    </Expressions>
-                                                                    <Compare expression="phoneBattery30">
-                                                                        <PartText x="0" y="0" width="450" height="450">
-                                                                            <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                                <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffff8c3f">
-                                                                                    <Template><![CDATA[%s]]>
-                                                                                        <Parameter expression="[COMPLICATION.TEXT]" />
-                                                                                    </Template>
-                                                                                </Font>
-                                                                            </TextCircular>
-                                                                        </PartText>
-                                                                    </Compare>
-                                                                    <Default>
-                                                                        <Condition>
-                                                                            <Expressions>
-                                                                                <Expression name="phoneBattery20"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 20]]></Expression>
-                                                                            </Expressions>
-                                                                            <Compare expression="phoneBattery20">
-                                                                                <PartText x="0" y="0" width="450" height="450">
-                                                                                    <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffff6640">
-                                                                                            <Template><![CDATA[%s]]>
-                                                                                                <Parameter expression="[COMPLICATION.TEXT]" />
-                                                                                            </Template>
-                                                                                        </Font>
-                                                                                    </TextCircular>
-                                                                                </PartText>
-                                                                            </Compare>
-                                                                            <Default>
-                                                                                <Condition>
-                                                                                    <Expressions>
-                                                                                        <Expression name="phoneBattery10"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 10]]></Expression>
-                                                                                    </Expressions>
-                                                                                    <Compare expression="phoneBattery10">
-                                                                                        <PartText x="0" y="0" width="450" height="450">
-                                                                                            <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                                                <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffff4444">
-                                                                                                    <Template><![CDATA[%s]]>
-                                                                                                        <Parameter expression="[COMPLICATION.TEXT]" />
-                                                                                                    </Template>
-                                                                                                </Font>
-                                                                                            </TextCircular>
-                                                                                        </PartText>
-                                                                                    </Compare>
-                                                                                    <Default>
-                                                                                        <PartText x="0" y="0" width="450" height="450">
-                                                                                            <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
-                                                                                                <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffcc2238">
-                                                                                                    <Template><![CDATA[%s]]>
-                                                                                                        <Parameter expression="[COMPLICATION.TEXT]" />
-                                                                                                    </Template>
-                                                                                                </Font>
-                                                                                            </TextCircular>
-                                                                                        </PartText>
-                                                                                    </Default>
-                                                                                </Condition>
-                                                                            </Default>
-                                                                        </Condition>
-                                                                    </Default>
-                                                                </Condition>
-                                                            </Default>
-                                                        </Condition>
-                                                    </Default>
-                                                </Condition>
-                                            </Default>
-                                        </Condition>
-                                    </Default>
-                                </Condition>
-                            </Default>
-                        </Condition>
-                    </Default>
-                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="420" height="420" startAngle="164" endAngle="138" align="CENTER" direction="COUNTER_CLOCKWISE">
+                        <Font family="SYNC_TO_DEVICE" size="32" weight="BOLD" color="#ffcc2238">
+                            <Template><![CDATA[%s]]>
+                                <Parameter expression="[COMPLICATION.TEXT]" />
+                            </Template>
+                            <Transform target="color" value="[COMPLICATION.RANGED_VALUE_VALUE] &gt;= 90 ? colorArgb(255, 47, 227, 122) : [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 80 ? colorArgb(255, 85, 220, 106) : [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 70 ? colorArgb(255, 134, 217, 91) : [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 60 ? colorArgb(255, 184, 216, 77) : [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 50 ? colorArgb(255, 230, 211, 72) : [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 40 ? colorArgb(255, 255, 178, 63) : [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 30 ? colorArgb(255, 255, 140, 63) : [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 20 ? colorArgb(255, 255, 102, 64) : [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 10 ? colorArgb(255, 255, 68, 68) : colorArgb(255, 204, 34, 56)" />
+                        </Font>
+                    </TextCircular>
+                </PartText>
             </Complication>
         </ComplicationSlot>
 
-        <ComplicationSlot
-            x="18"
-            y="272"
-            width="207"
-            height="96"
-            slotId="56"
-            displayName="prev_alarm"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
+        <!-- Prev / next alarm (alarm app complications) -->
+        <ComplicationSlot x="18" y="272" width="207" height="96" slotId="56" displayName="prev_alarm" supportedTypes="SHORT_TEXT EMPTY" isCustomizable="FALSE">
             <BoundingRoundBox x="0" y="0" width="207" height="96" outlinePadding="0.0" cornerRadius="0" />
             <DefaultProviderPolicy
                 primaryProvider="com.example.oneshotalarm/com.example.oneshotalarm.watch.PrevAlarmComplicationDataSourceService"
@@ -1411,330 +365,20 @@
                 defaultSystemProviderType="EMPTY" />
             <Complication type="SHORT_TEXT">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor0">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor1">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff0b4fa8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor2">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff2475cf">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor3">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff56a2e8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor4">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff92cdf8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor5">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff3a8add">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor6">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa8dafa">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor7">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc5e9ff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor8">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe6f7ff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor9">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff2fbff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor10">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffffffff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor11">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff2fbff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor12">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe6f7ff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor13">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc5e9ff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor14">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa8dafa">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor15">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff3a8add">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor16">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff92cdf8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor17">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff56a2e8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="prevAlarmTimeColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="prevAlarmTimeColor18">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff2475cf">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>            </Complication>
+                <PartText x="0" y="0" width="207" height="40">
+                    <Text align="CENTER" verticalAlign="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
+                            <Template><![CDATA[%s]]>
+                                <Parameter expression="[COMPLICATION.TITLE]" />
+                            </Template>
+                            <Transform target="color" value="([HOUR_0_23] * 60 + [MINUTE]) &lt; (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 6, 58, 143) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 11, 79, 168) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 36, 117, 207) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 86, 162, 232) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 146, 205, 248) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 58, 138, 221) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 168, 218, 250) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 197, 233, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 230, 247, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779)) ? colorArgb(255, 242, 251, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779)) ? colorArgb(255, 255, 255, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 242, 251, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 230, 247, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 197, 233, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 168, 218, 250) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 58, 138, 221) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 146, 205, 248) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 86, 162, 232) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 36, 117, 207) : colorArgb(255, 6, 58, 143)" />
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
         </ComplicationSlot>
 
-        <ComplicationSlot
-            x="225"
-            y="272"
-            width="207"
-            height="96"
-            slotId="57"
-            displayName="next_alarm"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
+        <ComplicationSlot x="225" y="272" width="207" height="96" slotId="57" displayName="next_alarm" supportedTypes="SHORT_TEXT EMPTY" isCustomizable="FALSE">
             <BoundingRoundBox x="0" y="0" width="207" height="96" outlinePadding="0.0" cornerRadius="0" />
             <DefaultProviderPolicy
                 primaryProvider="com.example.oneshotalarm/com.example.oneshotalarm.watch.NextAlarmComplicationDataSourceService"
@@ -1743,330 +387,20 @@
                 defaultSystemProviderType="EMPTY" />
             <Complication type="SHORT_TEXT">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor0"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor0">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor1"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor1">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff0b4fa8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor2"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor2">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff2475cf">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor3"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor3">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff56a2e8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor4"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor4">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff92cdf8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor5"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor5">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff3a8add">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor6"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor6">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa8dafa">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor7"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor7">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc5e9ff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor8"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor8">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe6f7ff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor9"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor9">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff2fbff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor10"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor10">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffffffff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor11"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor11">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#fff2fbff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor12"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor12">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffe6f7ff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor13"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor13">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffc5e9ff">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor14"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor14">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ffa8dafa">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor15"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor15">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff3a8add">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor16"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor16">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff92cdf8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor17"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor17">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff56a2e8">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                <Condition>
-                    <Expressions>
-                        <Expression name="nextAlarmTimeColor18"><![CDATA[([HOUR_0_23] * 60 + [MINUTE]) < (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768))]]></Expression>
-                    </Expressions>
-                    <Compare expression="nextAlarmTimeColor18">
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff2475cf">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Compare>
-                    <Default>
-                        <PartText x="0" y="0" width="207" height="40">
-                            <Text align="CENTER" verticalAlign="CENTER">
-                                <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
-                                    <Template><![CDATA[%s]]>
-                                        <Parameter expression="[COMPLICATION.TITLE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>                    </Default>
-                </Condition>            </Complication>
+                <PartText x="0" y="0" width="207" height="40">
+                    <Text align="CENTER" verticalAlign="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="34" weight="BOLD" color="#ff063a8f">
+                            <Template><![CDATA[%s]]>
+                                <Parameter expression="[COMPLICATION.TITLE]" />
+                            </Template>
+                            <Transform target="color" value="([HOUR_0_23] * 60 + [MINUTE]) &lt; (308.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 6, 58, 143) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (338.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 11, 79, 168) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (358.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 36, 117, 207) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (378.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 86, 162, 232) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (398.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 146, 205, 248) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (418.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 58, 138, 221) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (443.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 168, 218, 250) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (473.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 197, 233, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (518.903 + 38.783 * cos(0.017202424 * [DAY_OF_YEAR] - 0.01644) + 10.059 * cos(0.034404848 * [DAY_OF_YEAR] - 1.19682)) ? colorArgb(255, 230, 247, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (598.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779)) ? colorArgb(255, 242, 251, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (838.306 + 7.343 * cos(0.017202424 * [DAY_OF_YEAR] - 1.65803) + 9.906 * cos(0.034404848 * [DAY_OF_YEAR] - 1.22779)) ? colorArgb(255, 255, 255, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (917.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 242, 251, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (977.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 230, 247, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1017.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 197, 233, 255) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1047.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 168, 218, 250) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1077.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 58, 138, 221) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1107.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 146, 205, 248) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1142.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 86, 162, 232) : ([HOUR_0_23] * 60 + [MINUTE]) &lt; (1187.704 + 42.435 * cos(0.017202424 * [DAY_OF_YEAR] - 2.79646) + 9.753 * cos(0.034404848 * [DAY_OF_YEAR] - 1.26768)) ? colorArgb(255, 36, 117, 207) : colorArgb(255, 6, 58, 143)" />
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
         </ComplicationSlot>
 
-        <ComplicationSlot
-            x="18"
-            y="316"
-            width="207"
-            height="32"
-            slotId="58"
-            displayName="prev_alarm_label_line_1"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
+        <ComplicationSlot x="18" y="316" width="207" height="32" slotId="58" displayName="prev_alarm_label_line_1" supportedTypes="SHORT_TEXT EMPTY" isCustomizable="FALSE">
             <BoundingRoundBox x="0" y="0" width="207" height="32" outlinePadding="0.0" cornerRadius="0" />
             <DefaultProviderPolicy
                 primaryProvider="com.example.oneshotalarm/com.example.oneshotalarm.watch.PrevAlarmLabelLine1ComplicationDataSourceService"
@@ -2087,15 +421,7 @@
             </Complication>
         </ComplicationSlot>
 
-        <ComplicationSlot
-            x="18"
-            y="346"
-            width="207"
-            height="32"
-            slotId="59"
-            displayName="prev_alarm_label_line_2"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
+        <ComplicationSlot x="18" y="346" width="207" height="32" slotId="59" displayName="prev_alarm_label_line_2" supportedTypes="SHORT_TEXT EMPTY" isCustomizable="FALSE">
             <BoundingRoundBox x="0" y="0" width="207" height="32" outlinePadding="0.0" cornerRadius="0" />
             <DefaultProviderPolicy
                 primaryProvider="com.example.oneshotalarm/com.example.oneshotalarm.watch.PrevAlarmLabelLine2ComplicationDataSourceService"
@@ -2116,15 +442,7 @@
             </Complication>
         </ComplicationSlot>
 
-        <ComplicationSlot
-            x="225"
-            y="316"
-            width="207"
-            height="32"
-            slotId="60"
-            displayName="next_alarm_label_line_1"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
+        <ComplicationSlot x="225" y="316" width="207" height="32" slotId="60" displayName="next_alarm_label_line_1" supportedTypes="SHORT_TEXT EMPTY" isCustomizable="FALSE">
             <BoundingRoundBox x="0" y="0" width="207" height="32" outlinePadding="0.0" cornerRadius="0" />
             <DefaultProviderPolicy
                 primaryProvider="com.example.oneshotalarm/com.example.oneshotalarm.watch.NextAlarmLabelLine1ComplicationDataSourceService"
@@ -2145,15 +463,7 @@
             </Complication>
         </ComplicationSlot>
 
-        <ComplicationSlot
-            x="225"
-            y="346"
-            width="207"
-            height="32"
-            slotId="61"
-            displayName="next_alarm_label_line_2"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
+        <ComplicationSlot x="225" y="346" width="207" height="32" slotId="61" displayName="next_alarm_label_line_2" supportedTypes="SHORT_TEXT EMPTY" isCustomizable="FALSE">
             <BoundingRoundBox x="0" y="0" width="207" height="32" outlinePadding="0.0" cornerRadius="0" />
             <DefaultProviderPolicy
                 primaryProvider="com.example.oneshotalarm/com.example.oneshotalarm.watch.NextAlarmLabelLine2ComplicationDataSourceService"

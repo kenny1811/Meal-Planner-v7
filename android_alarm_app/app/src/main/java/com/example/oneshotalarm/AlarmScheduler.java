@@ -1,13 +1,11 @@
 package com.example.oneshotalarm;
 
 import android.app.AlarmManager;
-import android.app.ActivityOptions;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
 import android.provider.Settings;
 
 import org.json.JSONArray;
@@ -38,31 +36,24 @@ final class AlarmScheduler {
         }
     }
 
-    static void requestFullScreenIntentPermission(Context context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
-            intent.setData(Uri.parse("package:" + context.getPackageName()));
-            context.startActivity(intent);
-        }
+    static void schedulePlan(Context context, JSONArray alarms, String planDate, String rosterCode) {
+        scheduleEnabledFutureAlarms(context, alarms);
+        AlarmStore.savePlan(context, alarms, planDate, rosterCode);
+        NextAlarmWidgetProvider.updateAll(context);
+        WatchBridge.sendTileState(context);
     }
 
-    static void schedulePlan(Context context, JSONArray alarms, long cleanupAtMillis) {
-        schedulePlan(
-                context,
-                alarms,
-                cleanupAtMillis,
-                AlarmStore.getPlanDate(context),
-                AlarmStore.getRosterCode(context)
-        );
+    /** 開機／裝完新版：照儲存嗰份 plan 重新排——同 schedulePlan 一樣要跳 disabled。 */
+    static void rescheduleStoredPlan(Context context) {
+        scheduleEnabledFutureAlarms(context, AlarmStore.getAlarms(context));
     }
 
-    static void schedulePlan(
-            Context context,
-            JSONArray alarms,
-            long cleanupAtMillis,
-            String planDate,
-            String rosterCode
-    ) {
+    /**
+     * 先取消舊嘅，再逐個排：停用嘅行位（留喺表入面睇得到）同已過時嘅都唔排。
+     * schedulePlan 同 rescheduleStoredPlan 共用——以前 reschedule 漏咗 disabled，
+     * 重啟後 OFF 咗嘅行位照響。
+     */
+    private static void scheduleEnabledFutureAlarms(Context context, JSONArray alarms) {
         cancelScheduledAlarms(context);
         long now = System.currentTimeMillis();
         for (int i = 0; i < alarms.length(); i++) {
@@ -71,28 +62,6 @@ final class AlarmScheduler {
                 continue;
             }
             if (alarm.optBoolean("disabled", false)) {
-                continue;  // 停用嘅行位：留喺表入面睇得到，但唔排鬧鐘
-            }
-            String id = alarm.optString("id", "alarm-" + i);
-            String label = alarm.optString("label", "鬧鐘");
-            long triggerAtMillis = alarm.optLong("trigger_at_epoch_ms", 0L);
-            if (triggerAtMillis <= now) {
-                continue;
-            }
-            scheduleAlarm(context, id, label, triggerAtMillis);
-        }
-        AlarmStore.savePlan(context, alarms, 0L, planDate, rosterCode);
-        NextAlarmWidgetProvider.updateAll(context);
-        WatchBridge.sendTileState(context);
-    }
-
-    static void rescheduleStoredPlan(Context context) {
-        JSONArray alarms = AlarmStore.getAlarms(context);
-        cancelScheduledAlarms(context);
-        long now = System.currentTimeMillis();
-        for (int i = 0; i < alarms.length(); i++) {
-            JSONObject alarm = alarms.optJSONObject(i);
-            if (alarm == null) {
                 continue;
             }
             String id = alarm.optString("id", "alarm-" + i);
