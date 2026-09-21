@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import hashlib
+import math
 import subprocess
 import json
 import copy
@@ -31,6 +32,8 @@ from meal_planner.maintenance_db import (
     load_roster_code_definitions,
     load_roster_post_mapping,
     load_sheet_rows,
+    roster_code_defs,
+    roster_post_for_code,
     save_roster_code_definitions,
     save_roster_post_mapping,
     save_sheet_rows,
@@ -73,8 +76,16 @@ from meal_planner.phone_push import (
     push_schedule_grid,
     remember_phone_host,
 )
+from meal_planner.roster import code_for_date, load_roster_map
+from meal_planner.roster_codes import CATCH_ALL_PATTERN, is_work_day, match_roster_code
+from meal_planner.schedule_grid import (
+    ScheduleRow,
+    load_schedule_rows_from_rows,
+    rows_for_roster,
+    weekday_allows,
+)
 from meal_planner.shift_time import payroll_coverage_issues
-from meal_planner.timeparse import business_date, minutes_30h
+from meal_planner.timeparse import business_date, hhmm30, minutes_30h
 from meal_planner.storage import (
     _STORE_LOCK,
     batch_ui_updates,
@@ -91,6 +102,7 @@ from meal_planner.storage import (
     load_menu_order,
     load_menu_tree_open,
     load_memory_payload,
+    load_plan_date_neighbours,
     load_sidebar_width,
     load_show_past,
     load_target_editor_layout,
@@ -1760,6 +1772,267 @@ def api_typhoon_apply(body: TyphoonApplyRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Typhoon apply failed: {e}") from e
+
+
+# ---------------------------------------------------------------------------
+# Dashboard 專用（D:\Projects\Dashboard，門前 kiosk 嘅 Express server）
+# ---------------------------------------------------------------------------
+# 門前 Dashboard 以前自己用 node:sqlite 讀呢邊個 DB、用 JS 抄咗一次行位表／餐單嘅規則；
+# 2026-09 決定「規則只留餐單一份」——Dashboard 改為打下面兩條唯讀 endpoint。
+# 輸出 JSON 嘅 shape（欄名、型別、null 規則、排序）係同 Dashboard `server/schedule-grid.js`、
+# `server/meal.js` 同佢個 web/ 嘅合約，**唔可以隨便改**；要改就要兩邊一齊改、一齊驗。
+# 規則全部用返現成嘅 schedule_grid / roster / roster_codes / storage，呢度只係砌 shape。
+
+_DASHBOARD_MAX_RANGE_DAYS = 62
+_DASHBOARD_ROSTER_EN = {
+    "年假": "Annual leave",
+    "Stand by": "Non-working day",  # SB 照門前直樹要求顯示 Non-working day
+    "勞工假": "Statutory holiday",
+    "病假": "Sick leave",
+    "颱風假": "Typhoon day",
+    "週假": "Weekly off",
+    "返工日": "Work day",
+}
+# 10 項營養固定次序（同 CLAUDE.md 用戶慣例一致）：key、中文名、單位
+_DASHBOARD_NUTRITION = (
+    ("kcal", "卡路里", "kCal"),
+    ("protein_g", "蛋白質", "g"),
+    ("carb_g", "碳水", "g"),
+    ("sugar_g", "天然糖", "g"),
+    ("cholesterol_mg", "膽固醇", "mg"),
+    ("sodium_mg", "鈉", "mg"),
+    ("calcium_mg", "鈣", "mg"),
+    ("fat_total_g", "總脂肪", "g"),
+    ("fat_sat_g", "飽和脂肪", "g"),
+    ("fat_trans_g", "反式脂肪", "g"),
+)
+_DASHBOARD_INGREDIENT_RE = re.compile(r"^(.*?)\s*[（(]([^()（）]*)[)）]\s*$")
+_DASHBOARD_POST_PREFIX_RE = re.compile(r"^\s*(\S+)\s*[-–—:]\s*(.+)$")
+
+
+def _dashboard_iso_date(value: str, name: str) -> date:
+    try:
+        return date.fromisoformat(str(value or "").strip())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"{name} must be YYYY-MM-DD") from e
+
+
+def _dashboard_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _dashboard_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _dashboard_at(items: list[Any], idx: int) -> Any:
+    return items[idx] if idx < len(items) else None
+
+
+def _dashboard_strip_post_code(place: str | None, code: str) -> str | None:
+    """更表嘅 post 原文係「ELEB - Chanel 圓方」；Dashboard 已經有綠牌顯示更碼，
+    剝走開頭重覆嘅更碼（唔分大小寫）。"""
+    if not place:
+        return None
+    m = _DASHBOARD_POST_PREFIX_RE.match(place)
+    if m and m.group(1).lower() == code.lower():
+        return m.group(2).strip()
+    return place
+
+
+def _dashboard_duty(
+    grid_rows: list[ScheduleRow], posts: dict[str, str], code: str, day: date
+) -> dict[str, Any]:
+    """一個更碼喺某日嘅行位表：當日生效版本、剔走停用行、(日-四)/(五六) 過濾、30 小時制時間。"""
+    known = rows_for_roster(grid_rows, code)
+    version = rows_for_roster(grid_rows, code, day)
+    rows = [
+        {
+            "time": hhmm30(row.t) if row.t is not None else "",
+            "content": row.content.strip(),
+            "duration": row.duration_min,
+            "marker": row.is_marker,
+        }
+        for row in version
+        if weekday_allows(row.content, day)
+    ]
+    effective = version[0].effective_from if version else None
+    return {
+        "code": code,
+        "place": _dashboard_strip_post_code(posts.get(code), code),
+        "effectiveFrom": effective.isoformat() if effective else None,
+        "rows": rows,
+        "known": bool(known),
+    }
+
+
+@app.get("/api/dashboard/schedule-grid")
+def api_dashboard_schedule_grid(start: str, end: str, code: str | None = None) -> dict[str, Any]:
+    """門前 Dashboard 用，shape 唔可以隨便改。
+
+    每日一個 {date, codes, duties}：codes 係更表當日嘅更碼（冇更表／冇更碼就 []），
+    duties 逐個更碼出 {code, place, effectiveFrom, rows:[{time, content, duration, marker}], known}。
+    傳咗 code= 就唔睇更表，每日都當係呢個更碼（Dashboard 嘅更碼由更表 Google Calendar 嚟，
+    佢就係咁用）。日期範圍包含 end，最多 62 日。
+    """
+    d0 = _dashboard_iso_date(start, "start")
+    d1 = _dashboard_iso_date(end, "end")
+    if d1 < d0:
+        raise HTTPException(status_code=400, detail="end must not be before start")
+    if (d1 - d0).days >= _DASHBOARD_MAX_RANGE_DAYS:
+        raise HTTPException(status_code=400, detail=f"range must be at most {_DASHBOARD_MAX_RANGE_DAYS} days")
+    settings = get_settings()
+    try:
+        sheet = load_sheet_rows("schedule_grid", settings)
+    except MaintenanceDatabaseError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    grid_rows = load_schedule_rows_from_rows(sheet.get("rows") or [])
+    posts = roster_post_for_code(settings)
+    roster: dict[tuple[int, int], Any] = {}
+    if code is None:
+        try:
+            roster = load_roster_map(settings)
+        except MaintenanceDatabaseError:
+            roster = {}
+    days: list[dict[str, Any]] = []
+    d = d0
+    while d <= d1:
+        if code is not None:
+            codes = [code]
+        else:
+            rm = roster.get((d.year, d.month))
+            found = code_for_date(rm, d) if rm else None
+            codes = [found] if found else []
+        days.append(
+            {
+                "date": d.isoformat(),
+                "codes": codes,
+                "duties": [_dashboard_duty(grid_rows, posts, c, d) for c in codes],
+            }
+        )
+        d += timedelta(days=1)
+    return {"start": d0.isoformat(), "end": d1.isoformat(), "days": days}
+
+
+def _dashboard_roster_label(defs, code: str | None) -> str | None:
+    if not code:
+        return None
+    hit = match_roster_code(defs, code)
+    if hit is None:
+        hit = next((x for x in defs if x.pattern == CATCH_ALL_PATTERN), None)
+    if hit is None:
+        return None
+    return _DASHBOARD_ROSTER_EN.get(hit.label, hit.label)
+
+
+def _dashboard_split_ingredient(raw: Any) -> dict[str, str]:
+    """「燕麥(59g)」→ {name: 燕麥, amount: 59g}；冇括號就 amount 留空。"""
+    text = str(raw).strip()
+    m = _DASHBOARD_INGREDIENT_RE.match(text)
+    if m:
+        return {"name": m.group(1).strip(), "amount": m.group(2).strip()}
+    return {"name": text, "amount": ""}
+
+
+def _dashboard_round(value: Any) -> int | None:
+    """JS Math.round（.5 向上），唔係 Python 嘅銀行家捨入。"""
+    try:
+        return int(math.floor(float(value) + 0.5))
+    except (TypeError, ValueError):
+        return None
+
+
+@app.get("/api/dashboard/meal")
+def api_dashboard_meal(date: str) -> dict[str, Any]:
+    """門前 Dashboard 用，shape 唔可以隨便改。
+
+    該日 plan_versions 最新一版餐單，砌成 Dashboard Meals 頁要嘅樣：
+    {date, prevDate, nextDate, generatedAt, rosterCode, rosterLabel, isWorkDay, meals, riceNote, note, nutrition}。
+    冇餐單就 {date, missing: true, prevDate, nextDate}。prevDate／nextDate 係前後最近一日有餐單嘅日子，
+    俾前端撥到盡就停。餐次只出有嘢食（有 items／餐廳午餐／有 skipped 原因）嗰啲；營養 10 項固定次序，
+    紅旗完全跟餐單 summary 計好嘅旗。
+    """
+    day_iso = _dashboard_iso_date(date, "date").isoformat()
+    prev_date, next_date = load_plan_date_neighbours(day_iso)
+    latest = load_latest_versions([day_iso])
+    if not latest["days"]:
+        return {"date": day_iso, "missing": True, "prevDate": prev_date, "nextDate": next_date}
+    day = latest["days"][0]
+    generated_at = latest["versions"][day_iso][-1]
+    mp = _dashboard_dict(day.get("meal_plan"))
+    times = _dashboard_dict(mp.get("meal_times_resolved"))
+    skipped_map = _dashboard_dict(times.get("_skipped"))
+    ingredients = _dashboard_dict(mp.get("meal_ingredients"))
+    nutrients = _dashboard_dict(mp.get("meal_nutrients"))
+    restaurant = _dashboard_dict(mp.get("restaurant_lunch"))
+
+    meals: list[dict[str, Any]] = []
+    for name in MEAL_LABELS:
+        items = [_dashboard_split_ingredient(x) for x in _dashboard_list(ingredients.get(name))]
+        meal_time = times.get(name)
+        # 餐廳午餐要午餐真係有排時間先算（EleM 呢類更冇午餐，但 day_json 仍然留住 restaurant_lunch 參考資料，summary 亦冇計佢）
+        is_restaurant = (
+            name == "午餐" and bool(restaurant.get("choice")) and not items and meal_time is not None
+        )
+        kcal_raw = _dashboard_dict(nutrients.get(name)).get("kcal")
+        skipped = skipped_map.get(name)
+        meal = {
+            "name": name,
+            "time": meal_time,
+            "items": items,
+            "restaurant": (
+                {"choice": restaurant.get("choice"), "store": restaurant.get("store"), "hours": restaurant.get("hours")}
+                if is_restaurant
+                else None
+            ),
+            "kcal": _dashboard_round(kcal_raw) if kcal_raw is not None else None,
+            "skipped": skipped,
+        }
+        if items or meal["restaurant"] or skipped:
+            meals.append(meal)
+
+    indicators = _dashboard_dict(day.get("nutrient_indicators"))
+    summary = _dashboard_dict(mp.get("summary"))
+    totals = _dashboard_list(summary.get("totals"))
+    errors = _dashboard_list(summary.get("errors"))
+    total_red = _dashboard_list(summary.get("total_red_flags"))
+    error_red = _dashboard_list(summary.get("error_red_flags"))
+    nutrition = []
+    for i, (key, label, unit) in enumerate(_DASHBOARD_NUTRITION):
+        ind = _dashboard_dict(indicators.get(key))
+        raw = ind.get("raw")
+        nutrition.append(
+            {
+                "key": key,
+                "name": label,
+                "unit": unit,
+                "total": _dashboard_at(totals, i),
+                "error": _dashboard_at(errors, i),
+                "target": raw if raw is not None else "",
+                "totalRed": bool(_dashboard_at(total_red, i)),
+                "errorRed": bool(_dashboard_at(error_red, i)),
+            }
+        )
+
+    roster_code = day.get("roster_code")
+    defs = roster_code_defs(get_settings())
+    is_wd = day.get("is_work_day")
+    if is_wd is None and roster_code:
+        # day_json 冇記低（舊格式）先照更碼定義計；正常 preview 出嘅 day_json 都有
+        is_wd = is_work_day(defs, str(roster_code))
+    return {
+        "date": day_iso,
+        "prevDate": prev_date,
+        "nextDate": next_date,
+        "generatedAt": generated_at,
+        "rosterCode": roster_code,
+        "rosterLabel": _dashboard_roster_label(defs, roster_code),
+        "isWorkDay": bool(is_wd),
+        "meals": meals,
+        "riceNote": mp.get("rice_note"),
+        "note": mp.get("note"),
+        "nutrition": nutrition,
+    }
 
 
 def main() -> None:

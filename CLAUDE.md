@@ -6,6 +6,17 @@
 - `android_watchface_app/`：自訂 Wear OS 錶面。
 - Live 資料庫：專案根目錄 `meal_planner.sqlite3`（`.gitignore` 已排除，備份亦然）。
 
+## 對外接口（其他 project 打嚟）
+- 手機 alarm app：`GET /api/maint/sheets/schedule_grid/export-all`（每日 05:00／05:30 pull）；電腦推去電話用 `phone_push.py`（要 token）。
+- **門前 Dashboard**（D:\Projects\Dashboard，Express 8788）：`app.py` 最尾「Dashboard 專用」section 兩條唯讀 endpoint，
+  輸出 shape 係同 Dashboard 嘅合約（`tests/test_dashboard_api.py` 鎖住），**唔可以隨便改**，要改就兩邊一齊改：
+  - `GET /api/dashboard/schedule-grid?start=YYYY-MM-DD&end=YYYY-MM-DD[&code=更碼]`：每日 `{date, codes, duties:[{code, place, effectiveFrom, rows:[{time, content, duration, marker}], known}]}`；
+    冇 `code` 就用更表當日更碼，有 `code` 就每日都當呢個更碼（Dashboard 更碼由更表 GCal 嚟，固定傳 `code`）；最多 62 日。
+    規則全部用返 `schedule_grid.rows_for_roster`／`weekday_allows`、`roster.code_for_date`、`maintenance_db.roster_post_for_code`。
+  - `GET /api/dashboard/meal?date=YYYY-MM-DD`：`plan_versions` 最新一版砌成 `{date, prevDate, nextDate, generatedAt, rosterCode, rosterLabel, isWorkDay, meals, riceNote, note, nutrition}`；
+    冇餐單 `{date, missing: true, prevDate, nextDate}`（`storage.load_plan_date_neighbours`）。
+  - 純內部接口：加／改唔使 CHANGELOG entry、唔跳 version。
+
 ## 版本號 & Changelog（每個 session 都要跟）
 - 網頁 sidebar 版本號 X.Y.Z 讀 **committed 版**根目錄 `CHANGELOG.md`（`git show HEAD:CHANGELOG.md`）
   最頂嘅 `## X.Y.Z` 標題：**commit 咗先至跳 version**，未 commit 嘅 entry／WIP 唔會喺 app 出現。

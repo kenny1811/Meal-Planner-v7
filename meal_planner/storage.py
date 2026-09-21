@@ -455,6 +455,21 @@ def load_latest_versions(dates: list[str]) -> dict[str, Any]:
     return {"days": out_days, "versions": meta}
 
 
+def load_plan_date_neighbours(date_iso: str) -> tuple[str | None, str | None]:
+    """有餐單嘅日子入面，`date_iso` 前面最近一日／後面最近一日（冇就 None）。
+    門前 Dashboard 用嚟知道撥到盡（prevDate／nextDate）。"""
+    with _plan_db() as conn:
+        prev_row = conn.execute(
+            "SELECT MAX(date) AS d FROM plan_versions WHERE date < ?", (str(date_iso),)
+        ).fetchone()
+        next_row = conn.execute(
+            "SELECT MIN(date) AS d FROM plan_versions WHERE date > ?", (str(date_iso),)
+        ).fetchone()
+    prev_d = prev_row["d"] if prev_row else None
+    next_d = next_row["d"] if next_row else None
+    return (str(prev_d) if prev_d else None, str(next_d) if next_d else None)
+
+
 def merge_memory_payload(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
     """Merge a partial UI memory save without dropping days absent from the browser payload."""
     existing = existing if isinstance(existing, dict) else {}
