@@ -240,13 +240,7 @@
     }
 
     async function saveMemoryPayload() {
-      try {
-        await fetch("/api/memory-list", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ payload: memoryPayload }),
-        });
-      } catch (_) {}
+      await persistMemoryDays(memoryPayload);
     }
 
     async function loadShoppingCatalog() {

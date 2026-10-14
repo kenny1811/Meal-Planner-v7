@@ -40,6 +40,20 @@ from meal_planner.roster import code_for_date, load_roster_map
 from meal_planner.maintenance_db import roster_code_defs
 from meal_planner.roster_codes import is_work_day
 from meal_planner.settings import AppSettings, get_settings
+from meal_planner.weekly_rules import (
+    DayInfo,
+    candidates_for_row,
+    day_payload_rows_used,
+    group_by_week,
+    meal_plan_rows_used,
+    needs_resolve,
+    quota_for_week,
+    resolve_rule_rows,
+    slot_counts_for_rows,
+    week_dates,
+    week_start,
+    weekday_days,
+)
 
 
 _FAT_PCT_KEYS = {"fat_total_g", "fat_sat_g", "fat_trans_g"}
@@ -271,6 +285,136 @@ def _validate_indicator_rows_or_raise(work_vals: list[Any], nonwork_vals: list[A
         )
 
 
+def _weekly_rule_outside_counts(
+    in_range: set[date],
+    rows: set[int],
+) -> dict[tuple[tuple[int, int], int], int]:
+    """同一個禮拜（日至六）入面、今次冇生成嘅日子，已經儲咗嘅餐單用咗幾多次。
+
+    唔計呢啲就會出事：用戶淨係重生成禮拜三四，個配額當成全新一週嚟派，
+    禮拜一二已經出過嘅糙米會再派多兩日，一週變四日。
+    """
+    from meal_planner.storage import load_latest_versions
+
+    weeks = {week_start(d) for d in in_range}
+    outside = [d for w in weeks for d in week_dates(w) if d not in in_range]
+    if not outside or not rows:
+        return {}
+    stored = load_latest_versions([d.isoformat() for d in outside])
+    counts: dict[tuple[tuple[int, int], int], int] = {}
+    for payload in stored.get("days") or []:
+        raw = payload.get("date") if isinstance(payload, dict) else None
+        try:
+            day = date.fromisoformat(str(raw))
+        except (TypeError, ValueError):
+            continue
+        week = week_start(day)
+        for row in rows & day_payload_rows_used(payload):
+            counts[(week, row)] = counts.get((week, row), 0) + 1
+    return counts
+
+
+def _red_flag_count(meal_plan: dict[str, Any]) -> int:
+    return int(_summary_score(meal_plan.get("summary") or {})[0])
+
+
+def _apply_weekly_ingredient_rules(
+    settings: AppSettings,
+    cache: Any,
+    built: list[dict[str, Any]],
+    reroll_nonce: int,
+) -> None:
+    """按 `weekly_ingredient_rules` 派邊幾日出邊樣食材。
+
+    做法：逐條規則、逐個禮拜，照排名逐日試解落去，**試到唔會多出紅旗先收貨**；
+    收貨咗嘅日子就帶住個約束行落去（所以第二條規則係喺第一條嘅結果上面試）。
+    一個禮拜真係搵唔夠乾淨日子（例如淨低嘅全部係餐廳午餐日，得一個蛋白格，
+    出咗三文魚就補唔返鈣），寧願嗰週少出一次，都唔會硬塞一個紅旗出嚟。
+    """
+    entries = list(cache.nutrition_entries)
+    rules = resolve_rule_rows(settings.weekly_ingredient_rules, entries)
+    if not rules:
+        return
+    rows = {row for _, row in rules}
+
+    solvable = [b for b in built if b["code"]]
+    if not solvable:
+        return
+    by_date = {b["date"]: b for b in solvable}
+    required: dict[date, set[int]] = {b["date"]: set() for b in solvable}
+    excluded: dict[date, set[int]] = {b["date"]: set() for b in solvable}
+
+    def resolve_day(day: date) -> dict[str, Any]:
+        b = by_date[day]
+        meal_plan = build_day_meal_plan(
+            settings,
+            b["code"],
+            b["is_work_day"],
+            day,
+            indicators=b["nutrients"],
+            reroll_nonce=reroll_nonce,
+            cache=cache,
+            required_rows=frozenset(required[day]) or None,
+            excluded_rows=frozenset(excluded[day]) or None,
+        )
+        meal_plan["summary"] = _calc_day_summary(meal_plan, b["nutrients"], settings)
+        return meal_plan
+
+    outside = _weekly_rule_outside_counts(set(by_date), rows)
+
+    for rule, row in rules:
+        infos = [
+            DayInfo(
+                day=b["date"],
+                score=_summary_score(b["meal_plan"].get("summary") or {}),
+                slot_counts=slot_counts_for_rows(b["meal_plan"], entries, {row}),
+                rows_used=meal_plan_rows_used(b["meal_plan"]),
+            )
+            for b in solvable
+        ]
+        for week, week_days in group_by_week(infos).items():
+            quota = quota_for_week(rule, week, row, outside)
+            picked: set[date] = set()
+
+            if rule.weekdays:
+                # 用戶自己指定咗星期幾就照跟，唔做紅旗篩選——佢要嗰日就係嗰日。
+                for info in weekday_days(week_days, rule.weekdays)[:quota]:
+                    picked.add(info.day)
+                    required[info.day].add(row)
+                    if row not in info.rows_used:
+                        by_date[info.day]["meal_plan"] = resolve_day(info.day)
+            else:
+                natural, rest = candidates_for_row(week_days, row)
+                for info in natural:
+                    if len(picked) >= quota:
+                        break
+                    picked.add(info.day)
+                    required[info.day].add(row)
+                for info in rest:
+                    if len(picked) >= quota:
+                        break
+                    before = _red_flag_count(by_date[info.day]["meal_plan"])
+                    required[info.day].add(row)
+                    trial = resolve_day(info.day)
+                    if _red_flag_count(trial) <= before and row in meal_plan_rows_used(trial):
+                        by_date[info.day]["meal_plan"] = trial
+                        picked.add(info.day)
+                    else:
+                        required[info.day].discard(row)
+
+            if rule.exclusive:
+                for info in week_days:
+                    if info.day in picked:
+                        continue
+                    excluded[info.day].add(row)
+                    if needs_resolve(
+                        meal_plan_rows_used(by_date[info.day]["meal_plan"]),
+                        required[info.day],
+                        excluded[info.day],
+                    ):
+                        by_date[info.day]["meal_plan"] = resolve_day(info.day)
+
+
 def preview_days(
     dates: list[date],
     *,
@@ -301,7 +445,7 @@ def preview_days(
     work_prof = DayIndicatorProfile.from_row_cells(list(work_vals))
     nonwork_prof = DayIndicatorProfile.from_row_cells(list(nonwork_vals))
 
-    days_out: list[dict[str, Any]] = []
+    built: list[dict[str, Any]] = []
     for d in sorted(set(dates)):
         rm = roster.get((d.year, d.month))
         code = code_for_date(rm, d) if rm else None
@@ -324,14 +468,31 @@ def preview_days(
             cache=planning_cache,
         )
         meal_plan["summary"] = _calc_day_summary(meal_plan, nutrients, settings)
-
-        dp = DayPreview(
-            date=d,
-            roster_code=code,
-            is_work_day=is_wd,
-            indicator_profile=prof_kind,
+        built.append(
+            {
+                "date": d,
+                "code": code,
+                "is_work_day": is_wd,
+                "profile_kind": prof_kind,
+                "nutrients": nutrients,
+                "meal_plan": meal_plan,
+            }
         )
-        days_out.append(dp.to_dict(_serialize_profile(nutrients), meal_plan=meal_plan))
+
+    # 每週固定食材要睇齊成個禮拜先派得到日子，所以擺喺逐日生成之後先行。
+    _apply_weekly_ingredient_rules(settings, planning_cache, built, reroll_nonce)
+
+    days_out: list[dict[str, Any]] = []
+    for b in built:
+        dp = DayPreview(
+            date=b["date"],
+            roster_code=b["code"],
+            is_work_day=b["is_work_day"],
+            indicator_profile=b["profile_kind"],
+        )
+        days_out.append(
+            dp.to_dict(_serialize_profile(b["nutrients"]), meal_plan=b["meal_plan"])
+        )
 
     return {
         "headers": [str(h) if h is not None else None for h in headers],
@@ -607,6 +768,23 @@ def resolve_day_out_of_stock(
         if entry is not None and entry.daymax_g is not None:
             bound_overrides[row_i] = {"daymax_g": max(0.0, float(entry.daymax_g) - grams)}
 
+    # 每週固定食材：呢日本身出緊嘅規則食材，重解之後要留返——唔係嘅話「某樣嘢
+    # 冇貨」撳一撳，就會靜靜雞食咗嗰個禮拜嘅糙米／三文魚配額。用戶自己喺嗰格
+    # swap 走咗嘅就唔強留（佢明擺唔要），冇貨停用咗嘅亦會自動失效（唔喺候選）。
+    swapped_away: set[int] = set()
+    for (s_meal, s_idx) in (forced_item_rows or {}):
+        items = old_items.get(s_meal) or []
+        if 0 <= int(s_idx) < len(items) and isinstance(items[int(s_idx)], dict):
+            row = items[int(s_idx)].get("row")
+            if isinstance(row, int):
+                swapped_away.add(int(row))
+    rule_rows = {
+        row for _, row in resolve_rule_rows(
+            settings.weekly_ingredient_rules, planning_cache.nutrition_entries
+        )
+    }
+    keep_rows = (rule_rows & meal_plan_rows_used(meal_plan_in)) - swapped_away
+
     meal_plan = build_day_meal_plan(
         settings,
         code,
@@ -617,6 +795,7 @@ def resolve_day_out_of_stock(
         locked_meals=locked,
         bound_overrides=bound_overrides or None,
         forced_item_rows=forced_item_rows or None,
+        required_rows=frozenset(keep_rows) or None,
     )
     meal_plan["summary"] = _calc_day_summary(meal_plan, indicators, settings)
     return {"date": date_s, "meal_plan": meal_plan}

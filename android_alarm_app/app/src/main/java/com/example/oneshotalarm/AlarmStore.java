@@ -34,7 +34,7 @@ final class AlarmStore {
     private AlarmStore() {
     }
 
-    static void savePlan(Context context, JSONArray alarms, String planDate, String rosterCode) {
+    static synchronized void savePlan(Context context, JSONArray alarms, String planDate, String rosterCode) {
         prefs(context).edit()
                 .putString(KEY_ALARMS, alarms == null ? "[]" : alarms.toString())
                 .putString(KEY_PLAN_DATE, planDate == null ? "" : planDate)
@@ -221,7 +221,7 @@ final class AlarmStore {
         }
     }
 
-    static void markAlarmFired(Context context, String id) {
+    static synchronized void markAlarmFired(Context context, String id) {
         String targetId = id == null ? "" : id;
         if (targetId.isEmpty()) {
             return;
@@ -259,7 +259,7 @@ final class AlarmStore {
      * 餐單 cache、已下載嘅更碼 variants、last_import 一律唔郁——刪淨行位表最後一行
      * 唔應該連餐單同更碼都陪葬。
      */
-    static void clear(Context context) {
+    static synchronized void clear(Context context) {
         prefs(context).edit()
                 .remove(KEY_ALARMS)
                 .remove(KEY_PLAN_DATE)

@@ -198,6 +198,33 @@ def report_start_end(
     return start, end
 
 
+def duty_kind(content: str) -> str | None:
+    """行位表／報更共用開工、收工標記。"""
+    if "報收工" in content:
+        return "end"
+    if "報開工" in content:
+        return "start"
+    return None
+
+
+def resolve_duty_times(
+    rows: list[ScheduleRow], roster_code: str, day: date,
+    overtime: tuple[time | None, time | None] = (None, None),
+) -> tuple[time | None, time | None]:
+    """OnOffDuty 當日時間：指定日加班表 ＞ 當日生效行位表；不改總表 rows。"""
+    start, end = report_start_end(rows_for_roster(rows, roster_code, day), day)
+    return (
+        overtime[0] if overtime[0] is not None else start,
+        overtime[1] if overtime[1] is not None else end,
+    )
+
+
+def duty_row_time(content: str, original: str, times: tuple[time | None, time | None]) -> str:
+    kind = duty_kind(content)
+    value = times[1] if kind == "end" else times[0] if kind == "start" else None
+    return hhmm30(value) if value is not None else original
+
+
 def recompute_durations(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     """重算時長：一格嘅時長 ＝ 去下一個「佔時間」行嘅距離。
 

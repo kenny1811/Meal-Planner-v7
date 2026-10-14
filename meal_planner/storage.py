@@ -400,6 +400,13 @@ def save_plan_versions(days: list[dict[str, Any]]) -> dict[str, Any]:
     return {"timestamp": ts, "saved_dates": saved_dates}
 
 
+def load_latest_plan_revision() -> str | None:
+    """A cheap version marker for Dashboard's missed-notification check."""
+    with _plan_db() as conn:
+        row = conn.execute("SELECT MAX(timestamp) AS revision FROM plan_versions").fetchone()
+    return str(row["revision"]) if row and row["revision"] is not None else None
+
+
 def log_resolve_event(
     *,
     plan_date: str,
@@ -492,7 +499,7 @@ def merge_memory_payload(existing: dict[str, Any], incoming: dict[str, Any]) -> 
     }
 
 
-def save_memory_payload(payload: dict[str, Any]) -> None:
+def save_memory_payload(payload: dict[str, Any]) -> list[str]:
     base = {
         "headers": payload.get("headers", []),
         "indicator_rows": payload.get("indicator_rows", {}),
@@ -515,7 +522,8 @@ def save_memory_payload(payload: dict[str, Any]) -> None:
     # 都見到最新資料，而唔止收埋喺 planner_snapshots 嗰浸大 JSON blob 入面。
     days = base.get("days")
     if isinstance(days, list) and days:
-        save_plan_versions(days)
+        return save_plan_versions(days)["saved_dates"]
+    return []
 
 
 def load_memory_payload() -> dict[str, Any]:

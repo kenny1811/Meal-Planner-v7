@@ -6,6 +6,7 @@ import os
 import tempfile
 import unittest
 from datetime import date, datetime
+from unittest.mock import patch
 
 from meal_planner.duty_form import (
     _action_done,
@@ -16,6 +17,7 @@ from meal_planner.duty_form import (
     pick_report_slot,
     record_onoff_log,
     record_onoff_open,
+    set_time_override,
 )
 from meal_planner.settings import clear_settings_cache, get_settings
 
@@ -128,6 +130,46 @@ class RecordOpenTests(unittest.TestCase):
         self.assertEqual(load_onoff_log(settings, self.day)["start"]["status"], "sent")
         rows = load_onoff_history(settings, self.day)["start"]
         self.assertEqual([r["status"] for r in rows], ["sent", "opened"])
+
+    def test_sent_times_cannot_be_changed_or_reset(self) -> None:
+        settings = get_settings()
+        for kind in ("start", "end"):
+            record_onoff_log(settings, self.day, kind, "sent", time_text="10:45")
+        with patch("meal_planner.duty_form.save_sheet_rows") as save:
+            for kind in ("start", "end"):
+                for value in ("11:15", ""):
+                    with self.subTest(kind=kind, time=value), self.assertRaisesRegex(ValueError, "已 sent"):
+                        set_time_override(settings, self.day, **{kind: value})
+            save.assert_not_called()
+
+    def test_sent_history_also_prevents_manual_time_changes(self) -> None:
+        settings = get_settings()
+        record_onoff_log(settings, self.day, "start", "sent", time_text="10:45")
+        record_onoff_log(settings, self.day, "start", "failed", time_text="11:15")
+        with patch("meal_planner.duty_form.save_sheet_rows") as save:
+            with self.assertRaisesRegex(ValueError, "已 sent"):
+                set_time_override(settings, self.day, start="11:30", end="22:00")
+            save.assert_not_called()
+
+    def test_unsent_end_can_change_after_start_sent(self) -> None:
+        settings = get_settings()
+        record_onoff_log(settings, self.day, "start", "sent", time_text="10:45")
+        with patch("meal_planner.duty_form.load_sheet_rows", return_value={"rows": [["日期", "開工", "收工", "備註"]]}), \
+             patch("meal_planner.duty_form.save_sheet_rows") as save, \
+             patch("meal_planner.duty_form._rearm_missed_actions"):
+            set_time_override(settings, self.day, end="22:00")
+            self.assertEqual(save.call_args.args[1][1][2], "2200")
+        self.assertEqual(load_onoff_log(settings, self.day)["start"]["status"], "sent")
+
+    def test_send_now_can_record_its_actual_time_after_sent(self) -> None:
+        settings = get_settings()
+        record_onoff_log(settings, self.day, "start", "sent", time_text="10:45", source="holdsend")
+        with patch("meal_planner.duty_form.load_sheet_rows", return_value={"rows": [["日期", "開工", "收工", "備註"]]}), \
+             patch("meal_planner.duty_form.save_sheet_rows") as save, \
+             patch("meal_planner.duty_form._rearm_missed_actions") as rearm:
+            set_time_override(settings, self.day, start="10:45", rearm=False)
+            self.assertEqual(save.call_args.args[1][1][1], "1045")
+            rearm.assert_not_called()
 
 
 class ActionDoneTests(unittest.TestCase):

@@ -115,6 +115,22 @@
       return relation !== "past" && slot.status !== "sent" && slot.status !== "stopped";
     }
 
+    function dutyCellEditable(input) {
+      const slotId = input.getAttribute("data-duty-time-slot") || input.getAttribute("data-duty-msg-slot");
+      if (!slotId) return true;
+      const slot = dutyReportPlan && dutyReportPlan.slots.find((s) => s.id === slotId);
+      return !!slot && dutyGroupCellEditable(dutyReportPlan, slot)
+        && (!input.hasAttribute("data-duty-time-slot") || !/報開工|報收工/.test(slot.content || ""));
+    }
+
+    function dutyBeginCellEdit(input, replace = false) {
+      if (!dutyCellEditable(input)) {
+        renderDutyReport();
+        return;
+      }
+      beginCatalogCellEdit(input, replace);
+    }
+
     function renderDutyReport() {
       const out = document.getElementById("duty-report-out");
       if (!out || !dutyReportPlan) return;
@@ -138,11 +154,11 @@
           const groupCell = groupEditable
             ? `<td class="duty-plain duty-group-cell" tabindex="0" data-duty-group-slot="${esc(slot.id)}" title="Click / Enter to pick group">${groupHtml}<span class="duty-caret">▾</span></td>`
             : `<td class="duty-plain">${groupHtml}</td>`;
-          const timeEditable = groupEditable;
+          const timeEditable = groupEditable && !/報開工|報收工/.test(slot.content || "");
           const timeCell = timeEditable
             ? `<td class="duty-td-time"><input type="text" readonly class="duty-time-input" data-duty-time-slot="${esc(slot.id)}" value="${esc(slot.time)}" title="F2 / 雙擊改：09:16 / 0916 / 2416；留空還原原定 ${esc(slot.original_time)}" />${timeMark}</td>`
             : `<td class="duty-td-time duty-plain">${esc(slot.time)}${timeMark}</td>`;
-          const messageCell = timeEditable
+          const messageCell = groupEditable
             ? `<td><input type="text" readonly class="duty-msg-input" data-duty-msg-slot="${esc(slot.id)}" value="${esc(slot.message)}" title="F2 / 雙擊改；留空還原預設：${esc(slot.default_message || "")}" /></td>`
             : `<td class="duty-plain">${esc(slot.message)}</td>`;
           return `<tr class="${rowClass}">
@@ -484,13 +500,21 @@
       if (err) err.textContent = message || "";
     }
 
-    async function refreshDutyReport(showBusy = true) {
+    async function refreshDutyReport(showBusy = true, preserveFocusedInput = false) {
       if (dutyReportLoading) return;
       dutyReportLoading = true;
       if (showBusy) dutyShowError("");
       try {
         dutyReportPlan = await loadDutyReportPlan(dutyReportDate);
         dutyShowError("");
+        const out = document.getElementById("duty-report-out");
+        const focused = document.activeElement;
+        if (preserveFocusedInput && focused && out && out.contains(focused) && focused.tagName === "INPUT") {
+          if (dutyCellEditable(focused)) return;
+          // 已 sent：取消舊格嘅編輯，直接換成純文字，唔會 focusout 提交舊值。
+          focused.dataset.catalogEditing = "0";
+          focused.readOnly = true;
+        }
         renderDutyReport();
       } catch (e) {
         dutyShowError(e && e.message ? e.message : String(e));
@@ -737,6 +761,10 @@
 
     // 即打即存一個 cell；moveKey 有值就記低下一格位置，re-render 後還原 focus。
     function dutyCommitCell(el, moveKey) {
+      if (!dutyCellEditable(el)) {
+        renderDutyReport();
+        return;
+      }
       const dr = moveKey === "ArrowUp" ? -1 : moveKey ? 1 : 0;
       if (el.matches("input[data-duty-time-slot]")) {
         const slotId = el.getAttribute("data-duty-time-slot");
@@ -789,6 +817,13 @@
           );
           if (!isGroup && !isCell) return;
 
+          if (isCell && !dutyCellEditable(el)) {
+            ev.preventDefault();
+            el.dataset.catalogEditing = "0";
+            renderDutyReport();
+            return;
+          }
+
           if (isGroup) {
             if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(ev.key)) {
               ev.preventDefault();
@@ -823,19 +858,19 @@
             dutyMoveFocus(el, ev.key === "Enter" ? "ArrowDown" : ev.key);
             return;
           }
-          if (ev.key === "F2") { ev.preventDefault(); beginCatalogCellEdit(el); return; }
-          if (ev.key === "Process") { beginCatalogCellEdit(el, true); return; }
+          if (ev.key === "F2") { ev.preventDefault(); dutyBeginCellEdit(el); return; }
+          if (ev.key === "Process") { dutyBeginCellEdit(el, true); return; }
           if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
-            beginCatalogCellEdit(el, true); // 打字即入 edit + 取代（唔 preventDefault）
+            dutyBeginCellEdit(el, true); // 打字即入 edit + 取代（唔 preventDefault）
           }
         });
         out.addEventListener("dblclick", (ev) => {
           const input = ev.target.closest("input[data-duty-time-slot], input[data-duty-msg-slot], .duty-map-cell");
-          if (input) { ev.preventDefault(); beginCatalogCellEdit(input); }
+          if (input) { ev.preventDefault(); dutyBeginCellEdit(input); }
         });
         out.addEventListener("compositionstart", (ev) => {
           const input = ev.target.closest("input[data-duty-time-slot], input[data-duty-msg-slot], .duty-map-cell");
-          if (input && input.readOnly) beginCatalogCellEdit(input, true);
+          if (input && input.readOnly) dutyBeginCellEdit(input, true);
         });
         // 離開個格：endCatalogCellEdit 還原 readonly；若值有改就即存。
         out.addEventListener("focusout", (ev) => {
@@ -849,8 +884,6 @@
       setInterval(() => {
         if (activePanel !== "duty_report" || dutyReportDate || dutyBlockDragging) return;
         if (document.getElementById("duty-group-picker")) return;
-        const focused = document.activeElement;
-        if (focused && out && out.contains(focused) && focused.tagName === "INPUT") return;
-        refreshDutyReport(false);
+        refreshDutyReport(false, true);
       }, 10000);
     });

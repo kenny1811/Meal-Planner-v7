@@ -2349,7 +2349,7 @@
     function catalogNutrientText(value) {
       const n = Number(value);
       if (!Number.isFinite(n)) return catalogText(value);
-      return n === 0 ? "" : n.toFixed(1);
+      return n === 0 ? "" : n.toFixed(2);
     }
 
     function catalogNumberText(value) {
@@ -2383,7 +2383,7 @@
         `<td class="catalog-num"><input type="text" inputmode="decimal" class="catalog-cell-input" data-catalog-row="${idx}" data-catalog-nutrient="${esc(key)}" value="${esc(catalogNutrientText(nutrients[key] ?? 0))}" readonly /></td>`
       ).join("");
       return `<tr data-catalog-index="${idx}">
-        <td class="catalog-paused"><input type="checkbox" data-catalog-row="${idx}" data-catalog-field="paused"${row.paused ? " checked" : ""} /></td>
+        <td class="catalog-paused" tabindex="-1" title="Hold to move row"><input type="checkbox" data-catalog-row="${idx}" data-catalog-field="paused"${row.paused ? " checked" : ""} /></td>
         ${textInput("category", row.category, "catalog-category")}
         ${textInput("name", row.name, "catalog-name")}
         ${nutrientCells}
@@ -2427,6 +2427,7 @@
       attachCatalogColumnResizers();
       applyTableOffsets(editor);
       attachTableDragHandles();
+      updateCatalogRowSelection();
     }
 
     function catalogColumnWidthPx(key) {
@@ -2538,8 +2539,162 @@
       document.querySelector(`#catalog-editor tr[data-catalog-index="${insertIndex}"] input[data-catalog-field="category"]`)?.focus();
     }
 
+    function updateCatalogRowSelection() {
+      const idx = catalogCursorRowIndex;
+      const count = (nutritionCatalogPayload.rows || []).length;
+      const selected = Number.isInteger(idx) && idx >= 0 && idx < count;
+      document.querySelectorAll("#catalog-editor tr[data-catalog-index]").forEach((row) => {
+        row.classList.toggle("catalog-row-selected", selected && Number(row.dataset.catalogIndex) === idx);
+      });
+      const up = document.getElementById("catalog-move-up");
+      const down = document.getElementById("catalog-move-down");
+      if (up) up.disabled = !selected || idx === 0;
+      if (down) down.disabled = !selected || idx === count - 1;
+    }
+
+    function moveNutritionCatalogRow(fromIndex, toIndex) {
+      const count = (nutritionCatalogPayload.rows || []).length;
+      if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)
+          || fromIndex < 0 || fromIndex >= count || toIndex < 0 || toIndex >= count || fromIndex === toIndex) return;
+      const active = document.activeElement;
+      const field = active?.getAttribute("data-catalog-field") || "name";
+      const nutrient = active?.getAttribute("data-catalog-nutrient");
+      if (active?.matches("#catalog-editor input.catalog-cell-input")) endCatalogCellEdit(active);
+      const editor = document.getElementById("catalog-editor");
+      const scrollTop = editor.scrollTop;
+      const scrollLeft = editor.scrollLeft;
+      const rows = collectNutritionCatalogRows();
+      rows.splice(toIndex, 0, rows.splice(fromIndex, 1)[0]);
+      catalogCursorRowIndex = toIndex;
+      nutritionCatalogPayload.rows = rows;
+      hideCatalogRowMenu();
+      renderNutritionCatalog(nutritionCatalogPayload);
+      editor.scrollTop = scrollTop;
+      editor.scrollLeft = scrollLeft;
+      const row = editor.querySelector(`tr[data-catalog-index="${toIndex}"]`);
+      const target = nutrient
+        ? row.querySelector(`input[data-catalog-nutrient="${nutrient}"]`)
+        : row.querySelector(`input[data-catalog-field="${field}"]`);
+      target?.focus({ preventScroll: true });
+      row.scrollIntoView({ block: "nearest", inline: "nearest" });
+      setUnsavedChanges("營養清單");
+    }
+
+    function attachCatalogRowMoving() {
+      const editor = document.getElementById("catalog-editor");
+      let suppressClick = false;
+      editor.addEventListener("click", (ev) => {
+        if (!suppressClick) return;
+        suppressClick = false;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+      }, true);
+      editor.addEventListener("contextmenu", (ev) => {
+        if (!suppressClick) return;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+      }, true);
+      editor.addEventListener("pointerdown", (ev) => {
+        const cell = ev.target.closest("td.catalog-paused");
+        if (!cell || ev.button !== 0 || ev.isPrimary === false) return;
+        const draggingIndex = Number(cell.closest("tr").dataset.catalogIndex);
+        let started = false;
+        let cancelled = false;
+        let dropIndex = null;
+        let lastMove = null;
+        let scrollTimer = null;
+        const clearDrop = () => {
+          editor.querySelectorAll(".catalog-drop-before, .catalog-drop-after").forEach((row) => {
+            row.classList.remove("catalog-drop-before", "catalog-drop-after");
+          });
+          dropIndex = null;
+        };
+        const updateDrop = (mv) => {
+          clearDrop();
+          if (Math.abs(mv.clientY - ev.clientY) < 4 && Math.abs(mv.clientX - ev.clientX) < 4) return;
+          const row = document.elementFromPoint(mv.clientX, mv.clientY)?.closest("tr[data-catalog-index]");
+          if (!row || !editor.contains(row)) return;
+          const rect = row.getBoundingClientRect();
+          const after = mv.clientY >= rect.top + rect.height / 2;
+          const insertionIndex = Number(row.dataset.catalogIndex) + (after ? 1 : 0);
+          dropIndex = insertionIndex > draggingIndex ? insertionIndex - 1 : insertionIndex;
+          row.classList.add(after ? "catalog-drop-after" : "catalog-drop-before");
+        };
+        const holdTimer = setTimeout(() => {
+          if (cancelled) return;
+          started = true;
+          suppressClick = true;
+          const active = document.activeElement;
+          if (active?.matches("#catalog-editor input.catalog-cell-input")) endCatalogCellEdit(active);
+          cell.focus({ preventScroll: true });
+          catalogCursorRowIndex = draggingIndex;
+          updateCatalogRowSelection();
+          hideCatalogRowMenu();
+          document.body.classList.add("catalog-row-dragging");
+          scrollTimer = setInterval(() => {
+            if (!lastMove) return;
+            const bounds = editor.getBoundingClientRect();
+            if (lastMove.clientX < bounds.left || lastMove.clientX > bounds.right
+                || lastMove.clientY < bounds.top || lastMove.clientY > bounds.bottom) return;
+            if (lastMove.clientY < bounds.top + 40) editor.scrollTop -= 24;
+            else if (lastMove.clientY > bounds.bottom - 40) editor.scrollTop += 24;
+            updateDrop(lastMove);
+          }, 60);
+        }, 450);
+        const cancel = () => {
+          cancelled = true;
+          suppressClick = true;
+          clearTimeout(holdTimer);
+          if (scrollTimer != null) clearInterval(scrollTimer);
+          scrollTimer = null;
+          document.body.classList.remove("catalog-row-dragging");
+          clearDrop();
+        };
+        const onMove = (mv) => {
+          if (mv.pointerId !== ev.pointerId || cancelled) return;
+          lastMove = mv;
+          if (!started) {
+            if (Math.abs(mv.clientY - ev.clientY) > 6 || Math.abs(mv.clientX - ev.clientX) > 6) {
+              cancel();
+            }
+            return;
+          }
+          mv.preventDefault();
+          updateDrop(mv);
+        };
+        const finish = (mv, cancel = false) => {
+          if (mv && mv.pointerId !== ev.pointerId) return;
+          if (started && !cancel && !cancelled) updateDrop(mv);
+          const toIndex = dropIndex;
+          clearTimeout(holdTimer);
+          if (scrollTimer != null) clearInterval(scrollTimer);
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          window.removeEventListener("pointercancel", onCancel);
+          window.removeEventListener("keydown", onKey);
+          window.removeEventListener("blur", onBlur);
+          document.body.classList.remove("catalog-row-dragging");
+          clearDrop();
+          if (started && !cancel && !cancelled) moveNutritionCatalogRow(draggingIndex, toIndex);
+          // The release click follows pointerup synchronously. Block only that
+          // click after a hold/drag, while a normal short click still toggles.
+          setTimeout(() => { suppressClick = false; }, 0);
+        };
+        const onUp = (mv) => finish(mv);
+        const onCancel = (mv) => finish(mv, true);
+        const onKey = (key) => { if (key.key === "Escape") { key.preventDefault(); cancel(); } };
+        const onBlur = () => finish(null, true);
+        window.addEventListener("pointermove", onMove, { passive: false });
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onCancel);
+        window.addEventListener("keydown", onKey);
+        window.addEventListener("blur", onBlur);
+      });
+    }
+
     function removeNutritionCatalogRow(idx) {
       nutritionCatalogPayload.rows = collectNutritionCatalogRows().filter((_, rowIdx) => rowIdx !== idx);
+      catalogCursorRowIndex = Math.min(idx, nutritionCatalogPayload.rows.length - 1);
       renderNutritionCatalog(nutritionCatalogPayload);
       setUnsavedChanges("營養清單");
       setCatalogStatus("Row removed locally. Save Catalog to persist.");
@@ -2556,7 +2711,10 @@
       const menu = document.getElementById("catalog-row-menu");
       if (!menu) return;
       catalogCursorRowIndex = idx;
+      updateCatalogRowSelection();
       menu.hidden = false;
+      menu.querySelector('[data-catalog-row-action="move-up"]').disabled = idx === 0;
+      menu.querySelector('[data-catalog-row-action="move-down"]').disabled = idx === nutritionCatalogPayload.rows.length - 1;
       menu.setAttribute("data-catalog-index", String(idx));
       const rect = menu.getBoundingClientRect();
       const left = Math.max(2, Math.min(ev.clientX, window.innerWidth - rect.width - 2));

@@ -1,6 +1,8 @@
 import os
+import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -115,6 +117,55 @@ class NutritionDatabaseTests(unittest.TestCase):
         self.assertEqual(saved[1].nutrients["fat_trans_g"], 0.0)
         with self.assertRaises(ValueError):
             save_catalog_entries([{"category": "Missing name"}], settings)
+
+    def test_catalog_reorder_persists_without_changing_ingredient_ids(self):
+        settings = get_settings()
+        rows = [
+            {"row_index": 10, "category": "水果", "name": "蘋果", "paused": True,
+             "min_g": 40, "max_g": 60, "daymax_g": 120, "nutrients": {"kcal": 52}},
+            {"row_index": 20, "category": "蔬菜", "name": "白菜", "nutrients": {"kcal": 13}},
+            {"row_index": 30, "category": "水果", "name": "粟米粒", "max_g": 25,
+             "daymax_g": 50, "nutrients": {"kcal": 400, "protein_g": 8}},
+        ]
+        save_catalog_entries(rows, settings)
+        expected = [rows[0], rows[2], rows[1]]
+        saved = save_catalog_entries(expected, settings)
+        reloaded = load_catalog_entries(settings)
+        self.assertEqual([entry.row_index for entry in saved], [10, 30, 20])
+        self.assertEqual([entry.name for entry in reloaded], ["蘋果", "粟米粒", "白菜"])
+        self.assertTrue(reloaded[0].paused)
+        self.assertEqual(reloaded[0].min_g, 40)
+        self.assertEqual(reloaded[1].nutrients["kcal"], 400)
+        self.assertEqual(reloaded[1].nutrients["protein_g"], 8)
+        self.assertEqual(reloaded[1].daymax_g, 50)
+
+    def test_inserted_catalog_row_does_not_take_an_existing_ingredient_id(self):
+        settings = get_settings()
+        original = _seed_catalog(settings)[0]
+        saved = save_catalog_entries([
+            {"category": "水果", "name": "新水果"},
+            {"row_index": original.row_index, "category": original.category, "name": original.name},
+        ], settings)
+        self.assertEqual(saved[1].row_index, original.row_index)
+        self.assertGreater(saved[0].row_index, original.row_index)
+        # Deleted ingredient IDs must also stay unused by newly inserted rows.
+        replacement = save_catalog_entries([{"category": "水果", "name": "另一款水果"}], settings)
+        self.assertGreater(replacement[0].row_index, saved[0].row_index)
+
+    def test_legacy_catalog_gains_display_order_without_changing_rows(self):
+        settings = get_settings()
+        _seed_catalog(settings)
+        with closing(sqlite3.connect(database_path(settings))) as conn:
+            conn.execute("ALTER TABLE nutrition_catalog DROP COLUMN sort_order")
+            conn.commit()
+        # Simulate a fresh process reading the pre-upgrade database.
+        from meal_planner.nutrition_db import _SCHEMA_READY
+        _SCHEMA_READY.discard(str(database_path(settings).resolve()))
+        entries = load_catalog_entries(settings)
+        self.assertEqual([(entry.row_index, entry.name) for entry in entries], [(2, "蘋果")])
+        self.assertEqual(entries[0].nutrients["kcal"], 100)
+        with closing(sqlite3.connect(database_path(settings))) as conn:
+            self.assertEqual(conn.execute("SELECT sort_order FROM nutrition_catalog").fetchone()[0], 2)
 
     def test_empty_targets_raise_instead_of_falling_back(self):
         settings = get_settings()

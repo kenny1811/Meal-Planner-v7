@@ -89,6 +89,7 @@ def solve_day_meal_plan(
     _auto_retry_depth: int = 0,
     bound_overrides: dict[int, dict[str, float]] | None = None,
     forced_item_rows: dict[tuple[str, int], int] | None = None,
+    required_rows: frozenset[int] | None = None,
 ) -> SolveArtifacts | None:
     """
     以 MILP 做 item 候選離散選擇，並以 LP 做克數分配：
@@ -96,6 +97,8 @@ def solve_day_meal_plan(
     - 每候選克數受 Min/Max 約束
     - 同一食材列受 DayMax 约束
     - 營養目標用 slack 最小化（不可行時回最小違規）
+    - `required_rows` 嘅食材列全日最少出現一次（每週固定食材用；唔指定邊一餐，
+      由 solver 喺所有有嗰個候選嘅格入面自己揀）
     """
     if pulp is None:
         return None
@@ -160,6 +163,18 @@ def solve_day_meal_plan(
         if not cs:
             continue
         model += pulp.lpSum(y[(meal, idx, j)] for j in range(len(cs))) == 1
+
+    # 每週固定食材：指定食材列全日最少揀中一次。唔鎖死邊一餐——例如三文魚可以
+    # 落午餐或者晚餐，由 solver 睇邊邊餐代價細。候選入面冇嗰行（例如畀人暫停咗）
+    # 就當冇呢條規則，唔好整到成個模型無解。
+    for row_idx in sorted(required_rows or ()):
+        row_vars = []
+        for c in by_row.get(int(row_idx), []):
+            cs = by_item.get((c.meal, c.item_idx), [])
+            if c in cs:
+                row_vars.append(y[(c.meal, c.item_idx, cs.index(c))])
+        if row_vars:
+            model += pulp.lpSum(row_vars) >= 1
 
     # 米類同日同款（只在交集存在時啟用）
     rice_item_keys = [k for k, cs in by_item.items() if cs and cs[0].is_rice_item]
@@ -520,6 +535,7 @@ def solve_day_meal_plan(
                 fixed_nutrients=fixed_nutrients,
                 _auto_retry_depth=2,
                 bound_overrides=cumulative_overrides,
+                required_rows=required_rows,
             )
             if sim is None or not isinstance(sim.diagnostics, dict):
                 relaxation_eval = {
@@ -591,6 +607,7 @@ def solve_day_meal_plan(
             focus_multiplier=focus_multiplier,
             fixed_nutrients=fixed_nutrients,
             bound_overrides=bound_overrides,
+            required_rows=required_rows,
             by_item=by_item,
             selected_rows_info=selected_rows_info,
             base_violations=hard_violations,
@@ -634,6 +651,7 @@ def solve_day_meal_plan(
                 fixed_nutrients=fixed_nutrients,
                 _auto_retry_depth=1,
                 bound_overrides=bound_overrides,
+                required_rows=required_rows,
             )
             if retry is None or not isinstance(retry.diagnostics, dict):
                 continue
@@ -661,6 +679,7 @@ def solve_day_meal_plan(
                     focus_multiplier=focus_multiplier,
                     fixed_nutrients=fixed_nutrients,
                     bound_overrides=bound_overrides,
+                    required_rows=required_rows,
                     by_item=by_item,
                     selected_rows_info=list((best_artifact.state or {}).get("selected_rows_info", [])),
                     base_violations=list(best_artifact.diagnostics.get("hard_violations", [])),

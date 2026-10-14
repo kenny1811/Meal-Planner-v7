@@ -29,6 +29,7 @@ def _search_replacement_plan(
     by_item: dict[tuple[str, int], list[_Candidate]],
     selected_rows_info: list[dict[str, Any]],
     base_violations: list[dict[str, Any]],
+    required_rows: frozenset[int] | None = None,
 ) -> dict[str, Any]:
     score_before = _violation_score(base_violations, settings=settings)
     chosen_by_key: dict[tuple[str, int], int] = {}
@@ -98,6 +99,7 @@ def _search_replacement_plan(
                     _auto_retry_depth=4,
                     bound_overrides=bound_overrides,
                     forced_item_rows=trial_forced,
+                    required_rows=required_rows,
                 )
                 attempts += 1
                 if sim is None or not isinstance(sim.diagnostics, dict):

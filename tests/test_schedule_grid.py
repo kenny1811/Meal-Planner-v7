@@ -2,6 +2,7 @@ import unittest
 import os
 import tempfile
 from datetime import date, time, timedelta
+from unittest.mock import patch
 
 from meal_planner.schedule_grid_sync import (
     ScheduleGridNotFound,
@@ -25,6 +26,27 @@ from meal_planner.settings import clear_settings_cache, get_settings
 
 
 class ScheduleGridTests(unittest.TestCase):
+    def test_onoff_times_export_only_in_current_roster_copy(self):
+        rows = [
+            ["更碼", "時間", "內容", "時長", "生效日期"],
+            ["VOC", "09:00", "報開工, 報平安更", "", "2026-01-01"],
+            ["VOC", "20:00", "報收工, 報平安更", "", "2026-01-01"],
+            ["EleA", "20:00", "報收工", "", "2026-01-01"],
+        ]
+        target = ("2026-10-03", "VOC", "2026-01-01", [])
+        sheets = {"schedule_grid": rows, "overtime": [["日期", "開工", "收工"], ["2026-10-03", "10:00", "21:15"]]}
+        with patch("meal_planner.schedule_grid_sync.load_sheet_rows", side_effect=lambda key, _: {"rows": sheets.get(key, [])}), \
+             patch("meal_planner.schedule_grid_sync._choose_schedule_grid_export_target", return_value=target), \
+             patch("meal_planner.typhoon.typhoon_grid_rows", return_value=None):
+            exported = build_schedule_grid_all_variants_export()
+        current = next(v for v in exported["variants"] if v["is_current"])
+        other = next(v for v in exported["variants"] if not v["is_current"])
+        self.assertEqual(next(a["time"] for a in current["alarms"] if "報收工" in a["label"]), "21:15")
+        self.assertEqual(next(a["time"] for a in current["alarms"] if "報開工" in a["label"]), "10:00")
+        self.assertEqual(other["alarms"][0]["time"], "20:00")
+        self.assertEqual(rows[1][1], "09:00")
+        self.assertEqual(rows[2][1], "20:00")
+
     def test_rows_for_roster_uses_latest_effective_version_for_day(self):
         rows = [
             ScheduleRow("EleC1", time(12, 0), "飯", 45),

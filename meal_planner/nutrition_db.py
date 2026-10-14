@@ -15,7 +15,7 @@ from meal_planner.indicators import NUTRIENT_KEYS, parse_indicator_cell
 from meal_planner.nutrition_catalog import NutritionEntry
 from meal_planner.settings import AppSettings, get_settings
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TARGET_PROFILES = ("workday", "nonworkday")
 TARGET_SETTING_KEYS = (
     "activity_factor",
@@ -83,7 +83,7 @@ def _connect(settings: AppSettings) -> sqlite3.Connection:
 
 # 營養欄名＝NUTRIENT_KEYS（indicators.py 係唯一權威）；SQL 一律由佢砌，唔好手寫欄名。
 _NUTRIENT_COLS_DDL = ",\n            ".join(f"{key} REAL NOT NULL" for key in NUTRIENT_KEYS)
-_CATALOG_COLUMNS = ("row_index", "paused", "category", "name", "min_g", "max_g", "daymax_g", *NUTRIENT_KEYS)
+_CATALOG_COLUMNS = ("row_index", "sort_order", "paused", "category", "name", "min_g", "max_g", "daymax_g", *NUTRIENT_KEYS)
 _CATALOG_INSERT_SQL = (
     "INSERT INTO nutrition_catalog ("
     + ", ".join(_CATALOG_COLUMNS)
@@ -111,6 +111,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS nutrition_catalog (
             row_index INTEGER PRIMARY KEY,
+            sort_order INTEGER,
             paused INTEGER NOT NULL,
             category TEXT NOT NULL,
             name TEXT NOT NULL,
@@ -153,6 +154,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    catalog_columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(nutrition_catalog)")}
+    if "sort_order" not in catalog_columns:
+        conn.execute("ALTER TABLE nutrition_catalog ADD COLUMN sort_order INTEGER")
+    conn.execute("UPDATE nutrition_catalog SET sort_order = row_index WHERE sort_order IS NULL")
     columns = {
         str(row["name"])
         for row in conn.execute("PRAGMA table_info(nutrition_profile)").fetchall()
@@ -235,7 +240,7 @@ def _seed_targets(
 
 def load_catalog_entries(settings: AppSettings | None = None) -> list[NutritionEntry]:
     settings = settings or get_settings()
-    catalog_sql = "SELECT * FROM nutrition_catalog ORDER BY row_index"
+    catalog_sql = "SELECT * FROM nutrition_catalog ORDER BY sort_order, row_index"
     with closing(_connect(settings)) as conn:
         _ensure_schema(conn)
         rows = conn.execute(catalog_sql).fetchall() if _has_rows(conn, "nutrition_catalog") else None
@@ -273,7 +278,21 @@ def save_catalog_entries(
     settings = settings or get_settings()
     clean_rows: list[dict[str, Any]] = []
     seen_rows: set[int] = set()
-    next_row_index = 2
+    # Allocate new IDs above existing ones, including rows later in display order.
+    # Row IDs are referenced by saved meal plans; moving/inserting must preserve them.
+    reserved_rows: set[int] = set()
+    for raw in rows:
+        if isinstance(raw, dict):
+            try:
+                existing_index = int(raw.get("row_index"))
+            except (TypeError, ValueError):
+                continue
+            if existing_index >= 2:
+                reserved_rows.add(existing_index)
+    with closing(_connect(settings)) as conn:
+        _ensure_schema(conn)
+        largest_index = conn.execute("SELECT MAX(row_index) FROM nutrition_catalog").fetchone()[0]
+    next_row_index = max(1, int(largest_index or 1), max(reserved_rows, default=1)) + 1
     for pos, raw in enumerate(rows, start=1):
         if not isinstance(raw, dict):
             continue
@@ -298,6 +317,7 @@ def save_catalog_entries(
         clean_rows.append(
             {
                 "row_index": row_index,
+                "sort_order": len(clean_rows),
                 "paused": int(bool(raw.get("paused"))),
                 "category": category,
                 "name": name,

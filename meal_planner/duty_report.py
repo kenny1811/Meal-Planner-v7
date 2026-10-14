@@ -6,8 +6,8 @@
 - 30 小時制：00:00–05:59 屬前一日（business date = now - 6h 之日期）。
 - slot 來源：當日更碼喺行位表入面 內容 含「報平安更」嘅行；(日-四)/(五六) 標記按星期過濾。
   預設時間＝行位表 + 加班表 override（開工 override →「報開工」slot、收工 override →
-  「報收工」slot），panel 改時間/skip/send now 再凌駕（同 OnOff_Duty 一致嘅分工）。
-- overlay：整日 stop／更碼 segments（支援中途轉更碼）／逐 slot skip、改時間、改群組。
+  「報收工」slot）。開工／收工由 OnOffDuty 主導，舊 panel 時間覆寫不再套用。
+- overlay：整日 stop／更碼 segments／逐 slot skip、改群組；中途報更可改時間。
 - 對照表（更碼→WhatsApp 群組）與訊息模板存 SQLite，可喺 panel 編輯。
 """
 
@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -32,9 +33,12 @@ from meal_planner.maintenance_db import load_sheet_rows, roster_post_for_code
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.schedule_grid import (
     ScheduleRow,
+    duty_kind,
+    duty_row_time,
     load_overtime_overrides_from_rows,
     load_schedule_rows_from_rows,
     rows_for_roster,
+    resolve_duty_times,
     weekday_allows,  # (日-四)/(五六) 標記，同行位表 report_start_end 共用一份
 )
 from meal_planner.settings import AppSettings, get_settings
@@ -71,7 +75,14 @@ DEFAULT_GROUP_MAPPING: dict[str, str] = {
 EVENTS_KEEP = 50
 
 _DB_LOCK = threading.Lock()
-_ACTION_LOCK = threading.Lock()
+_ACTION_LOCK = threading.RLock()
+
+
+@contextmanager
+def time_edit_lock():
+    # OnOffDuty 改時間期間鎖住相應報更檢查／寫入，避免同一刻 sent 後仍改得。
+    with _ACTION_LOCK:
+        yield
 
 
 def _now(settings: AppSettings) -> datetime:
@@ -249,7 +260,8 @@ def record_log(
                 " ON CONFLICT(date_iso, slot_id) DO UPDATE SET status = excluded.status,"
                 " message = excluded.message, group_name = excluded.group_name,"
                 " detail = excluded.detail, manual = excluded.manual,"
-                " recorded_at = excluded.recorded_at",
+                " recorded_at = excluded.recorded_at"
+                " WHERE duty_report_log.status != 'sent' OR excluded.status = 'sent'",
                 (
                     biz_date.isoformat(),
                     slot_id,
@@ -375,12 +387,12 @@ def compute_slots(
     slot_overrides: dict[str, Any],
     overtime: tuple[time | None, time | None] = (None, None),
     extra_slots: Any = None,
+    duty_times: tuple[time | None, time | None] | None = None,
 ) -> list[dict[str, Any]]:
     """由 segments（更碼時間軸）+ 加班表 + overlay 推導當日 slot 清單（未計 sent 狀態）。
 
-    時間優先序：panel 改時間 override＞加班表（開工 override 套落有「報開工」嘅 slot、
-    收工 override 套落有「報收工」嘅 slot）＞行位表原時間。slot id 一律用行位表原時間，
-    唔會因 override 而變。
+    開工／收工跟 OnOffDuty 當日時間，忽略舊 panel time；中途報更可用 panel time。
+    slot id 一律用行位表原時間，唔會因當日時間改變而變。
 
     overlay 嘅 extra_slots 係行位表以外加開嘅更（id 用 `code@+HH:MM` 分開），
     訊息／群組同一般 slot 一模一樣——收訊息嗰邊睇唔出分別。
@@ -388,10 +400,10 @@ def compute_slots(
     # 一律先 normalize：舊資料／typhoon fallback 會直接傳 "00:00" 做「全日」，
     # 30 小時制之下 00:00 係 24:00，唔轉做 06:00 成日嘅 slot 會全部跌出窗口。
     segments = normalize_segments(segments)
-    ot_start, ot_end = overtime
     slots: list[dict[str, Any]] = []
     for i, seg in enumerate(segments):
         code = seg["code"]
+        code_times = duty_times if duty_times is not None else resolve_duty_times(parsed_rows, code, biz_date, overtime)
         seg_from = _parse_hhmm(seg["from"])
         seg_to = _parse_hhmm(segments[i + 1]["from"]) if i + 1 < len(segments) else 10**6
         for hhmm, content in safe_slots_for_code(parsed_rows, code, biz_date):
@@ -399,17 +411,13 @@ def compute_slots(
             if not (seg_from <= minutes < seg_to):
                 continue
             slot_id = f"{code}@{hhmm}"
-            base_time = hhmm
-            if ot_end is not None and "報收工" in content:
-                base_time = hhmm30(ot_end)
-            elif ot_start is not None and "報開工" in content:
-                base_time = hhmm30(ot_start)
+            base_time = duty_row_time(content, hhmm, code_times)
             override = slot_overrides.get(slot_id) if isinstance(slot_overrides.get(slot_id), dict) else {}
             if override.get("hidden"):
                 # 呢個 slot 當日根本唔存在（打風改晒報更節奏嗰陣，舊時間永遠唔會再用）。
                 # 同 skip 唔同：skip 係「見到但唔射」，hidden 係「當佢冇」。
                 continue
-            effective_time = str(override.get("time") or base_time)
+            effective_time = base_time if duty_kind(content) else str(override.get("time") or base_time)
             if _parse_hhmm(effective_time) < 0:
                 effective_time = base_time
             group = str(override.get("group") or mapping.get(code, ""))
@@ -422,6 +430,7 @@ def compute_slots(
                     "original_time": hhmm,
                     "ot_override": base_time != hhmm,
                     "time": effective_time,
+                    "time_editable": duty_kind(content) is None,
                     "content": content,
                     "group": group,
                     "message": message,
@@ -436,7 +445,9 @@ def compute_slots(
             continue
         slot_id = f"{code}@+{item['time']}"
         override = slot_overrides.get(slot_id) if isinstance(slot_overrides.get(slot_id), dict) else {}
-        effective_time = str(override.get("time") or item["time"])
+        code_times = duty_times if duty_times is not None else resolve_duty_times(parsed_rows, code, biz_date, overtime)
+        base_time = duty_row_time(item["content"], item["time"], code_times)
+        effective_time = base_time if duty_kind(item["content"]) else str(override.get("time") or base_time)
         if _parse_hhmm(effective_time) < 0:
             effective_time = item["time"]
         default_message = template.replace("{code}", code)
@@ -448,6 +459,7 @@ def compute_slots(
                 "ot_override": False,
                 "extra": True,
                 "time": effective_time,
+                "time_editable": duty_kind(item["content"]) is None,
                 "content": item["content"],
                 "group": str(override.get("group") or mapping.get(code, "")),
                 "message": str(override.get("message") or default_message),
@@ -539,6 +551,7 @@ def build_plan(
     slots = compute_slots(
         parsed_rows, segments, biz_date, config["mapping"], config["message_template"], slot_overrides,
         overtime=overtime, extra_slots=overlay.get("extra_slots"),
+        duty_times=resolve_duty_times(parsed_rows, roster_code, biz_date, overtime),
     )
     for slot in slots:
         entry = log.get(slot["id"])
@@ -602,9 +615,34 @@ def apply_override(
     source: str = "web",
     biz_date: date | None = None,
 ) -> dict[str, Any]:
+    # 同發送共用鎖：即使畫面未刷新，發送完成後都唔可以改返已 sent 嘅時間。
+    with _ACTION_LOCK:
+        return _apply_override(
+            settings, mode=mode, segments=segments, slot_patch=slot_patch,
+            extra_slots=extra_slots, source=source, biz_date=biz_date,
+        )
+
+
+def _apply_override(
+    settings: AppSettings,
+    *,
+    mode: str | None = None,
+    segments: list[dict[str, str]] | None = None,
+    slot_patch: dict[str, Any] | None = None,
+    extra_slots: list[dict[str, Any]] | None = None,
+    source: str = "web",
+    biz_date: date | None = None,
+) -> dict[str, Any]:
     """套用 override（最後指令話事）；每項操作記入 events log。"""
     now = _now(settings)
     biz_date = biz_date or business_date(now)
+    if slot_patch is not None and slot_patch.get("time") is not None:
+        slot_id = str(slot_patch.get("id") or "").strip()
+        if load_log(settings, biz_date).get(slot_id, {}).get("status") == "sent":
+            raise ValueError("已 sent 嘅報更唔可以再改時間（包括還原原定時間）")
+        slot = next((s for s in build_plan(settings, biz_date=biz_date).get("slots", []) if s["id"] == slot_id), None)
+        if slot and duty_kind(slot["content"]):
+            raise ValueError("開工／收工時間請喺 OnOffDuty 修改；報更會跟隨當日時間")
     overlay = load_overlay(settings, biz_date)
     day_label = "今日" if biz_date == business_date(now) else biz_date.strftime("%d/%m")
 
@@ -698,6 +736,32 @@ def apply_override(
     return build_plan(settings, biz_date=biz_date)
 
 
+def rearm_duty_times(settings: AppSettings, biz_date: date, kinds: set[str]) -> None:
+    """改到仍可報送嘅時間，清除對應舊 missed/failed；保留 sent 及其他報更。"""
+    now = _now(settings)
+    plan = build_plan(settings, biz_date=biz_date)
+    log = load_log(settings, biz_date)
+    ids = [
+        slot["id"] for slot in plan["slots"]
+        if duty_kind(slot["content"]) in kinds
+        and log.get(slot["id"], {}).get("status") in {"missed", "failed"}
+        and now < _slot_datetime(biz_date, slot["time"], now.tzinfo) + timedelta(minutes=GRACE_MINUTES)
+    ]
+    if not ids:
+        return
+    with _DB_LOCK:
+        conn = _connect(settings)
+        try:
+            conn.executemany(
+                "DELETE FROM duty_report_log WHERE date_iso=? AND slot_id=? AND status IN ('missed','failed')",
+                [(biz_date.isoformat(), slot_id) for slot_id in ids],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    notify_change()
+
+
 # ---------------------------------------------------------------- 發送
 
 
@@ -769,11 +833,15 @@ def process_due_slots(settings: AppSettings | None = None) -> datetime | None:
     due_seen = False
     for slot in plan["slots"]:
         if slot["status"] == "overdue":
-            record_log(
-                settings, biz_date, slot["id"], "missed",
-                message=slot["message"], group_name=slot["group"],
-                detail=GRACE_DETAIL,
-            )
+            # 同改時間共用鎖並重新讀取，舊 plan 唔可以把已重排到將來嘅 slot 標返 missed。
+            with _ACTION_LOCK:
+                current = next((s for s in build_plan(settings, biz_date=biz_date)["slots"] if s["id"] == slot["id"]), None)
+                if current and current["status"] == "overdue":
+                    record_log(
+                        settings, biz_date, slot["id"], "missed",
+                        message=current["message"], group_name=current["group"],
+                        detail=GRACE_DETAIL,
+                    )
             continue
         if slot["status"] == "pending":
             if auto_ready:

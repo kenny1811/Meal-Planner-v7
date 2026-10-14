@@ -20,6 +20,7 @@ google_calendar_credentials/
 ~$*
 
 # Local debugging captures and generated phone/watch artifacts
+artifacts/
 .codex-remote-attachments/
 _tmp_*
 tmp_*

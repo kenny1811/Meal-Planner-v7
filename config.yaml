@@ -37,7 +37,28 @@ rice:
   water_multiplier: 2
   rice_category_exact: "米"
   # 米類備註：食材名稱包含以下字串即計入熟重。
-  note_name_contains: ["米"]
+  note_name_contains: ["米(熟)"]
+
+# 每週固定食材：保證指定食材每星期出現幾多次。食材要喺 pattern 嗰格原本就係候選
+# （例如「糙米(熟)」喺「米」格、「三文魚」喺「魚/肉/沙甸魚/豆腐」格），呢度只係
+# 改「幾時出」，唔會憑空加格。
+#   per_week  : 每個星期（日至六，星期日做第一日）出幾多次。
+#   weekdays  : 固定星期幾（1=一 … 7=日）；留空＝配額制，由 solver 試解比併，
+#               揀營養代價最細嗰幾日（紅旗 > 超標量 > 總偏離，逐級比細）。
+#   exclusive : true = 配額以外嘅日子唔准再出，次數啱啱好；false = 只保證下限。
+# 米類有「一日一款」規則，所以米類規則係以「日」計（嗰日午晚餐都係嗰款米）。
+weekly_ingredient_rules:
+  - name: "糙米(熟)"
+    per_week: 2
+    weekdays: []
+    exclusive: true
+  # 三文魚鈣得 12mg/100g，頂走沙甸魚(380mg)／豆腐(200mg)會令全日鈣跌穿下限。
+  # 用配額制由 solver 揀日，自然會落喺午晚兩餐都由 solver 話事嘅日子（另一餐
+  # 補返鈣）；改成固定星期幾要自己確認嗰兩日唔係餐廳午餐日，否則會爆鈣紅旗。
+  - name: "三文魚"
+    per_week: 2
+    weekdays: []
+    exclusive: true
 
 dates:
   timezone: "Asia/Hong_Kong"

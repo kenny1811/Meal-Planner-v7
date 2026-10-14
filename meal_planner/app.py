@@ -15,12 +15,13 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from meal_planner.dates_input import DateValidationError, parse_date_expression
+from meal_planner.dashboard_notify import notify_dashboard_meals
 from meal_planner.free_port import free_tcp_port
 from meal_planner.google_calendar_sync import authorize_google_calendar, google_calendar_auth_status, sync_roster_to_google_calendar
 from meal_planner.indicators import NUTRIENT_KEYS
@@ -101,6 +102,7 @@ from meal_planner.storage import (
     load_menu_labels,
     load_menu_order,
     load_menu_tree_open,
+    load_latest_plan_revision,
     load_memory_payload,
     load_plan_date_neighbours,
     load_sidebar_width,
@@ -934,7 +936,7 @@ def api_item_candidates() -> dict[str, Any]:
 
 
 @app.get("/api/memory-list")
-def api_memory_list_get() -> dict[str, Any]:
+def api_memory_list_get(background_tasks: BackgroundTasks) -> dict[str, Any]:
     try:
         # 讀→改→寫要鎖住，否則兩個 tab 同時 GET/POST 會 lost update。
         with _STORE_LOCK:
@@ -945,7 +947,9 @@ def api_memory_list_get() -> dict[str, Any]:
                 payload = refresh_payload_with_latest_indicators(payload)
                 after = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
                 if after != before:
-                    save_memory_payload(payload)
+                    changed_dates = save_memory_payload(payload)
+                    if changed_dates:
+                        background_tasks.add_task(notify_dashboard_meals, changed_dates)
         return {"payload": payload}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -954,11 +958,13 @@ def api_memory_list_get() -> dict[str, Any]:
 
 
 @app.post("/api/memory-list")
-def api_memory_list_set(body: MemoryPayloadRequest) -> dict[str, Any]:
+def api_memory_list_set(body: MemoryPayloadRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
     try:
         with _STORE_LOCK:
             payload = merge_memory_payload(load_memory_payload(), body.payload)
-            save_memory_payload(payload)
+            changed_dates = save_memory_payload(payload)
+        if changed_dates:
+            background_tasks.add_task(notify_dashboard_meals, changed_dates)
         return {"ok": True}
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Save memory list failed: {e}") from e
@@ -1526,7 +1532,24 @@ def api_onoffduty_override(body: OnOffDutyOverrideRequest) -> dict[str, Any]:
         else:
             biz_date = business_date(datetime.now(ZoneInfo(settings.dates.timezone)))
         set_time_override(settings, biz_date, start=body.start, end=body.end, note=body.note)
-        return build_day_plan(settings, biz_date=biz_date)
+        phone_sync = None
+        if body.start is not None or body.end is not None:
+            from meal_planner.phone_push import push_schedule_grid
+
+            # 儲存及排程更新已完成；網絡等候喺時間／發送鎖之外，唔阻報更。
+            phone_sync = push_schedule_grid()
+        # 等候電話期間可能已 sent；回傳最新狀態，唔重新打開舊嘅時間編輯入口。
+        plan = build_day_plan(settings, biz_date=biz_date)
+        if phone_sync is not None:
+            plan["phone_sync"] = phone_sync
+            if (plan["phone_sync"].get("status") == "ok"
+                    and plan["phone_sync"].get("plan_date") != plan["date_iso"]):
+                plan["phone_sync"]["status"] = "different_date"
+                plan["phone_sync"]["detail"] = (
+                    f"電話目前匯入 {plan['phone_sync'].get('plan_date') or '另一日'} 行位表；"
+                    f"{plan['date_iso']} 嘅時間已儲存，會喺該日成為匯入目標時套用。"
+                )
+        return plan
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -1867,6 +1890,12 @@ def _dashboard_round(value: Any) -> int | None:
         return int(math.floor(float(value) + 0.5))
     except (TypeError, ValueError):
         return None
+
+
+@app.get("/api/dashboard/meal-revision")
+def api_dashboard_meal_revision() -> dict[str, str | None]:
+    """Latest saved plan version for Dashboard's missed-notification check."""
+    return {"revision": load_latest_plan_revision()}
 
 
 @app.get("/api/dashboard/meal")

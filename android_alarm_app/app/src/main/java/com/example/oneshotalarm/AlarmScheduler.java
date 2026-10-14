@@ -37,15 +37,20 @@ final class AlarmScheduler {
     }
 
     static void schedulePlan(Context context, JSONArray alarms, String planDate, String rosterCode) {
-        scheduleEnabledFutureAlarms(context, alarms);
-        AlarmStore.savePlan(context, alarms, planDate, rosterCode);
-        NextAlarmWidgetProvider.updateAll(context);
-        WatchBridge.sendTileState(context);
+        // Import、手動改表及響鐘記錄共用鎖，保持本地鬧鐘同儲存／傳錶內容一致。
+        synchronized (AlarmStore.class) {
+            scheduleEnabledFutureAlarms(context, alarms);
+            AlarmStore.savePlan(context, alarms, planDate, rosterCode);
+            NextAlarmWidgetProvider.updateAll(context);
+            WatchBridge.sendTileState(context);
+        }
     }
 
     /** 開機／裝完新版：照儲存嗰份 plan 重新排——同 schedulePlan 一樣要跳 disabled。 */
     static void rescheduleStoredPlan(Context context) {
-        scheduleEnabledFutureAlarms(context, AlarmStore.getAlarms(context));
+        synchronized (AlarmStore.class) {
+            scheduleEnabledFutureAlarms(context, AlarmStore.getAlarms(context));
+        }
     }
 
     /**
@@ -85,10 +90,12 @@ final class AlarmScheduler {
     }
 
     static void cancelAll(Context context) {
-        cancelScheduledAlarms(context);
-        AlarmStore.clear(context);
-        NextAlarmWidgetProvider.updateAll(context);
-        WatchBridge.sendTileState(context);
+        synchronized (AlarmStore.class) {
+            cancelScheduledAlarms(context);
+            AlarmStore.clear(context);
+            NextAlarmWidgetProvider.updateAll(context);
+            WatchBridge.sendTileState(context);
+        }
     }
 
     static void cancelScheduledAlarms(Context context) {

@@ -189,12 +189,16 @@
       <section class="config-view catalog-section" data-config-view="catalog" style="display:none;">
         <h2 data-title-key="catalog">Nutrition Catalog</h2>
         <div class="config-toolbar catalog-toolbar">
+          <button type="button" class="btn" id="catalog-move-up" disabled>↑ Move Up</button>
+          <button type="button" class="btn" id="catalog-move-down" disabled>↓ Move Down</button>
           <button type="button" class="btn" id="catalog-save" style="display:none;">Save Catalog</button>
           <span id="catalog-status" class="target-status"></span>
         </div>
         <div id="catalog-err" class="err"></div>
         <div id="catalog-editor"></div>
         <div id="catalog-row-menu" class="catalog-row-menu" hidden>
+          <button type="button" data-catalog-row-action="move-up">Move Up</button>
+          <button type="button" data-catalog-row-action="move-down">Move Down</button>
           <button type="button" data-catalog-row-action="insert">Insert Row</button>
           <button type="button" data-catalog-row-action="delete">Delete Row</button>
         </div>

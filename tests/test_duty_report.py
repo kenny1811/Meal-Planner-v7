@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import unittest
+import os
+import tempfile
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
+from unittest.mock import patch
 
 from meal_planner.duty_report import (
     GRACE_MINUTES,
+    apply_override,
+    load_log,
+    record_log,
     _slot_runtime_status,
     business_date,
     compute_slots,
@@ -17,6 +23,7 @@ from meal_planner.duty_report import (
     weekday_allows,
 )
 from meal_planner.schedule_grid import ScheduleRow
+from meal_planner.settings import clear_settings_cache, get_settings
 
 HK = ZoneInfo("Asia/Hong_Kong")
 
@@ -46,6 +53,48 @@ ALL_ROWS = VOC_ROWS + PENA_ROWS + FBPB_ROWS
 
 MAPPING = {"VOC": "VCA共同體", "PenA": "半島報更群組"}
 TEMPLATE = "{code} SAPP1801 報平安更正常"
+
+
+class TestSentTimeOverride(unittest.TestCase):
+    def test_failed_resend_cannot_unlock_a_sent_time(self):
+        day = date(2026, 10, 3)
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"MENU_PROJECT_ROOT": tmp}):
+            clear_settings_cache()
+            try:
+                settings = get_settings()
+                record_log(settings, day, "VOC@21:30", "sent", message="original")
+                for status in ("failed", "missed"):
+                    record_log(settings, day, "VOC@21:30", status, message="retry")
+                    self.assertEqual(load_log(settings, day)["VOC@21:30"]["status"], "sent")
+                    with self.assertRaisesRegex(ValueError, "已 sent"):
+                        apply_override(settings, biz_date=day, slot_patch={"id": "VOC@21:30", "time": "22:00"})
+                self.assertEqual(load_log(settings, day)["VOC@21:30"]["message"], "original")
+            finally:
+                clear_settings_cache()
+
+    def test_sent_start_and_end_reject_changes_and_reset_before_any_write(self):
+        day = date(2026, 10, 3)
+        with patch("meal_planner.duty_report._now", return_value=datetime(2026, 10, 3, 12, tzinfo=HK)), \
+             patch("meal_planner.duty_report.load_log", return_value={"VOC@09:15": {"status": "sent"}, "VOC@21:30": {"status": "sent"}}), \
+             patch("meal_planner.duty_report.save_overlay") as save, \
+             patch("meal_planner.duty_report.record_event") as event:
+            for slot_id in ("VOC@09:15", "VOC@21:30"):
+                for value in ("22:00", ""):
+                    with self.subTest(slot=slot_id, time=value), self.assertRaisesRegex(ValueError, "已 sent"):
+                        apply_override(None, biz_date=day, slot_patch={"id": slot_id, "time": value})
+            save.assert_not_called()
+            event.assert_not_called()
+
+    def test_unsent_midshift_time_still_saves(self):
+        day = date(2026, 10, 3)
+        with patch("meal_planner.duty_report._now", return_value=datetime(2026, 10, 3, 12, tzinfo=HK)), \
+             patch("meal_planner.duty_report.load_log", return_value={}), \
+             patch("meal_planner.duty_report.load_overlay", return_value={}), \
+             patch("meal_planner.duty_report.save_overlay") as save, \
+             patch("meal_planner.duty_report.record_event"), \
+             patch("meal_planner.duty_report.build_plan", return_value={}):
+            apply_override(None, biz_date=day, slot_patch={"id": "VOC@13:15", "time": "1400"})
+            self.assertEqual(save.call_args.args[2]["slots"]["VOC@13:15"]["time"], "14:00")
 
 
 class TestBusinessDate(unittest.TestCase):
@@ -161,14 +210,17 @@ class TestSegments(unittest.TestCase):
         # slot id 保持行位表原時間，overlay 對應唔會甩
         self.assertIn("VOC@21:30", by_id)
 
-    def test_panel_time_override_beats_overtime(self):
-        overrides = {"VOC@21:30": {"time": "23:00"}}
+    def test_legacy_onoff_panel_time_cannot_override_onoff_duty(self):
+        overrides = {"VOC@09:15": {"time": "10:00"}, "VOC@21:30": {"time": "23:00"}}
         slots = compute_slots(
             ALL_ROWS, [{"from": "00:00", "code": "VOC"}], date(2026, 7, 12), MAPPING, TEMPLATE, overrides,
             overtime=(None, time(22, 15)),
         )
         by_id = {s["id"]: s for s in slots}
-        self.assertEqual(by_id["VOC@21:30"]["time"], "23:00")
+        self.assertEqual(by_id["VOC@09:15"]["time"], "09:15")
+        self.assertEqual(by_id["VOC@21:30"]["time"], "22:15")
+        self.assertFalse(by_id["VOC@09:15"]["time_editable"])
+        self.assertFalse(by_id["VOC@21:30"]["time_editable"])
 
     def test_slot_overrides_skip_time_group(self):
         overrides = {

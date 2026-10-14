@@ -22,12 +22,12 @@ import org.json.JSONObject;
 
 /**
  * OnOffDuty tab：每日 On Duty / Off Duty Google Form 打卡（同電腦 OnOffDuty panel 對齊）。
- * 時間由電腦 API 計（更時表＋加班表），電話只做：睇 + 撳開預填 form + 記 log。
- * 冇 edit——臨時改時間喺 Google Form 入面改完先撳 Submit；正式改就改加班表。
+ * 時間由電腦 API 計；現場改時間透過同一個 API 寫入當日加班表，並重新匯入電話行位表。
  */
 class OnOffDutyView {
 
     private static final int HTTP_READ_TIMEOUT_MS = 30000;
+    private static final int OVERRIDE_READ_TIMEOUT_MS = 40000;
 
     private final Activity activity;
     private final LinearLayout container;
@@ -35,7 +35,13 @@ class OnOffDutyView {
     private final Typeface boldTypeface;
     private JSONObject plan;
     private boolean loading = false;
+    private boolean statusRefreshInFlight = false;
+    private long planRevision = 0L;
+    private AlertDialog timeDialog;
+    private String editingKind = "";
+    private String editingDate = "";
     private String lastError = "";
+    private String phoneSyncNotice = "";
     private String viewDate = "";
 
     OnOffDutyView(Activity activity, LinearLayout container, Typeface regular, Typeface bold) {
@@ -59,15 +65,82 @@ class OnOffDutyView {
         requestPlan("GET", path, null, "onoffduty-fetch", "Cannot reach PC: ");
     }
 
-    /** 標準一款：成功就 plan＝結果、loading 完、重畫；失敗就出 lastError 重畫。 */
-    private void requestPlan(String method, String path, JSONObject payload, String threadName, String errorPrefix) {
-        ui.request(method, path, payload, HTTP_READ_TIMEOUT_MS, threadName,
+    /** Poll while the tab is visible, including while its time dialog is open. */
+    void refreshStatus() {
+        if (loading || statusRefreshInFlight || plan == null) {
+            return;
+        }
+        statusRefreshInFlight = true;
+        final long revision = planRevision;
+        final String requestedDate = viewDate;
+        final String path = "/api/onoffduty/plan"
+                + (requestedDate.isEmpty() ? "" : "?date_iso=" + requestedDate);
+        ui.request("GET", path, null, 12000, "onoffduty-status",
                 parsed -> {
-                    plan = parsed;
-                    loading = false;
-                    render();
+                    statusRefreshInFlight = false;
+                    if (loading || revision != planRevision || !requestedDate.equals(viewDate)) {
+                        return;
+                    }
+                    lastError = "";
+                    acceptPlan(parsed);
                 },
                 e -> {
+                    statusRefreshInFlight = false;
+                    if (!loading && revision == planRevision && requestedDate.equals(viewDate)) {
+                        lastError = "Status refresh failed: " + e.getMessage();
+                        render();
+                    }
+                });
+    }
+
+    private void acceptPlan(JSONObject parsed) {
+        if (plan != null && !plan.optString("date_iso", "").equals(parsed.optString("date_iso", ""))) {
+            phoneSyncNotice = "";
+        }
+        plan = parsed;
+        planRevision++;
+        updatePhoneSyncNotice(parsed);
+        if (timeDialog != null && (!editingDate.equals(plan.optString("date_iso", ""))
+                || !canEditTime(findAction(editingKind)))) {
+            timeDialog.dismiss();
+        }
+        render();
+    }
+
+    private void updatePhoneSyncNotice(JSONObject parsed) {
+        JSONObject sync = parsed.optJSONObject("phone_sync");
+        if (sync == null) {
+            return;
+        }
+        String status = sync.optString("status", sync.optBoolean("ok", false) ? "ok" : "error");
+        String importedDate = sync.optString("plan_date", "");
+        String editedDate = parsed.optString("date_iso", "");
+        if ("ok".equals(status) && !importedDate.isEmpty() && !editedDate.equals(importedDate)) {
+            phoneSyncNotice = "時間已更新；電話目前匯入 " + importedDate + " 行位表，與 " + editedDate + " 不同。";
+        } else if (!"ok".equals(status)) {
+            String detail = sync.optString("detail", sync.optString("message", ""));
+            phoneSyncNotice = "時間已更新；電話行位表未同步：" + (detail.isEmpty() ? status : detail);
+        } else {
+            phoneSyncNotice = "";
+        }
+    }
+
+    /** 標準一款：成功就 plan＝結果、loading 完、重畫；失敗就出 lastError 重畫。 */
+    private void requestPlan(String method, String path, JSONObject payload, String threadName, String errorPrefix) {
+        final long revision = ++planRevision;
+        int timeout = "/api/onoffduty/override".equals(path) ? OVERRIDE_READ_TIMEOUT_MS : HTTP_READ_TIMEOUT_MS;
+        ui.request(method, path, payload, timeout, threadName,
+                parsed -> {
+                    if (revision != planRevision) {
+                        return;
+                    }
+                    loading = false;
+                    acceptPlan(parsed);
+                },
+                e -> {
+                    if (revision != planRevision) {
+                        return;
+                    }
                     loading = false;
                     lastError = errorPrefix + e.getMessage();
                     render();
@@ -100,6 +173,9 @@ class OnOffDutyView {
 
     /** 撳 Open form：背後記 log（fire-and-forget），即刻開瀏覽器去預填 form。 */
     private void openForm(JSONObject action) {
+        if (loading) {
+            return;
+        }
         String url = action.optString("url", "");
         String kind = action.optString("kind", "");
         if (url.isEmpty()) {
@@ -115,10 +191,12 @@ class OnOffDutyView {
             }
         } catch (Exception ignored) {
         }
+        final long revision = ++planRevision;
         ui.request("POST", "/api/onoffduty/log", payload, HTTP_READ_TIMEOUT_MS, "onoffduty-log",
                 parsed -> {
-                    plan = parsed;
-                    render();
+                    if (revision == planRevision) {
+                        acceptPlan(parsed);
+                    }
                 },
                 ignored -> {
                     // log 失敗唔阻開 form；下次 refresh 會見返真狀態。
@@ -130,30 +208,69 @@ class OnOffDutyView {
         }
     }
 
-    /** 現場改開工/收工時間：寫入加班表（全系統一致），留空＝還原跟更時表。 */
+    private boolean canEditTime(JSONObject action) {
+        if (action == null || !action.optBoolean("time_editable", true)
+                || "sent".equals(action.optString("status", ""))) {
+            return false;
+        }
+        JSONArray history = action.optJSONArray("history");
+        for (int i = 0; history != null && i < history.length(); i++) {
+            JSONObject entry = history.optJSONObject(i);
+            if (entry != null && "sent".equals(entry.optString("status", ""))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private JSONObject findAction(String kind) {
+        JSONArray actions = plan == null ? null : plan.optJSONArray("actions");
+        for (int i = 0; actions != null && i < actions.length(); i++) {
+            JSONObject action = actions.optJSONObject(i);
+            if (action != null && kind.equals(action.optString("kind", ""))) {
+                return action;
+            }
+        }
+        return null;
+    }
+
+    /** 現場改開工/收工時間：寫入加班表，留空＝還原跟行位表。 */
     private void showTimeEditDialog(JSONObject action) {
         String kind = action.optString("kind", "");
+        JSONObject current = findAction(kind);
+        if (loading || !canEditTime(current)) {
+            return;
+        }
         String label = action.optString("label", "");
         if (kind.isEmpty()) {
             return;
         }
+        if (timeDialog != null) {
+            timeDialog.dismiss();
+        }
+        editingKind = kind;
+        editingDate = plan.optString("date_iso", "");
+        final String requestedDate = editingDate;
         LinearLayout box = new LinearLayout(activity);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(16), dp(8), dp(16), 0);
         EditText timeInput = new EditText(activity);
         timeInput.setInputType(InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
         timeInput.setHint("21:30 / 2130");
-        timeInput.setText(action.optString("time", ""));
+        timeInput.setText(current.optString("time", ""));
         timeInput.setSelectAllOnFocus(true);
         box.addView(timeInput);
         EditText noteInput = new EditText(activity);
         noteInput.setInputType(InputType.TYPE_CLASS_TEXT);
         noteInput.setHint("備註（加班表，可留空）");
         box.addView(noteInput);
-        new AlertDialog.Builder(activity)
+        final AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setTitle(label + " — 現場改時間（寫入加班表）")
                 .setView(box)
                 .setPositiveButton("OK", (d, w) -> {
+                    if (!requestedDate.equals(plan.optString("date_iso", ""))) {
+                        return;
+                    }
                     String value = timeInput.getText().toString().trim();
                     if (value.isEmpty()) {
                         Toast.makeText(activity, "要還原請用「還原」掣", Toast.LENGTH_SHORT).show();
@@ -161,9 +278,22 @@ class OnOffDutyView {
                     }
                     postOverride(kind, value, noteInput.getText().toString().trim());
                 })
-                .setNeutralButton("還原跟更時表", (d, w) -> postOverride(kind, "", ""))
+                .setNeutralButton("還原跟行位表", (d, w) -> {
+                    if (requestedDate.equals(plan.optString("date_iso", ""))) {
+                        postOverride(kind, "", "");
+                    }
+                })
                 .setNegativeButton("Cancel", null)
-                .show();
+                .create();
+        timeDialog = dialog;
+        dialog.setOnDismissListener(d -> {
+            if (timeDialog == dialog) {
+                timeDialog = null;
+                editingKind = "";
+                editingDate = "";
+            }
+        });
+        dialog.show();
     }
 
     /** 現場轉更：更碼本身係一個 Spinner pickup list，揀咗（確認後）即寫入更表——
@@ -282,7 +412,11 @@ class OnOffDutyView {
         if (loading || plan == null) {
             return;
         }
+        if (!canEditTime(findAction(kind))) {
+            return;
+        }
         loading = true;
+        phoneSyncNotice = "";
         JSONObject payload = new JSONObject();
         try {
             payload.put("date_iso", plan.optString("date_iso", ""));
@@ -308,6 +442,9 @@ class OnOffDutyView {
             TextView err = textView(lastError, 11, 0xFFB91C1C, false);
             err.setPadding(dp(8), dp(4), dp(8), dp(4));
             container.addView(err);
+        }
+        if (!phoneSyncNotice.isEmpty()) {
+            container.addView(ui.noteStrip(phoneSyncNotice), ui.cardParams());
         }
         if (plan == null) {
             Button retry = actionButton("Retry");
@@ -462,14 +599,18 @@ class OnOffDutyView {
         String kind = action.optString("kind", "");
         boolean overridden = plan != null && plan.optBoolean(
                 "start".equals(kind) ? "start_override" : "end_override", false);
+        boolean timeEditable = canEditTime(action);
         TextView timeView = textView(
-                (time.isEmpty() ? "—" : time) + (overridden ? " *" : "") + "  ✎",
+                (time.isEmpty() ? "—" : time) + (overridden ? " *" : "") + (timeEditable ? "  ✎" : ""),
                 26, overridden ? 0xFF9A5B00 : 0xFF0F172A, true);
         timeView.setPadding(0, dp(2), 0, 0);
-        timeView.setOnClickListener(v -> showTimeEditDialog(action));
+        if (timeEditable) {
+            timeView.setOnClickListener(v -> showTimeEditDialog(action));
+        }
         card.addView(timeView);
         TextView hintView = textView(
-                overridden ? "加班表 override · 撳時間改" : "撳時間現場改（寫入加班表）",
+                !timeEditable ? "時間已鎖定"
+                        : overridden ? "加班表 override · 撳時間改" : "撳時間現場改（寫入加班表）",
                 9, overridden ? 0xFF9A5B00 : 0xFF9AA1A9, false);
         hintView.setPadding(0, 0, 0, 0);
         card.addView(hintView);
@@ -585,6 +726,7 @@ class OnOffDutyView {
             return;
         }
         loading = true;
+        final long revision = ++planRevision;
         JSONObject payload = new JSONObject();
         try {
             payload.put("action", actionName);
@@ -596,9 +738,11 @@ class OnOffDutyView {
         }
         ui.request("POST", "/api/onoffduty/lateoff", payload, HTTP_READ_TIMEOUT_MS, "onoffduty-holdsend",
                 parsed -> {
-                    plan = parsed;
+                    if (revision != planRevision) {
+                        return;
+                    }
                     loading = false;
-                    render();
+                    acceptPlan(parsed);
                     JSONObject result = parsed.optJSONObject("sendnow_result");
                     if (result != null) {
                         String message = "齊發完成 " + result.optString("actual", "")
@@ -608,6 +752,9 @@ class OnOffDutyView {
                     }
                 },
                 e -> {
+                    if (revision != planRevision) {
+                        return;
+                    }
                     loading = false;
                     lastError = "Hold/send failed: " + e.getMessage();
                     render();

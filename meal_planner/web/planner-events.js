@@ -608,6 +608,9 @@
     document.getElementById("target-save").addEventListener("click", () => saveTargetEditor("config"));
     document.getElementById("planner-target-save").addEventListener("click", () => saveTargetEditor("planner"));
     document.getElementById("catalog-save").addEventListener("click", saveNutritionCatalog);
+    document.getElementById("catalog-move-up").addEventListener("click", () => moveNutritionCatalogRow(catalogCursorRowIndex, catalogCursorRowIndex - 1));
+    document.getElementById("catalog-move-down").addEventListener("click", () => moveNutritionCatalogRow(catalogCursorRowIndex, catalogCursorRowIndex + 1));
+    attachCatalogRowMoving();
     document.getElementById("detail-save").addEventListener("click", saveDetailSettings);
     document.getElementById("maint-save").addEventListener("click", saveMaintEditor);
     // 系統參數三張細表嘅 right-click row menu（planner-config.js makeDetailRowMenu）。
@@ -635,7 +638,10 @@
     document.getElementById("catalog-editor").addEventListener("focusin", (ev) => {
       const row = ev.target && ev.target.closest ? ev.target.closest("tr[data-catalog-index]") : null;
       const idx = row ? Number(row.getAttribute("data-catalog-index")) : NaN;
-      if (Number.isInteger(idx) && idx >= 0) catalogCursorRowIndex = idx;
+      if (Number.isInteger(idx) && idx >= 0) {
+        catalogCursorRowIndex = idx;
+        updateCatalogRowSelection();
+      }
     });
     document.getElementById("catalog-editor").addEventListener("focusout", (ev) => {
       if (ev.target && ev.target.matches && ev.target.matches("input.catalog-cell-input")) {
@@ -643,6 +649,14 @@
       }
     });
     document.getElementById("catalog-editor").addEventListener("keydown", (ev) => {
+      if (ev.altKey && (ev.key === "ArrowUp" || ev.key === "ArrowDown")) {
+        const idx = activeCatalogRowIndex();
+        if (idx != null) {
+          ev.preventDefault();
+          moveNutritionCatalogRow(idx, idx + (ev.key === "ArrowUp" ? -1 : 1));
+        }
+        return;
+      }
       const input = ev.target && ev.target.matches && ev.target.matches("#catalog-editor td input") ? ev.target : null;
       if (!input) return;
       if (input.type === "checkbox") {
@@ -716,6 +730,10 @@
         insertNutritionCatalogRow();
       } else if (action.getAttribute("data-catalog-row-action") === "delete") {
         removeNutritionCatalogRow(idx);
+      } else if (action.getAttribute("data-catalog-row-action") === "move-up") {
+        moveNutritionCatalogRow(idx, idx - 1);
+      } else if (action.getAttribute("data-catalog-row-action") === "move-down") {
+        moveNutritionCatalogRow(idx, idx + 1);
       }
     });
     // 所有 row menu：撳出面／Escape 就收埋。

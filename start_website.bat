@@ -1,21 +1,8 @@
 @echo off
 setlocal
-
-set "ROOT=%~dp0"
-rem bind 0.0.0.0：LAN + Meshnet 一齊聽（電話出街經 meshnet 先叫得通）；瀏覽器照用 LAN IP 開。
-set "MENU_LAN_IP=192.168.15.125"
-set "MENU_API_HOST=0.0.0.0"
-set "MENU_PROJECT_ROOT=%ROOT%"
+set "MEAL_SERVER_SCRIPT=%~dp0start_server_hidden.ps1"
 if "%MENU_API_PORT%"=="" set "MENU_API_PORT=8765"
-set "MENU_URL=http://%MENU_LAN_IP%:%MENU_API_PORT%"
-set "PYTHON_EXE=C:\Users\Kenny\AppData\Local\Programs\Python\Python313\python.exe"
-if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$want = (Resolve-Path '%ROOT%').Path.TrimEnd('\'); $hostIp = '%MENU_API_HOST%'; $port = [int]'%MENU_API_PORT%'; $lanUrl = 'http://%MENU_LAN_IP%:%MENU_API_PORT%/api/health'; function Get-Utf8Json($url) { $wc = New-Object System.Net.WebClient; $bytes = $wc.DownloadData($url); [Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json }; function Test-Health($url) { try { $r = Get-Utf8Json $url; $got = ([string]$r.project_root).TrimEnd('\'); if ($r.status -eq 'ok' -and $got -ieq $want) { return $true } } catch { return $false }; return $false }; function Test-ExpectedListener { $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -eq $hostIp -or $_.LocalAddress -eq '0.0.0.0' }); return $listeners.Count -gt 0 }; function Test-Ready { return ((Test-ExpectedListener) -and (Test-Health $lanUrl)) }; function Stop-MealPlannerServer { $targetPids = @(); $targetPids += Get-CimInstance Win32_Process | Where-Object { ($_.Name -like 'python*.exe') -and ($_.CommandLine -like '*-m meal_planner.app*') } | ForEach-Object { $_.ProcessId }; $targetPids += Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess }; $targetPids | Sort-Object -Unique | Where-Object { $_ -and $_ -ne $PID } | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; if (-not (Test-Ready)) { Stop-MealPlannerServer; Start-Sleep -Milliseconds 350; Start-Process -WindowStyle Hidden -FilePath '%PYTHON_EXE%' -ArgumentList @('-m','meal_planner.app') -WorkingDirectory '%ROOT%' >$null 2>$null }; for ($i=0; $i -lt 40; $i++) { if (Test-Ready) { exit 0 }; Start-Sleep -Milliseconds 250 }; exit 1" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',('\"' + $env:MEAL_SERVER_SCRIPT + '\"')); $want = (Split-Path -Parent $env:MEAL_SERVER_SCRIPT).TrimEnd('\'); for ($i=0; $i -lt 60; $i++) { try { $req = [Net.HttpWebRequest]::Create('http://127.0.0.1:' + $env:MENU_API_PORT + '/api/health'); $req.Proxy = $null; $req.Timeout = 2000; $req.ReadWriteTimeout = 2000; $response = $req.GetResponse(); try { $reader = New-Object IO.StreamReader($response.GetResponseStream(), [Text.Encoding]::UTF8); try { $r = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() } } finally { $response.Dispose() }; if ($r.status -eq 'ok' -and ([string]$r.project_root).TrimEnd('\') -ieq $want) { exit 0 } } catch {}; Start-Sleep -Seconds 1 }; exit 1"
 if errorlevel 1 exit /b 1
-
-:open_site
-start "" "%MENU_URL%/?v=v7-%RANDOM%-%RANDOM%"
-exit /b 0
-
+start "" "http://192.168.15.125:%MENU_API_PORT%/?v=v7-%RANDOM%-%RANDOM%"
 endlocal

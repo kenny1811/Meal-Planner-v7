@@ -3,6 +3,7 @@ package com.example.oneshotalarm;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -34,6 +35,7 @@ public class MainActivity extends Activity {
     private static final int SERVER_STATUS_OFFLINE = 2;
     private static final int SERVER_STATUS_ERROR = 3;
     private static final long SERVER_STATUS_POLL_MS = 30000L;
+    private static final long DUTY_STATUS_POLL_MS = 10000L;
     /**
      * 連唔到電腦嗰陣改用呢個梯級重試（毫秒），通返就回復 SERVER_STATUS_POLL_MS。
      * 出街由 Wi-Fi 轉流動數據，NordLynx tunnel 要幾秒至十幾秒先重建好；
@@ -61,9 +63,43 @@ public class MainActivity extends Activity {
     private boolean serverStatusPollingActive = false;
     private final android.os.Handler serverStatusHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
+    private final android.os.Handler dutyStatusHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean resumed = false;
+    private boolean storedPlanDirty = false;
+    private int currentPage = PAGE_MEAL;
+    private SharedPreferences planPreferences;
+    private final Runnable reloadStoredPlan = () -> {
+        if (!resumed || !storedPlanDirty || !getWindow().getDecorView().hasWindowFocus()) {
+            return; // Dialog inputs keep their draft until the dialog closes.
+        }
+        storedPlanDirty = false;
+        shiftTableView.loadFromStore();
+        shiftTableView.render();
+    };
+    private final SharedPreferences.OnSharedPreferenceChangeListener planStoreListener = (prefs, key) -> {
+        if ("alarms_json".equals(key) || "plan_date".equals(key) || "roster_code".equals(key)) {
+            storedPlanDirty = true;
+            // savePlan updates three keys together; refresh once after the writer returns.
+            dutyStatusHandler.removeCallbacks(reloadStoredPlan);
+            dutyStatusHandler.post(reloadStoredPlan);
+        }
+    };
+    private final Runnable pollDutyStatus = new Runnable() {
+        @Override public void run() {
+            if (!resumed) {
+                return;
+            }
+            if (currentPage == PAGE_DUTY) {
+                dutyReportView.refreshStatus();
+            } else if (currentPage == PAGE_ONOFF) {
+                onOffDutyView.refreshStatus();
+            }
+            dutyStatusHandler.postDelayed(this, DUTY_STATUS_POLL_MS);
+        }
+    };
     /** 連續失敗次數：決定用 SERVER_STATUS_RETRY_MS 邊一級。 */
     private int serverStatusFailStreak = 0;
-    private int currentPage = PAGE_MEAL;
     private float swipeDownX = 0f;
     private float swipeDownY = 0f;
     private android.graphics.Typeface regularTypeface;
@@ -98,11 +134,17 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        resumed = true;
+        planPreferences = getSharedPreferences(AlarmStore.PREFS, MODE_PRIVATE);
+        planPreferences.registerOnSharedPreferenceChangeListener(planStoreListener);
+        storedPlanDirty = false;
         loadFromStore();
         mealPlanView.resetExpanded();  // 每次返返嚟都用返當時嘅 default 餐
         render();
         NextAlarmWidgetProvider.updateAll(this);
         scheduleServerStatusChecks();
+        dutyStatusHandler.removeCallbacks(pollDutyStatus);
+        dutyStatusHandler.postDelayed(pollDutyStatus, DUTY_STATUS_POLL_MS);
         if (currentPage == PAGE_MEAL) {
             mealPlanView.refresh();
         } else if (currentPage == PAGE_DUTY && dutyReportView != null) {
@@ -115,9 +157,23 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        resumed = false;
+        if (planPreferences != null) {
+            planPreferences.unregisterOnSharedPreferenceChangeListener(planStoreListener);
+        }
+        dutyStatusHandler.removeCallbacksAndMessages(null);
         serverStatusPollingActive = false;
         serverStatusHandler.removeCallbacksAndMessages(null);
         mealPlanView.onPause();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && storedPlanDirty) {
+            dutyStatusHandler.removeCallbacks(reloadStoredPlan);
+            dutyStatusHandler.post(reloadStoredPlan);
+        }
     }
 
     private void scheduleServerStatusChecks() {

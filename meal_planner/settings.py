@@ -82,6 +82,26 @@ class MealBusinessRulesConfig:
 
 
 @dataclass(frozen=True)
+class WeeklyIngredientRule:
+    """每週固定食材：保證某食材每星期出現指定次數。
+
+    - `weekdays` 有值＝固定星期幾（1=一 … 7=日）。
+    - `weekdays` 空＝配額制：每個星期（日至六）出 `per_week` 次，
+      由 solver 試解比併，揀營養代價最細嗰幾日。
+    - `exclusive`＝配額以外嘅日子唔准再出，令次數啱啱好等於 `per_week`。
+    """
+
+    name: str
+    per_week: int
+    weekdays: tuple[int, ...] = ()
+    exclusive: bool = True
+
+    @property
+    def is_quota(self) -> bool:
+        return not self.weekdays
+
+
+@dataclass(frozen=True)
 class OptimizerWeights:
     kcal: float = 1.0
     protein: float = 1.0
@@ -140,6 +160,7 @@ class AppSettings:
     pattern: PatternConfig
     meal_business_rules: MealBusinessRulesConfig
     optimizer: OptimizerConfig
+    weekly_ingredient_rules: tuple[WeeklyIngredientRule, ...] = ()
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:
@@ -205,7 +226,7 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
             for x in (
                 rc.get("note_name_contains")
                 if isinstance(rc.get("note_name_contains"), list)
-                else ["米"]
+                else ["米(熟)"]
             )
         ),
     )
@@ -258,6 +279,35 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
         kcal_hi_pull_weight=float(oc.get("kcal_hi_pull_weight", 0.05)),
     )
 
+    weekly_rules: list[WeeklyIngredientRule] = []
+    for entry in data.get("weekly_ingredient_rules") or []:
+        if not isinstance(entry, Mapping):
+            continue
+        name = str(entry.get("name", "") or "").strip()
+        try:
+            per_week = int(entry.get("per_week", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if not name or per_week <= 0:
+            continue
+        wd_raw = entry.get("weekdays")
+        weekdays: list[int] = []
+        for x in wd_raw if isinstance(wd_raw, list) else []:
+            try:
+                n = int(x)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= n <= 7 and n not in weekdays:
+                weekdays.append(n)
+        weekly_rules.append(
+            WeeklyIngredientRule(
+                name=name,
+                per_week=per_week,
+                weekdays=tuple(sorted(weekdays)),
+                exclusive=bool(entry.get("exclusive", True)),
+            )
+        )
+
     return AppSettings(
         project_root=project_root,
         system_folder=system_folder,
@@ -271,6 +321,7 @@ def _build_settings(project_root: Path, data: Mapping[str, Any]) -> AppSettings:
         pattern=pattern,
         meal_business_rules=meal_business_rules,
         optimizer=optimizer,
+        weekly_ingredient_rules=tuple(weekly_rules),
     )
 
 

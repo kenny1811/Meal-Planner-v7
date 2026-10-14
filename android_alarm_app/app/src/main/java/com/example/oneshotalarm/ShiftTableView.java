@@ -2,6 +2,7 @@ package com.example.oneshotalarm;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.graphics.Typeface;
 import android.view.Gravity;
 import android.widget.Button;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -56,6 +58,29 @@ final class ShiftTableView {
     private String draftDate = "";
     private String draftRosterCode = "";
     private String shiftEmptyMessage = "";
+    private ActivePlanSnapshot draftBaseSnapshot;
+
+    /** Read all active-plan keys together, including when an importer writes on another thread. */
+    private static final class ActivePlanSnapshot {
+        final String alarmsJson;
+        final String planDate;
+        final String rosterCode;
+
+        ActivePlanSnapshot(Map<String, ?> values) {
+            alarmsJson = stringValue(values.get("alarms_json"), "[]");
+            planDate = stringValue(values.get("plan_date"), "");
+            rosterCode = stringValue(values.get("roster_code"), "");
+        }
+
+        private static String stringValue(Object value, String fallback) {
+            return value instanceof String ? (String) value : fallback;
+        }
+
+        boolean sameAs(ActivePlanSnapshot other) {
+            return other != null && alarmsJson.equals(other.alarmsJson)
+                    && planDate.equals(other.planDate) && rosterCode.equals(other.rosterCode);
+        }
+    }
 
     ShiftTableView(Activity activity, LinearLayout container, Typeface regular, Typeface bold, MealPlanStatus mealPlanStatus) {
         this.activity = activity;
@@ -68,12 +93,32 @@ final class ShiftTableView {
     // ---------------------------------------------------------------- MainActivity 入口
 
     void loadFromStore() {
-        draftAlarms = copyJsonArray(AlarmStore.getAlarms(activity));
-        draftDate = AlarmStore.getPlanDate(activity);
-        draftRosterCode = AlarmStore.getRosterCode(activity);
+        draftBaseSnapshot = readActivePlanSnapshot();
+        try {
+            draftAlarms = new JSONArray(draftBaseSnapshot.alarmsJson);
+        } catch (JSONException e) {
+            draftAlarms = new JSONArray();
+        }
+        draftDate = draftBaseSnapshot.planDate;
+        draftRosterCode = draftBaseSnapshot.rosterCode;
         if (draftAlarms.length() > 0) {
             shiftEmptyMessage = "";
         }
+    }
+
+    private ActivePlanSnapshot readActivePlanSnapshot() {
+        return new ActivePlanSnapshot(activity.getSharedPreferences(AlarmStore.PREFS, Context.MODE_PRIVATE).getAll());
+    }
+
+    private boolean requireCurrentDraft(ActivePlanSnapshot expected) {
+        if (expected != null && expected.sameAs(draftBaseSnapshot)
+                && expected.sameAs(readActivePlanSnapshot())) {
+            return true;
+        }
+        loadFromStore();
+        render();
+        Toast.makeText(activity, "行位表已更新，已取消舊修改；請按最新行位表重新編輯。", Toast.LENGTH_LONG).show();
+        return false;
     }
 
     void render() {
@@ -433,6 +478,7 @@ final class ShiftTableView {
     }
 
     private void showShiftVariantDialog(boolean applyAsToday) {
+        final ActivePlanSnapshot editBase = draftBaseSnapshot;
         JSONArray variants = AlarmStore.getScheduleGridVariants(activity);
         if (variants.length() == 0) {
             Toast.makeText(activity, "電話未有已匯入更碼", Toast.LENGTH_LONG).show();
@@ -449,7 +495,11 @@ final class ShiftTableView {
         }
         new AlertDialog.Builder(activity)
                 .setTitle(applyAsToday ? "匯入失敗：選擇今日更碼" : "選擇更碼")
-                .setItems(labels, (dialog, which) -> applyShiftVariant(variants.optJSONObject(which), applyAsToday))
+                .setItems(labels, (dialog, which) -> {
+                    if (requireCurrentDraft(editBase)) {
+                        applyShiftVariant(variants.optJSONObject(which), applyAsToday);
+                    }
+                })
                 .show();
     }
 
@@ -467,7 +517,9 @@ final class ShiftTableView {
         draftAlarms = applyAsToday ? copyAlarmsForDate(alarms, planDate) : copyJsonArray(alarms);
         draftDate = planDate;
         draftRosterCode = variant.optString("roster_code", draftRosterCode);
-        saveDraftAlarms();
+        if (!saveDraftAlarms()) {
+            return;
+        }
         Toast.makeText(
                 activity,
                 applyAsToday
@@ -724,6 +776,7 @@ final class ShiftTableView {
      * 凌晨 00–05 嘅鬧鐘先退一日做「更日」基準，再按輸入 24–29 → 翌日 00–05 計返。
      */
     private void editTime(int index) {
+        final ActivePlanSnapshot editBase = draftBaseSnapshot;
         JSONObject alarm = draftAlarms.optJSONObject(index);
         if (alarm == null) {
             return;
@@ -736,6 +789,9 @@ final class ShiftTableView {
             hour30 += 24;
         }
         ui.showTimeDialog("Select time", hour30, cal.get(Calendar.MINUTE), null, null, (hour, minute) -> {
+            if (!requireCurrentDraft(editBase)) {
+                return;
+            }
             int dayOffset = hour >= 24 ? 1 : 0;
             cal.add(Calendar.DAY_OF_MONTH, dayOffset);
             cal.set(Calendar.HOUR_OF_DAY, hour - dayOffset * 24);
@@ -747,6 +803,7 @@ final class ShiftTableView {
     }
 
     private void editLabel(int index) {
+        final ActivePlanSnapshot editBase = draftBaseSnapshot;
         JSONObject alarm = draftAlarms.optJSONObject(index);
         if (alarm == null) {
             return;
@@ -760,6 +817,9 @@ final class ShiftTableView {
                 .setView(input)
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("OK", (dialog, which) -> {
+                    if (!requireCurrentDraft(editBase)) {
+                        return;
+                    }
                     String label = input.getText() == null ? "" : input.getText().toString().trim();
                     setAlarmLabel(index, label.isEmpty() ? "鬧鐘" : label);
                 })
@@ -784,6 +844,7 @@ final class ShiftTableView {
 
     /** Long-press 一行出 menu：插入／刪除。 */
     private void showRowMenu(int index) {
+        final ActivePlanSnapshot editBase = draftBaseSnapshot;
         JSONObject alarm = draftAlarms.optJSONObject(index);
         if (alarm == null) {
             return;
@@ -792,6 +853,9 @@ final class ShiftTableView {
         new AlertDialog.Builder(activity)
                 .setTitle(title)
                 .setItems(new CharSequence[]{"插入一行", "刪除呢行"}, (dialog, which) -> {
+                    if (!requireCurrentDraft(editBase)) {
+                        return;
+                    }
                     if (which == 0) {
                         insertAlarm(index);
                     } else {
@@ -1008,24 +1072,34 @@ final class ShiftTableView {
         saveDraftAlarms();
     }
 
-    private void saveDraftAlarms() {
+    private boolean saveDraftAlarms() {
+        if (!requireCurrentDraft(draftBaseSnapshot)) {
+            return false;
+        }
         if (!AlarmScheduler.canScheduleExactAlarm(activity)) {
             Toast.makeText(activity, "請先允許精準鬧鐘權限", Toast.LENGTH_LONG).show();
             AlarmScheduler.requestExactAlarmPermission(activity);
             render();
-            return;
+            return false;
         }
         shiftEmptyMessage = "";
         pushRowsAfterStarRows();
         sortDraftAlarms();
         recomputeDraftDurations();
-        if (draftAlarms.length() == 0) {
-            AlarmScheduler.cancelAll(activity);
-        } else {
-            AlarmScheduler.schedulePlan(activity, draftAlarms, draftDate, draftRosterCode);
+        synchronized (AlarmStore.class) {
+            // 同背景 importer 共用同步區，核對後不可插入另一份新 plan 再被舊 draft 蓋掉。
+            if (!requireCurrentDraft(draftBaseSnapshot)) {
+                return false;
+            }
+            if (draftAlarms.length() == 0) {
+                AlarmScheduler.cancelAll(activity);
+            } else {
+                AlarmScheduler.schedulePlan(activity, draftAlarms, draftDate, draftRosterCode);
+            }
         }
         loadFromStore();
         render();
+        return true;
     }
 
     private void sortDraftAlarms() {

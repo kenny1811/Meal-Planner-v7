@@ -151,7 +151,7 @@
         let first3;
         if (!dateRowRendered) {
           const weekday = dowZh(day.date);
-          const isToday = day.date === todayIsoHK();
+          const isToday = day.date === plannerTodayIsoHK();
           const isSunday = weekday === "Sun";
           const dateClasses = ["c-center", "col-d", isToday ? "today-cell" : "", isSunday ? "sunday-cell" : ""].filter(Boolean).join(" ");
           const weekdayClasses = ["c-center", "col-w", isToday ? "today-cell" : "", isSunday ? "sunday-cell" : ""].filter(Boolean).join(" ");
@@ -198,7 +198,7 @@
         const noteText = mp.note ? String(mp.note) : "無餐單資料 / 缺乏更表";
         const dMy = dateDMY(day.date);
         const wDay = dowZh(day.date);
-        const isToday = day.date === todayIsoHK();
+        const isToday = day.date === plannerTodayIsoHK();
         const isSunday = wDay === "Sun";
         const dateClasses = ["c-center", "col-d", isToday ? "today-cell" : "", isSunday ? "sunday-cell" : ""].filter(Boolean).join(" ");
         const weekdayClasses = ["c-center", "col-w", isToday ? "today-cell" : "", isSunday ? "sunday-cell" : ""].filter(Boolean).join(" ");
@@ -316,15 +316,28 @@
       return `${y}-${mm}-${dd}`;
     }
 
-    // 個版可以開成日唔 refresh。跨咗 24:00 就要自己捲上，否則 today-cell 藍框同
-    // 「今日-1」起計嘅過濾都仲停留喺開頁嗰日（試過開通宵，第二朝仲當緊係前一日）。
+    function plannerTodayIsoHK(now = new Date()) {
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: HK_TZ,
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", hourCycle: "h23",
+      }).formatToParts(now);
+      const value = (type) => Number(parts.find((part) => part.type === type).value);
+      const day = { y: value("year"), m: value("month"), d: value("day") };
+      return isoFromYmd(value("hour") < 6 ? ymdAddDays(day, -1) : day);
+    }
+
+    // 個版可以開成日唔 refresh。午夜要更新日期過濾；06:00 要將 today-cell 藍框轉去新一日。
     // 唔另開 timer：右上角浮動鐘本身每秒行一次，喺嗰度順手對；當時唔喺餐單版
     // 就唔郁，等你揀返餐單嗰陣先重畫。
     let lastRenderedTodayIso = "";
+    let lastRenderedPlannerTodayIso = "";
 
     function rollOverIfDateChanged() {
       const today = todayIsoHK();
-      if (!lastRenderedTodayIso || lastRenderedTodayIso === today) return;
+      const plannerToday = plannerTodayIsoHK();
+      if (!lastRenderedTodayIso || !lastRenderedPlannerTodayIso) return;
+      if (lastRenderedTodayIso === today && lastRenderedPlannerTodayIso === plannerToday) return;
       const panel = document.querySelector(".panel-bottom");
       // 正喺度打緊字就唔好夾硬重畫，下一格 tick 再算（餐格係 td[contenteditable]，唔係 input）。
       const editing = panel && panel.contains(document.activeElement)
@@ -400,6 +413,7 @@
     function renderFromMemory(anchor = null) {
       const out = document.getElementById("out");
       lastRenderedTodayIso = todayIsoHK();
+      lastRenderedPlannerTodayIso = plannerTodayIsoHK();
       const days = visibleDays();
       const headers = memoryPayload.headers && memoryPayload.headers.length
         ? memoryPayload.headers

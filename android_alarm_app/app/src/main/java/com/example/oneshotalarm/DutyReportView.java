@@ -37,6 +37,11 @@ class DutyReportView {
     private final Typeface boldTypeface;
     private JSONObject plan;
     private boolean loading = false;
+    private boolean statusRefreshInFlight = false;
+    private long planRevision = 0L;
+    private AlertDialog timeDialog;
+    private String editingSlotId = "";
+    private String editingDate = "";
     private String lastError = "";
     private String viewDate = "";
     private boolean mappingExpanded = false;
@@ -64,6 +69,44 @@ class DutyReportView {
         requestPlan("GET", path, null, "duty-report-fetch", "Cannot reach PC: ");
     }
 
+    /** Refresh sent status without replacing the inputs in an open dialog. */
+    void refreshStatus() {
+        if (loading || statusRefreshInFlight || plan == null) {
+            return;
+        }
+        statusRefreshInFlight = true;
+        final long revision = planRevision;
+        final String requestedDate = viewDate;
+        final String path = "/api/duty-report/plan"
+                + (requestedDate.isEmpty() ? "" : "?date_iso=" + requestedDate);
+        ui.request("GET", path, null, 12000, "duty-report-status",
+                parsed -> {
+                    statusRefreshInFlight = false;
+                    if (loading || revision != planRevision || !requestedDate.equals(viewDate)) {
+                        return;
+                    }
+                    lastError = "";
+                    acceptPlan(parsed);
+                },
+                e -> {
+                    statusRefreshInFlight = false;
+                    if (!loading && revision == planRevision && requestedDate.equals(viewDate)) {
+                        lastError = "Status refresh failed: " + e.getMessage();
+                        render();
+                    }
+                });
+    }
+
+    private void acceptPlan(JSONObject parsed) {
+        plan = parsed;
+        planRevision++;
+        if (timeDialog != null && (!editingDate.equals(plan.optString("date_iso", ""))
+                || !canEditSlotTime(findSlot(editingSlotId)))) {
+            timeDialog.dismiss();
+        }
+        render();
+    }
+
     private void postJson(String path, JSONObject payload, String busyText) {
         if (loading) {
             return;
@@ -76,13 +119,19 @@ class DutyReportView {
 
     /** 標準一款：成功就 plan＝結果、loading 完、重畫；失敗就出 lastError 重畫。 */
     private void requestPlan(String method, String path, JSONObject payload, String threadName, String errorPrefix) {
+        final long revision = ++planRevision;
         ui.request(method, path, payload, HTTP_READ_TIMEOUT_MS, threadName,
                 parsed -> {
-                    plan = parsed;
+                    if (revision != planRevision) {
+                        return;
+                    }
                     loading = false;
-                    render();
+                    acceptPlan(parsed);
                 },
                 e -> {
+                    if (revision != planRevision) {
+                        return;
+                    }
                     loading = false;
                     lastError = errorPrefix + e.getMessage();
                     render();
@@ -408,6 +457,7 @@ class DutyReportView {
         boolean isPast = "past".equals(relation);
         boolean isToday = "today".equals(relation);
         boolean editable = !isPast && !"sent".equals(status) && !"stopped".equals(status);
+        boolean timeEditable = canEditSlotTime(slot);
 
         LinearLayout rowLayout = row();
         rowLayout.setBackground("due".equals(status)
@@ -422,9 +472,9 @@ class DutyReportView {
         if (!timeText.equals(slot.optString("original_time", timeText))) {
             timeText += "*";
         }
-        TextView time = textView(timeText, 18, editable ? 0xFF0B3EA8 : 0xFF64748B, true);
+        TextView time = textView(timeText, 18, timeEditable ? 0xFF0B3EA8 : 0xFF64748B, true);
         time.setPadding(0, 0, dp(10), 0);
-        if (editable) {
+        if (timeEditable) {
             time.setOnClickListener(v -> showTimeDialog(slot));
         }
         timeLine.addView(time);
@@ -433,6 +483,9 @@ class DutyReportView {
 
         TextView message = textView(slot.optString("message", ""), 10, 0xFF64748B, false);
         textColumn.addView(message);
+        if (isOnOffSlot(slot)) {
+            textColumn.addView(textView("時間跟報開工／收工", 9, 0xFF64748B, false));
+        }
         String groupName = slot.optString("group", "");
         TextView group = textView(
                 "→ " + (groupName.isEmpty() ? "(no group)" : groupName) + (editable ? " ▾" : ""),
@@ -544,6 +597,9 @@ class DutyReportView {
     }
 
     private void postSlotPatch(String slotId, String key, Object value) {
+        if ("time".equals(key) && !canEditSlotTime(findSlot(slotId))) {
+            return;
+        }
         JSONObject payload = overridePayload();
         try {
             JSONObject slot = new JSONObject();
@@ -573,9 +629,13 @@ class DutyReportView {
             return;
         }
         loading = true;
+        final long revision = ++planRevision;
         ui.request("GET", "/api/duty-report/plan" + (target.isEmpty() ? "" : "?date_iso=" + target),
                 null, HTTP_READ_TIMEOUT_MS, "duty-report-shift",
                 parsed -> {
+                    if (revision != planRevision) {
+                        return;
+                    }
                     loading = false;
                     // 未有更碼嘅日子（更表未出）唔入去。
                     if ("none".equals(parsed.optString("source", ""))) {
@@ -583,10 +643,12 @@ class DutyReportView {
                         return;
                     }
                     viewDate = target;
-                    plan = parsed;
-                    render();
+                    acceptPlan(parsed);
                 },
                 e -> {
+                    if (revision != planRevision) {
+                        return;
+                    }
                     loading = false;
                     Toast.makeText(activity, "Cannot reach PC: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
@@ -594,19 +656,69 @@ class DutyReportView {
 
     // ---------------------------------------------------------------- dialogs
 
+    private boolean isOnOffSlot(JSONObject slot) {
+        String content = slot == null ? "" : slot.optString("content", "");
+        return content.contains("報開工") || content.contains("報收工");
+    }
+
+    private JSONObject findSlot(String slotId) {
+        JSONArray slots = plan == null ? null : plan.optJSONArray("slots");
+        for (int i = 0; slots != null && i < slots.length(); i++) {
+            JSONObject slot = slots.optJSONObject(i);
+            if (slot != null && slotId.equals(slot.optString("id", ""))) {
+                return slot;
+            }
+        }
+        return null;
+    }
+
+    private boolean canEditSlotTime(JSONObject slot) {
+        if (slot == null || plan == null || "past".equals(plan.optString("relation", ""))
+                || isOnOffSlot(slot) || !slot.optBoolean("time_editable", true)) {
+            return false;
+        }
+        String status = slot.optString("status", "");
+        return !"sent".equals(status) && !"stopped".equals(status);
+    }
+
     /** 大窗時間輸入（PanelUi.showTimeDialog，同行位表一份）：時 0–29（30小時制）。 */
     private void showTimeDialog(JSONObject slot) {
         String slotId = slot.optString("id", "");
-        String[] parts = slot.optString("time", "00:00").split(":");
-        ui.showTimeDialog(
-                "Edit time (original " + slot.optString("original_time", "") + ")",
+        JSONObject current = findSlot(slotId);
+        if (loading || !canEditSlotTime(current)) {
+            return;
+        }
+        if (timeDialog != null) {
+            timeDialog.dismiss();
+        }
+        editingSlotId = slotId;
+        editingDate = plan.optString("date_iso", "");
+        final String requestedDate = editingDate;
+        String[] parts = current.optString("time", "00:00").split(":");
+        timeDialog = ui.showTimeDialog(
+                "Edit time (original " + current.optString("original_time", "") + ")",
                 parseIntOr(parts.length > 0 ? parts[0] : "", 0),
                 parseIntOr(parts.length > 1 ? parts[1] : "", 0),
                 "Restore original",
-                () -> postSlotPatch(slotId, "time", ""),
-                (hour, minute) -> postSlotPatch(
-                        slotId, "time", String.format(java.util.Locale.US, "%02d%02d", hour, minute))
+                () -> {
+                    if (requestedDate.equals(plan.optString("date_iso", ""))) {
+                        postSlotPatch(slotId, "time", "");
+                    }
+                },
+                (hour, minute) -> {
+                    if (requestedDate.equals(plan.optString("date_iso", ""))) {
+                        postSlotPatch(slotId, "time", String.format(java.util.Locale.US, "%02d%02d", hour, minute));
+                    }
+                }
         );
+        final AlertDialog shown = timeDialog;
+        shown.setOnDismissListener(d -> {
+            if (timeDialog == shown) {
+                timeDialog = null;
+                editingSlotId = "";
+                editingDate = "";
+            }
+        });
     }
 
     private static int parseIntOr(String raw, int fallback) {

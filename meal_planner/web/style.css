@@ -1757,7 +1757,11 @@
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
-    table.catalog-table .catalog-paused { text-align: center; }
+    table.catalog-table .catalog-paused { text-align: center; touch-action: none; user-select: none; }
+    .catalog-row-dragging, .catalog-row-dragging * { cursor: grabbing !important; user-select: none; }
+    .catalog-row-selected .catalog-paused { background: #dceaff; }
+    .catalog-drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
+    .catalog-drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
     .catalog-col-resizer {
       position: absolute;
       top: 0;

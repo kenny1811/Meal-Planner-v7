@@ -1,11 +1,12 @@
     // OnOffDuty panel: 每日 On Duty / Off Duty Google Form 打卡預填連結。
-    // 時間來源 = 更時表（睇適用日）+ 加班表 override，同 Report Normal（報平安更）分開。
+    // 報開工／報收工時間喺電話修改；電腦顯示同步後嘅時間及 Form 連結。
     // 兩張卡都有 Hold / Resume / Send now：未定幾點開工（打風）或未走得（遲收工）就 hold，
     // 真發生嗰陣撳 Send now —— form + WhatsApp 齊發。
     // 冇半自動模式：夠鐘一定自動交，Open form 淨係方便自己開嚟睇（只留 history 記錄）。
     let onoffPlan = null;
     let onoffLoading = false;
     let onoffDate = "";
+    let onoffPlanRevision = 0;
 
     function onoffShowError(message) {
       const err = document.getElementById("onoffduty-err");
@@ -15,6 +16,7 @@
     async function refreshOnOffDuty(showBusy = true) {
       if (onoffLoading) return;
       onoffLoading = true;
+      onoffPlanRevision++;
       if (showBusy) onoffShowError("");
       try {
         onoffPlan = await loadOnOffDutyPlan(onoffDate);
@@ -161,15 +163,21 @@
       out.addEventListener("click", (ev) => {
         const open = ev.target.closest("a.onoff-open[data-onoff-kind]");
         if (open) {
+          if (onoffLoading) { ev.preventDefault(); return; }
           // 唔攔 navigation（新 tab 開 form），背後記 log 再刷新狀態。
           const kind = open.getAttribute("data-onoff-kind");
+          const revision = onoffPlanRevision;
           postOnOffDutyLog(kind, onoffDate, "opened")
-            .then((plan) => { onoffPlan = plan; renderOnOffDuty(); })
+            .then((plan) => {
+              if (revision !== onoffPlanRevision || onoffLoading) return;
+              onoffPlan = plan; renderOnOffDuty();
+            })
             .catch(() => {});
           return;
         }
         const copy = ev.target.closest("[data-onoff-copy]");
         if (copy) {
+          if (onoffLoading) { ev.preventDefault(); return; }
           const url = copy.getAttribute("data-onoff-copy");
           if (navigator.clipboard && url) {
             navigator.clipboard.writeText(url).then(
@@ -212,4 +220,7 @@
           return;
         }
       });
+      setInterval(() => {
+        if (activePanel === "onoffduty" && !onoffLoading) refreshOnOffDuty(false);
+      }, 10000);
     });

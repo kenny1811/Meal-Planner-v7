@@ -177,7 +177,7 @@ final class PanelUi {
      * 大窗時間輸入（行位表改時間、報更改時間共用）：兩個大數字格，打滿自動跳；
      * 時 0–29（30 小時制，24–29 即翌日凌晨）。neutralLabel 傳 null 就冇中間掣。
      */
-    void showTimeDialog(
+    AlertDialog showTimeDialog(
             String title,
             int hour,
             int minute,
@@ -268,6 +268,7 @@ final class PanelUi {
             }, 180);
         });
         dialog.show();
+        return dialog;
     }
 
     private EditText timePartInput(String value) {

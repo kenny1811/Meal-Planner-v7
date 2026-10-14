@@ -280,6 +280,20 @@ class DashboardApiTests(unittest.TestCase):
         self.assertEqual(self.meal("2026-12-31"), {"date": "2026-12-31", "missing": True, "prevDate": MON, "nextDate": None})
         self.assertEqual(self.client.get("/api/dashboard/meal", params={"date": "2026-9-1"}).status_code, 400)
 
+    def test_meal_revision_changes_only_when_a_new_version_is_saved(self):
+        def revision():
+            response = self.client.get("/api/dashboard/meal-revision")
+            self.assertEqual(response.status_code, 200)
+            return response.json()["revision"]
+
+        self.assertIsNone(revision())
+        first = save_plan_versions([_day(SAT, "EleB", True)])
+        self.assertEqual(revision(), first["timestamp"])
+        save_plan_versions([_day(SAT, "EleB", True)])
+        self.assertEqual(revision(), first["timestamp"])
+        second = save_plan_versions([_day(SAT, "EleM", True)])
+        self.assertEqual(revision(), second["timestamp"])
+
     def test_meal_uses_latest_version_and_restaurant_needs_time(self):
         first = save_plan_versions([_day(SAT, "EleB", True)])
         second = save_plan_versions([

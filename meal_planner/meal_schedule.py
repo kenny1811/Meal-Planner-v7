@@ -232,6 +232,8 @@ def choose_ingredients_for_meals(
     bound_overrides: dict[int, dict[str, float]] | None = None,
     forced_rice_row: int | None = None,
     forced_item_rows: dict[tuple[str, int], int] | None = None,
+    required_rows: frozenset[int] | None = None,
+    excluded_rows: frozenset[int] | None = None,
 ) -> tuple[
     dict[str, list[str]],
     dict[str, dict[str, float]],
@@ -275,6 +277,14 @@ def choose_ingredients_for_meals(
         picked = [e for e in cands if int(e.row_index) == int(f_row)]
         if picked:
             candidates_by_item[(f_meal, int(f_idx))] = picked
+
+    # 每週固定食材（exclusive）：配額以外嘅日子要抽走嗰行。淨低一個候選都冇就
+    # 唔抽——寧願出多次都好過個格變空、成日餐單缺件嘢。
+    for row in sorted(excluded_rows or ()):
+        for key, cands in list(candidates_by_item.items()):
+            kept = [e for e in cands if int(e.row_index) != int(row)]
+            if kept and len(kept) != len(cands):
+                candidates_by_item[key] = kept
 
     if forced_rice_row is not None:
         # 一日一米：鎖咗嘅餐已經食咗某款米，重解餐次嘅米類候選只准同款
@@ -337,6 +347,7 @@ def choose_ingredients_for_meals(
             reroll_nonce=int(reroll_nonce or 0),
             fixed_nutrients=extra_fixed_nutrients,
             bound_overrides=bound_overrides,
+            required_rows=required_rows,
         )
         if solved is not None:
             for meal in fixed_meal_set:
@@ -461,6 +472,10 @@ def build_day_meal_plan(
     # 指定食材：{(餐, item 位置): 營養清單 row}。淨係喺嗰格原本嘅候選入面篩，
     # 所以只可以換成同格嘅嘢（米格換唔到魚）。
     forced_item_rows: dict[tuple[str, int], int] | None = None,
+    # 每週固定食材：`required_rows` 嘅食材列當日最少出現一次（邊一餐由 solver 揀）；
+    # `excluded_rows` 嘅當日唔准出。兩者都係營養清單 row index。
+    required_rows: frozenset[int] | None = None,
+    excluded_rows: frozenset[int] | None = None,
 ) -> dict[str, Any]:
     """組合飯時主規則、各餐 Pattern、返工日午餐餐廳（第一命中）；可選 `day` 以解析行位表實際用餐時間。"""
     if not roster_code:
@@ -600,6 +615,8 @@ def build_day_meal_plan(
         bound_overrides=bound_overrides,
         forced_rice_row=forced_rice_row,
         forced_item_rows=forced_item_rows,
+        required_rows=required_rows,
+        excluded_rows=excluded_rows,
     )
     if rest and isinstance(rest.get("nutrients"), dict):
         meal_nutrients["午餐"] = {

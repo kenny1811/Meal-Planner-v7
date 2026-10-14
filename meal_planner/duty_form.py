@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -31,7 +32,10 @@ from meal_planner.duty_common import (
     RETRY_SECONDS,
     retry_backoff_active,
 )
-from meal_planner.duty_report import apply_override, build_plan as build_report_normal_plan, send_slot
+from meal_planner.duty_report import (
+    apply_override, build_plan as build_report_normal_plan, rearm_duty_times,
+    send_slot, time_edit_lock,
+)
 from meal_planner.duty_scheduler import notify_change
 from meal_planner.maintenance_db import load_sheet_rows, roster_post_for_code, save_sheet_rows
 from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
@@ -39,8 +43,8 @@ from meal_planner.roster_codes import form_key_for_code
 from meal_planner.schedule_grid import (
     load_overtime_overrides_from_rows,
     load_schedule_rows_from_rows,
-    report_start_end,
-    rows_for_roster,
+    duty_kind,
+    resolve_duty_times,
     _to_date,
 )
 from meal_planner.settings import AppSettings, get_settings
@@ -55,6 +59,15 @@ from meal_planner.timeparse import (
 )
 
 STAFF_NUMBER = "SAPP1801"
+
+_ACTION_LOCK = threading.RLock()
+
+
+@contextmanager
+def _action_lock():
+    # 改時間同發送順序執行；send now 記 sent 後寫實際時間會重入同一把鎖。
+    with _ACTION_LOCK:
+        yield
 
 
 @dataclass(frozen=True)
@@ -130,6 +143,7 @@ def _connect(settings: AppSettings) -> sqlite3.Connection:
     return conn
 
 
+@_action_lock()
 def record_onoff_log(
     settings: AppSettings,
     biz_date: date,
@@ -313,6 +327,16 @@ def clear_onoff_log_entry(
     notify_change()
 
 
+def _sent_report_kinds(settings: AppSettings, biz_date: date) -> set[str]:
+    plan = build_report_normal_plan(settings, biz_date=biz_date)
+    return {
+        kind for slot in plan.get("slots", [])
+        if slot.get("status") == "sent" and (kind := duty_kind(slot.get("content", "")))
+    }
+
+
+@_action_lock()
+@time_edit_lock()
 def set_time_override(
     settings: AppSettings,
     biz_date: date,
@@ -322,13 +346,24 @@ def set_time_override(
     note: str | None = None,
     rearm: bool = True,
 ) -> None:
-    """現場改開工/收工：直接 upsert 入加班表（權威來源）——報更、計糧、日曆、餐單全部跟住變。
+    """指定日改開工/收工：寫當日加班表，Form、報更及電話當日副本共用呢個時間。
 
-    start/end：None=唔郁；""=清走該格（兩格都空成行刪走，還原跟更時表）；"21:30"/"2130"=設定。
+    start/end：None=唔郁；""=清走該格（兩格都空成行刪走，還原跟行位表）；"21:30"/"2130"=設定。
     改完會重新武裝（見 _rearm_missed_actions）：新時間仲未到就當件事未發生，
-    舊 log（missed／sent／hold…）清走，scheduler 照新時間再交。
+    舊 log（missed／hold…）清走，scheduler 照新時間再交；已 sent 嘅 action 唔准手動改時間。
     rearm=False：件事已經即場做咗（send now），唔使叫 scheduler 補做。
     """
+    if rearm and (start is not None or end is not None):
+        log = load_onoff_log(settings, biz_date)
+        history = load_onoff_history(settings, biz_date)
+        sent_reports = _sent_report_kinds(settings, biz_date)
+        for kind, value in (("start", start), ("end", end)):
+            if value is not None and (
+                log.get(kind, {}).get("status") == "sent"
+                or any(item.get("status") == "sent" for item in history.get(kind, []))
+                or kind in sent_reports
+            ):
+                raise ValueError(f"{ACTION_LABEL[kind]}已 sent，唔可以再手動改時間（包括還原原定時間）")
     payload = load_sheet_rows("overtime", settings)
     rows = [list(r) if isinstance(r, list) else [] for r in (payload.get("rows") or [])]
     if not rows:
@@ -381,14 +416,14 @@ def set_time_override(
     save_sheet_rows("overtime", rows, settings)
     if rearm:
         _rearm_missed_actions(settings, biz_date)
+        rearm_duty_times(settings, biz_date, {kind for kind, value in (("start", start), ("end", end)) if value is not None})
 
 
 def _rearm_missed_actions(settings: AppSettings, biz_date: date) -> None:
     """改完時間／更碼 = 重新武裝：件事改咗去一個仲未過（未過 grace）嘅時間，
     即係當佢**未發生**——清走舊 log，俾 scheduler 照新時間重新交。
 
-    包括之前已經 sent 嗰啲（例如打風日 auto 早咗交、跟住現場改真開工時間），
-    亦包括 hold（改到實際時間就當 resume，連 ReportNormal 對應 slot 一齊放返）。
+    已 sent 嘅 action 保留；hold 改到實際時間就當 resume，連 ReportNormal 對應 slot 一齊放返。
     只郁時間真係變咗嘅 action——log 記低嗰個時間仲啱嘅就唔掂。
     """
     tz = ZoneInfo(settings.dates.timezone)
@@ -399,6 +434,8 @@ def _rearm_missed_actions(settings: AppSettings, biz_date: date) -> None:
         kind, time_text = str(action.get("kind") or ""), str(action.get("time") or "")
         entry = log.get(kind) or {}
         if not kind or not time_text or not entry:
+            continue
+        if entry.get("status") == "sent":
             continue
         if str(entry.get("time_text") or "") == time_text:
             continue  # 呢個 action 個時間冇變過
@@ -646,6 +683,7 @@ def _needs_overtime_row(
     return (early_start or late_end) and total_minutes > OVERTIME_MIN_TOTAL_MINUTES
 
 
+@_action_lock()
 def duty_send_now(settings: AppSettings, kind: str, *, note: str = "") -> dict[str, Any]:
     """真開工／真收工齊發：用「而家」做實際時間。
 
@@ -748,6 +786,17 @@ def _action_done(status: str, history_rows: list[dict[str, Any]], time_text: str
 
 
 def process_due_actions(settings: AppSettings | None = None) -> datetime | None:
+    settings = settings or get_settings()
+    # 手動 Send now 可能等 Form 網絡；共用 scheduler 要繼續處理到期 WhatsApp。
+    if not _ACTION_LOCK.acquire(blocking=False):
+        return datetime.now(ZoneInfo(settings.dates.timezone)) + timedelta(seconds=0.2)
+    try:
+        return _process_due_actions(settings)
+    finally:
+        _ACTION_LOCK.release()
+
+
+def _process_due_actions(settings: AppSettings) -> datetime | None:
     """scheduler tick：夠鐘就自動交；過咗 grace 未交標 missed（只限今日）。
 
     冇半自動模式——開唔開過預填連結都唔影響，照交。
@@ -865,12 +914,10 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
     # Form 內容同自動發射都係呢個時間（hold / send now 先會再改變）。
     # 更時表（計糧官方時間）淨係用嚟做遲收工寫加班表嘅標準窗口，唔會出現喺 Form。
     grid_rows = load_schedule_rows_from_rows(load_sheet_rows("schedule_grid", settings).get("rows") or [])
-    grid_start, grid_end = report_start_end(rows_for_roster(grid_rows, roster_code, biz_date), biz_date)
     std_start, std_end = _standard_shift_time(settings, roster_code, biz_date)
     overtime_rows = load_sheet_rows("overtime", settings).get("rows") or []
     ot_start, ot_end = load_overtime_overrides_from_rows(overtime_rows).get(biz_date, (None, None))
-    start = ot_start if ot_start is not None else grid_start
-    end = ot_end if ot_end is not None else grid_end
+    start, end = resolve_duty_times(grid_rows, roster_code, biz_date, (ot_start, ot_end))
 
     result["form"] = form.key
     result["post"] = post
@@ -886,6 +933,7 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
 
     log = load_onoff_log(settings, biz_date)
     history = load_onoff_history(settings, biz_date)
+    sent_reports = _sent_report_kinds(settings, biz_date)
     result["actions"] = [
         {
             "kind": "start",
@@ -919,4 +967,10 @@ def build_day_plan(settings: AppSettings | None = None, *, biz_date: date | None
             )
         # 完整經過（append-only）：交過幾多次、hold 過、重新武裝過，全部見得到。
         action["history"] = history.get(action["kind"], [])
+        action["time_editable"] = (
+            biz_date >= today
+            and action["status"] != "sent"
+            and not any(item.get("status") == "sent" for item in action["history"])
+            and action["kind"] not in sent_reports
+        )
     return result

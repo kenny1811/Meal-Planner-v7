@@ -95,7 +95,7 @@ meal_business_rules:
 
 ```yaml
 rice:
-  note_name_contains: ["米"]
+  note_name_contains: ["米(熟)"]
   cooked_to_raw:
     - { name_contains: "糙米", ratio: 2.623 }
 ```

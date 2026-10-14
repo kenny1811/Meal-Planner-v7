@@ -17,9 +17,13 @@ from meal_planner.roster import code_for_date, roster_map_from_sheet_rows
 from meal_planner.roster_codes import is_work_day
 from meal_planner.schedule_grid import (
     grid_row_matches_roster,
+    duty_row_time,
+    load_overtime_overrides_from_rows,
     load_schedule_rows_from_rows,
     report_start_end,
     rows_for_roster,
+    resolve_duty_times,
+    weekday_allows,
 )
 from meal_planner.settings import get_settings
 from meal_planner.timeparse import business_date, hhmm30, minutes_30h
@@ -39,6 +43,15 @@ _TRAILING_DURATION_RE = re.compile(r"\s+\d{1,3}$")
 _SCHEDULE_GRID_DATE_RE = re.compile(r"^\s*(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})/(\d{1,2})/(\d{4}))\s*$")
 SCHEDULE_GRID_HEADER = ["更碼", "時間", "內容", "時長", "生效日期", "停用"]
 _BLANK_EFFECTIVE_DATE_SENTINEL = "0001-01-01"
+
+
+def _overtime_by_date(settings):
+    # 未有加班紀錄係正常情況；總表仍可匯出。
+    try:
+        rows = load_sheet_rows("overtime", settings).get("rows") or []
+    except MaintenanceDatabaseError:
+        rows = []
+    return load_overtime_overrides_from_rows(rows)
 
 
 def _parse_date_iso(raw: str) -> str:
@@ -240,7 +253,15 @@ def _choose_schedule_grid_export_target(
 
     candidate_rows = rows_for_roster(parsed_rows, code, candidate_date)
     if candidate_date == today and candidate_rows:
-        _, max_time = _schedule_day_minutes(candidate_rows)
+        overtime = _overtime_by_date(get_settings())
+        duty_times = resolve_duty_times(parsed_rows, code, today, overtime.get(today, (None, None)))
+        effective_minutes = []
+        for row in candidate_rows:
+            if row.t is None or not weekday_allows(row.content, today):
+                continue
+            row_time = duty_row_time(row.content, hhmm30(row.t), duty_times)
+            effective_minutes.append(minutes_30h(row_time))
+        max_time = max(effective_minutes, default=-1)
         if max_time >= 0 and now_minutes > max_time:
             next_date, next_code = _next_workday_from(candidate_date + timedelta(days=1), roster_map, code_defs)
             if next_date is None or not next_code:
@@ -397,6 +418,10 @@ def build_schedule_grid_all_variants_export() -> dict[str, Any]:
 
     typhoon_rows = typhoon_grid_rows(settings, target_day, roster_code) if roster_code else None
 
+    # 只喺目標日、當日更碼嘅電話副本套用 OnOffDuty 時間，總表及其他日子不變。
+    overtime = _overtime_by_date(settings)
+    duty_times = resolve_duty_times(parsed_rows, roster_code, target_day, overtime.get(target_day, (None, None)))
+
     variants: list[dict[str, Any]] = []
     for code in code_order:
         # 停用行都要送落電話——電話要見到佢先撳得返啟用；停用資訊喺 alarm 個 disabled 欄。
@@ -430,6 +455,12 @@ def build_schedule_grid_all_variants_export() -> dict[str, Any]:
             ]
         if not alarms:
             continue
+        for alarm in alarms:
+            if not weekday_allows(alarm["label"], target_day):
+                # 電話保留行作顯示，但當日不適用嘅另一個收工時間不可另排鬧鐘。
+                alarm["disabled"] = True
+            elif is_current:
+                alarm["time"] = duty_row_time(alarm["label"], alarm["time"], duty_times)
         variants.append(
             {
                 "roster_code": code,

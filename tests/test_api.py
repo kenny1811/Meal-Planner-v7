@@ -17,6 +17,29 @@ from meal_planner.storage import load_memory_payload, save_memory_payload
 
 
 class ApiTests(unittest.TestCase):
+    def test_memory_save_notifies_dashboard_only_after_new_versions(self):
+        old_root = os.environ.get("MENU_PROJECT_ROOT")
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                os.environ["MENU_PROJECT_ROOT"] = tmp
+                clear_settings_cache()
+                client = TestClient(app)
+                body = {"payload": {"days": [{"date": "2026-10-07", "meal_plan": {"note": "first"}}]}}
+                with patch("meal_planner.app.notify_dashboard_meals") as notify:
+                    first = client.post("/api/memory-list", json=body)
+                    self.assertEqual(first.status_code, 200)
+                    notify.assert_called_once_with(["2026-10-07"])
+                    notify.reset_mock()
+                    second = client.post("/api/memory-list", json=body)
+                    self.assertEqual(second.status_code, 200)
+                    notify.assert_not_called()
+        finally:
+            if old_root is None:
+                os.environ.pop("MENU_PROJECT_ROOT", None)
+            else:
+                os.environ["MENU_PROJECT_ROOT"] = old_root
+            clear_settings_cache()
+
     def test_api_validation_error_uses_error_envelope(self):
         client = TestClient(app)
 

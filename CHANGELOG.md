@@ -4,6 +4,19 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.13.32 — 14/10/2026
+- Nutrition Catalog rows can be moved by long press, buttons or Alt+arrow keys without changing saved meal references; nutrient values show two decimal places.
+- The meal planner's today highlight follows the 30-hour day, and cooked-rice notes no longer count corn kernels as rice.
+- On/off-duty time changes update duty reports and phone schedules; sent actions stay locked, and desktop form links follow the latest phone changes.
+- Phone schedule editors refresh imported plans and prevent older edits from overwriting a newer schedule.
+- The Meal Planner server restarts automatically after an interruption.
+
+## 7.12.31 — 22/09/2026 15:19
+- Weekly ingredient quotas (config.yaml `weekly_ingredient_rules`): brown rice now comes
+  up 2 days a week and salmon twice a week, counted Sunday to Saturday. The planner picks
+  the days with the most room to absorb them, and skips one rather than push a nutrient
+  into the red.
+
 ## 7.11.31 — 22/09/2026 00:10
 - Dropped the /apkdl chunked-download page. It existed because the meshnet link dropped every
   ~34 seconds on csl; measured tonight, SmarTone holds the tunnel with zero drops and Kenny is
