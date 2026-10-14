@@ -459,7 +459,8 @@ def build_schedule_grid_all_variants_export() -> dict[str, Any]:
             if not weekday_allows(alarm["label"], target_day):
                 # 電話保留行作顯示，但當日不適用嘅另一個收工時間不可另排鬧鐘。
                 alarm["disabled"] = True
-            elif is_current:
+            elif is_current and not (typhoon_rows is not None and alarm["disabled"]):
+                # 打風返唔到嘅原定行保留原時間，先睇得到實際開工遲咗幾多。
                 alarm["time"] = duty_row_time(alarm["label"], alarm["time"], duty_times)
         variants.append(
             {

@@ -6,6 +6,7 @@ import os
 import tempfile
 import unittest
 from datetime import date, timedelta
+from unittest.mock import patch
 
 from meal_planner.maintenance_db import load_sheet_rows, save_roster_code_definitions, save_sheet_rows
 from meal_planner.settings import clear_settings_cache, get_settings
@@ -447,6 +448,24 @@ class ApplyTests(TyphoonTestBase):
         missed = next(row for row in rows if row["time"] == "09:15")
         self.assertTrue(missed["disabled"])
         self.assertFalse(any(row["disabled"] for row in rows if row["time"] >= "12:40"))
+
+    def test_phone_export_keeps_disabled_planned_start_and_active_actual_start(self) -> None:
+        from meal_planner.schedule_grid_sync import build_schedule_grid_all_variants_export
+
+        save_sheet_rows(
+            "overtime",
+            [["日期", "開工", "收工", "備註"], [FUTURE_DATE.isoformat(), "13:00", "22:00", "颱風"]],
+            self.settings,
+        )
+        target = (FUTURE_DATE.isoformat(), "VOC", "2026-01-01", [])
+        with patch("meal_planner.schedule_grid_sync._choose_schedule_grid_export_target", return_value=target):
+            exported = build_schedule_grid_all_variants_export()
+        current = next(variant for variant in exported["variants"] if variant["is_current"])
+        starts = [(alarm["time"], alarm["disabled"]) for alarm in current["alarms"] if "報開工" in alarm["label"]]
+        self.assertEqual(starts, [("09:15", True), ("13:00", False)])
+        other = next(variant for variant in exported["variants"] if variant["roster_code"] == "EleA")
+        self.assertEqual(next(alarm["time"] for alarm in other["alarms"] if "報開工" in alarm["label"]), "09:15")
+        self.assertEqual(load_sheet_rows("schedule_grid", self.settings)["rows"], SCHEDULE_GRID)
 
     def test_apply_on_a_day_off_switches_the_roster_code(self) -> None:
         from meal_planner.duty_form import roster_code_for

@@ -4,6 +4,9 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.13.33 — 14/10/2026
+- On typhoon days, disabled phone schedule rows keep their original start times alongside the active actual start.
+
 ## 7.13.32 — 14/10/2026
 - Nutrition Catalog rows can be moved by long press, buttons or Alt+arrow keys without changing saved meal references; nutrient values show two decimal places.
 - The meal planner's today highlight follows the 30-hour day, and cooked-rice notes no longer count corn kernels as rice.
