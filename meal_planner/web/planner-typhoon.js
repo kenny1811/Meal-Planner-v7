@@ -10,6 +10,9 @@
     let typhoonDayOff = false;
     let typhoonName = "";
     let typhoonNameNote = "";
+    let typhoonNameStatus = "";
+    let typhoonNameRequest = 0;
+    let typhoonNameEdit = 0;
     let typhoonRefocusSignal = false;  // 重畫成個 panel 會失去 focus，打字期間要留返喺個格度
     let typhoonSignalCaret = null;
     let typhoonSignalTyping = false;
@@ -156,6 +159,7 @@
     // 唔靠「下次成功重算先存」，打完字直接走人都唔會漏。
     function leaveTyphoonPanel() {
       if (typeof activePanel !== "undefined" && activePanel !== "typhoon") return;
+      typhoonNameRequest += 1;  // 離開後返嚟嘅查詢唔可以再改畫面／儲存值。
       const box = document.getElementById("typhoon-signal");
       if (box) typhoonSignal = box.value;
       const nameBox = document.getElementById("typhoon-name");
@@ -171,6 +175,9 @@
       typhoonDate = String(saved.date_iso || "");
       typhoonCode = String(saved.code || "");
       typhoonName = String(saved.name || "");
+      typhoonNameNote = "";
+      typhoonNameStatus = "";
+      typhoonNameRequest += 1;
       typhoonConfirmed = !!saved.confirmed;
       typhoonDayOff = !!saved.day_off;
       // 30 小時制：凌晨 00:00–05:59 寫成 24:00–29:59（落波時間唔收 00:xx 嗰個寫法）。
@@ -180,27 +187,55 @@
       typhoonSignalCaret = null;
       // 上次計好嗰份餐單留喺 memory：日期／開工時間一樣就即刻見返，唔使等 LP 再跑。
       await refreshTyphoon();
-      fillTyphoonNameFromObservatory();
+      await fillTyphoonNameFromObservatory();
     }
 
-    // 個名由天文台正追蹤緊嘅熱帶氣旋帶出嚟（10 分鐘 cache），每次開面板都覆蓋返最新嗰個。
-    // 攞唔到就唔郁（留返上次嗰個 + 講明點解）。直接改個格嘅 value，唔重畫，唔會搶走 cursor。
-    function fillTyphoonNameFromObservatory() {
-      loadTyphoonCurrentName()
-        .then((data) => {
-          typhoonNameNote = String((data && data.note) || "");
-          const box = document.getElementById("typhoon-name");
-          if (!box) return;
-          box.title = typhoonNameNote || `天文台：${(data.names || []).map((n) => n.zh || n.en).join("、")}`;
-          // 每次入嚟都跟返而家真係吹緊嗰個——上次存低嘅舊名唔應該賴死唔走。
-          if (!data.name || data.name === typhoonName) return;
-          typhoonName = data.name;
-          box.value = data.name;
-          // 加班表個備註由後端砌（同 Apply 寫落去嗰個係同一段 code），所以要重算一次。
-          typhoonRefocusSignal = true;  // cursor 留返喺落波時間度
-          refreshTyphoon();
-        })
-        .catch(() => {});
+    function typhoonNameStatusText() {
+      if (typhoonNameStatus === "none") return typhoonName.trim() ? "(已過)" : "(no active typhoon)";
+      if (typhoonNameStatus === "error") return "(check failed)";
+      return "";
+    }
+
+    function updateTyphoonNameStatus() {
+      const box = document.getElementById("typhoon-name");
+      const status = document.getElementById("typhoon-name-status");
+      if (box) box.title = typhoonNameNote;
+      if (status) {
+        status.textContent = typhoonNameStatusText();
+        status.title = typhoonNameNote;
+      }
+    }
+
+    // 冇風留返上次個名；「已過」只係顯示，唔會寫入備註或儲存嘅名稱。
+    // 網絡／格式出錯唔等於冇風。舊查詢亦唔可以蓋過新查詢或正在手打嘅名。
+    async function fillTyphoonNameFromObservatory(force = false, recalc = true) {
+      if (typeof activePanel !== "undefined" && activePanel !== "typhoon") return;
+      const request = ++typhoonNameRequest;
+      const edit = typhoonNameEdit;
+      try {
+        const data = await loadTyphoonCurrentName(force);
+        if (request !== typhoonNameRequest) return;
+        typhoonNameStatus = data.status || "error";
+        typhoonNameNote = [data.note || (data.names || []).map((n) => n.zh || n.en).join("、"),
+          data.checked_at ? `Checked: ${data.checked_at}` : ""].filter(Boolean).join(" · ");
+        const box = document.getElementById("typhoon-name");
+        updateTyphoonNameStatus();
+        if (!box || edit !== typhoonNameEdit || data.status !== "active" || !data.name || data.name === typhoonName) return;
+        typhoonName = data.name;
+        box.value = data.name;
+        if (recalc) await refreshTyphoon();
+      } catch (e) {
+        if (request !== typhoonNameRequest) return;
+        typhoonNameStatus = "error";
+        typhoonNameNote = e && e.message ? e.message : "Could not check the current typhoon name.";
+        updateTyphoonNameStatus();
+      }
+    }
+
+    async function simulateTyphoon() {
+      await fillTyphoonNameFromObservatory(true, false);
+      if (typeof activePanel !== "undefined" && activePanel !== "typhoon") return;
+      await refreshTyphoon();
     }
 
     // ◀ ▶ 郁嘅係「落波日期」（同落波時間一 pair），唔係模擬邊日。
@@ -562,6 +597,7 @@
         <label class="typhoon-field"><input type="checkbox" id="typhoon-confirmed" ${typhoonConfirmed ? "checked" : ""} />Confirmed</label>
         <label class="typhoon-field">Name
           <input type="text" id="typhoon-name" class="typhoon-name" value="${esc(typhoonName)}" placeholder="韋帕" title="${esc(typhoonNameNote || "加班表備註會寫「颱風」+ 呢個名（預設由天文台帶出）")}" />
+          <span id="typhoon-name-status" role="status" title="${esc(typhoonNameNote)}">${esc(typhoonNameStatusText())}</span>
         </label>
         <label class="typhoon-field ${plan.day_off_possible ? "typhoon-dayoff-live" : "typhoon-field-off"}" title="${esc(
           plan.day_off_possible
@@ -689,7 +725,11 @@
         }
         // 同落波時間一樣：打字唔更新，撳走／撳 Enter 先重算，
         // 加班表 block 到時就睇到真正會寫落去嗰句「颱風X」。
-        nameBox.addEventListener("input", () => { typhoonName = nameBox.value; });
+        nameBox.addEventListener("input", () => {
+          typhoonName = nameBox.value;
+          typhoonNameEdit += 1;
+          updateTyphoonNameStatus();
+        });
         nameBox.addEventListener("change", () => refreshTyphoon());
         nameBox.addEventListener("keydown", (ev) => {
           if (ev.key !== "Enter") return;
@@ -867,7 +907,7 @@ ${gc.detail || ""}
         const btn = ev.target.closest("[data-typhoon-action]");
         if (!btn) return;
         const action = btn.dataset.typhoonAction;
-        if (action === "refresh") return refreshTyphoon();
+        if (action === "refresh") return simulateTyphoon();
         if (action === "date-prev") return typhoonShiftDate(-1);
         if (action === "date-next") return typhoonShiftDate(1);
         if (action === "date-today") { typhoonDate = ""; typhoonCode = ""; return refreshTyphoon(); }

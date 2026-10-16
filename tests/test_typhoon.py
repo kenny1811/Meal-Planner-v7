@@ -535,11 +535,51 @@ class CurrentTyphoonNameTests(unittest.TestCase):
         data = self._with_payload(payload)
         self.assertEqual(data["names"], [{"zh": "紅霞", "en": "NOUL"}])
         self.assertEqual(data["note"], "")
+        self.assertEqual(data["status"], "active")
+        self.assertTrue(data["checked_at"].endswith("+08:00"))
+
+    def test_latest_cyclone_comes_first_regardless_of_feed_order(self) -> None:
+        data = self._with_payload((
+            "<TropicalCycloneList>"
+            "<TropicalCyclone><TropicalCycloneID>2617</TropicalCycloneID>"
+            "<TropicalCycloneChineseName>紅霞</TropicalCycloneChineseName></TropicalCyclone>"
+            "<TropicalCyclone><TropicalCycloneID>2630</TropicalCycloneID>"
+            "<TropicalCycloneEnglishName>CHAMPI</TropicalCycloneEnglishName></TropicalCyclone>"
+            "</TropicalCycloneList>"
+        ).encode())
+        self.assertEqual(data["names"], [{"zh": "", "en": "CHAMPI"}, {"zh": "紅霞", "en": ""}])
+        self.assertEqual(data["status"], "active")
+
+    def test_namespaced_feed_is_read(self) -> None:
+        data = self._with_payload((
+            '<TropicalCycloneList xmlns="urn:weather"><TropicalCyclone>'
+            "<TropicalCycloneChineseName>紅霞</TropicalCycloneChineseName>"
+            "</TropicalCyclone></TropicalCycloneList>"
+        ).encode())
+        self.assertEqual(data["names"][0]["zh"], "紅霞")
+        self.assertEqual(data["status"], "active")
+
+    def test_wrong_schema_or_missing_names_is_not_reported_as_no_cyclone(self) -> None:
+        for payload in (b"<html>Unavailable</html>", b"<TropicalCycloneList><TropicalCyclone/></TropicalCycloneList>", b"broken XML"):
+            with self.subTest(payload=payload):
+                data = self._with_payload(payload)
+                self.assertEqual(data["status"], "error")
+                self.assertEqual(data["names"], [])
+
+    def test_force_refresh_bypasses_successful_cache(self) -> None:
+        first = self._with_payload(b"<TropicalCycloneList/>")
+        with patch("urllib.request.urlopen", side_effect=OSError("offline")) as fetch:
+            self.assertEqual(typhoon.current_typhoon_names(), first)
+            fetch.assert_not_called()
+            data = typhoon.current_typhoon_names(force=True)
+            fetch.assert_called_once()
+        self.assertEqual(data["status"], "error")
 
     def test_empty_list_says_so_instead_of_guessing(self) -> None:
         data = self._with_payload(b"<TropicalCycloneList></TropicalCycloneList>")
         self.assertEqual(data["names"], [])
         self.assertIn("No tropical cyclone", data["note"])
+        self.assertEqual(data["status"], "none")
 
     def test_unreachable_observatory_is_reported_not_swallowed(self) -> None:
         import urllib.request
@@ -556,6 +596,7 @@ class CurrentTyphoonNameTests(unittest.TestCase):
             urllib.request.urlopen = original
         self.assertEqual(data["names"], [])
         self.assertIn("Could not reach the Observatory", data["note"])
+        self.assertEqual(data["status"], "error")
 
 
 if __name__ == "__main__":

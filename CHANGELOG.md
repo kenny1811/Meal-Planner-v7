@@ -4,6 +4,9 @@ Web app version history (X.Y.Z). The top entry is the current version shown in t
 Z = fix/tweak, Y = feature, X = major redesign. The version and this log follow commits:
 an entry ships in the same commit as its change; work-in-progress never shows here.
 
+## 7.13.34 — 16/10/2026
+- Typhoon refreshes the latest tracked name on Simulate, retains the previous name with an (已過) label when none is tracked, and shows lookup failures separately.
+
 ## 7.13.33 — 14/10/2026
 - On typhoon days, disabled phone schedule rows keep their original start times alongside the active actual start.
 

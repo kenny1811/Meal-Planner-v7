@@ -435,8 +435,8 @@
       return data || {};
     }
 
-    async function loadTyphoonCurrentName() {
-      const r = await fetch("/api/typhoon/current-name");
+    async function loadTyphoonCurrentName(force = false) {
+      const r = await fetch(`/api/typhoon/current-name${force ? "?force=true" : ""}`, { cache: "no-store" });
       const data = await parseJsonSafe(r);
       if (!r.ok) {
         throw new Error(apiErrorMessage(data, "Load typhoon name failed.", r.status));

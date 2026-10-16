@@ -1630,17 +1630,19 @@ def api_typhoon_plan(
 
 
 @app.get("/api/typhoon/current-name")
-def api_typhoon_current_name() -> dict[str, Any]:
+def api_typhoon_current_name(force: bool = False) -> dict[str, Any]:
     from meal_planner.typhoon import current_typhoon_names
 
-    data = current_typhoon_names()
+    data = current_typhoon_names(force=force)
     first = data["names"][0] if data["names"] else {}
     return {
-        "name": first.get("zh", ""),
+        "name": first.get("zh") or first.get("en", ""),
         "english": first.get("en", ""),
         "names": data["names"],
         "note": data["note"],
         "source": data["source"],
+        "status": data["status"],
+        "checked_at": data["checked_at"],
     }
 
 

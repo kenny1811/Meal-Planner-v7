@@ -68,19 +68,34 @@ def current_typhoon_names(*, force: bool = False) -> dict[str, Any]:
     if not force and _tc_cache is not None and now - _tc_cache[0] < TC_LIST_CACHE_SECONDS:
         return _tc_cache[1]
 
-    result: dict[str, Any] = {"names": [], "note": "", "source": TC_LIST_URL}
+    result: dict[str, Any] = {
+        "names": [], "note": "", "source": TC_LIST_URL, "status": "error",
+        "checked_at": datetime.now(ZoneInfo("Asia/Hong_Kong")).isoformat(timespec="seconds"),
+    }
     try:
         with urllib.request.urlopen(TC_LIST_URL, timeout=TC_LIST_TIMEOUT_SECONDS) as response:
             root = ET.fromstring(response.read())
+        # 唔可以將改咗格式／錯誤頁當成「冇颱風」。兼容 XML namespace。
+        for node in root.iter():
+            node.tag = node.tag.rsplit("}", 1)[-1]
+        if root.tag != "TropicalCycloneList":
+            raise ValueError("Unexpected tropical cyclone list")
+        cyclones = root.findall("TropicalCyclone")
+        # 名單次序唔保證新舊；按國際編號，最新命名嗰個先。
+        cyclones.sort(key=lambda node: int(node.findtext("TropicalCycloneID") or "0"), reverse=True)
+        for node in cyclones:
+            chinese = (node.findtext("TropicalCycloneChineseName") or "").strip()
+            english = (node.findtext("TropicalCycloneEnglishName") or "").strip()
+            if chinese or english:
+                result["names"].append({"zh": chinese, "en": english})
+        if cyclones and not result["names"]:
+            raise ValueError("Tropical cyclone names are missing")
     except Exception as e:  # noqa: BLE001 - 攞唔到天文台唔可以拖冧個 panel
+        result["names"] = []
         result["note"] = f"Could not reach the Observatory ({e.__class__.__name__}) — type the name yourself."
         return result
 
-    for node in root.findall("TropicalCyclone"):
-        chinese = (node.findtext("TropicalCycloneChineseName") or "").strip()
-        english = (node.findtext("TropicalCycloneEnglishName") or "").strip()
-        if chinese or english:
-            result["names"].append({"zh": chinese, "en": english})
+    result["status"] = "active" if result["names"] else "none"
     if not result["names"]:
         result["note"] = "No tropical cyclone is being tracked right now."
     _tc_cache = (now, result)
